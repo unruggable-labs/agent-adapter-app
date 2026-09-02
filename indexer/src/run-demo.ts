@@ -71,7 +71,7 @@ async function main() {
     const id7 = store.identities.get(s.ubid7)!;
     check("claimed", id7.claimed, true);
     check("agentURI", id7.agentURI, "ipfs://punkbot-7/agent.json");
-    check("agentWallet is alice", id7.agentWallet, s.actors.alice);
+    check("agentWallet is the bot's operating key, not alice's", id7.agentWallet, s.actors.bot);
     check("joined ERC-8004 agentId", id7.agentIds.map(String), ["0"]); // the mock registry's first id is 0 — a real, settable id
     check("registered agent has same UBID", store.agents.get(0n)?.ubid, s.ubid7);
     const rep7 = store.reputation(s.ubid7);
@@ -81,9 +81,10 @@ async function main() {
     check("reviews", rep7.reviews.length, 1);
     check("interaction score", rep7.interactions[0]?.score, 95);
     check("dave confirmed and verified", rep7.confirmedAccounts, [{ attester: s.actors.dave, verified: true }]);
-    const wallet = store.resolveWallet(s.actors.alice)!;
-    check("alice wallet-UBID resolves to #7", wallet.designation.ubid, s.ubid7);
+    const wallet = store.resolveWallet(s.actors.bot)!;
+    check("bot's wallet-UBID resolves to #7", wallet.designation.ubid, s.ubid7);
     check("mutual pointing verified", wallet.verified, true);
+    check("alice's own wallet has no designation", store.resolveWallet(s.actors.alice), null);
 
     console.log("  -- B: Punk #9 (burn-reopen hijack is flagged)");
     const id9 = store.identities.get(s.ubid9)!;

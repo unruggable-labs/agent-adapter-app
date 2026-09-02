@@ -22,7 +22,7 @@ const CHAIN_ID = 31337n;
  */
 export async function runScenario(rpcUrl: string, d: Deployment) {
   const { publicClient, testClient, wallets } = makeClients(rpcUrl);
-  const [, alice, bob, carol, dave, eve] = wallets;
+  const [, alice, bob, carol, dave, eve, bot] = wallets;
 
   const adapterWrite = (wallet: (typeof wallets)[0], functionName: string, args: unknown[]) =>
     wallet
@@ -91,8 +91,12 @@ export async function runScenario(rpcUrl: string, d: Deployment) {
     "account[31337][0]",
     encodeAbiParameters([{ type: "address" }], [dave.account.address]),
   ]);
-  // One call closes the wallet loop: forward wallet = caller, reverse wallet-UBID = caller's.
-  await adapterWrite(alice, "counterfactualSetAgentWalletAndUBID", [Standard.ERC721, d.punks, 7n]);
+  // The three roles are three addresses: Alice's wallet holds the deed (token #7), the
+  // identity record carries the reputation, and the bot's server key does the day-to-day
+  // signing. Alice, as deed holder, names the bot's key as the operating wallet; the bot
+  // points back from its own key — two statements, two signers, a verified link.
+  await adapterWrite(alice, "counterfactualSetAgentWallet", [Standard.ERC721, d.punks, 7n, bot.account.address]);
+  await adapterWrite(bot, "setWalletUBID", [Standard.ERC721, d.punks, 7n]);
   // Dave confirms he is an additional account of this agent (reciprocal half of ERC-8048).
   await adapterWrite(dave, "confirmAdditionalAccount", [ubid7]);
 
@@ -163,6 +167,7 @@ export async function runScenario(rpcUrl: string, d: Deployment) {
       carol: carol.account.address.toLowerCase() as Address,
       dave: dave.account.address.toLowerCase() as Address,
       eve: eve.account.address.toLowerCase() as Address,
+      bot: bot.account.address.toLowerCase() as Address,
       punks: d.punks.toLowerCase() as Address,
     },
   };

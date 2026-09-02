@@ -1,7 +1,8 @@
 import { AppProvider, useApp } from "./lib/app-state";
-import { shortHex } from "./lib/chain";
+import { ACTORS, shortHex } from "./lib/chain";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
+import { HowPage } from "./pages/How";
 import { IdentitiesPage } from "./pages/Identities";
 import { IdentityPage } from "./pages/Identity";
 import { WalletPage } from "./pages/Wallet";
@@ -25,6 +26,7 @@ function Shell() {
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/create")) page = <CreatePage />;
   else if (route.startsWith("/wallet")) page = <WalletPage />;
+  else if (route.startsWith("/how")) page = <HowPage />;
 
   return (
     <div className="shell">
@@ -44,11 +46,14 @@ function Shell() {
         <div className="nav-label">You</div>
         <NavItem to="/wallet" label="My wallet" />
 
+        <div className="nav-label">Learn</div>
+        <NavItem to="/how" label="How identity works" />
+
         <div className="sidebar-foot">
           <div className="nav-label" style={{ padding: "0 0 4px" }}>Acting as</div>
           <select className="select" value={actorIndex} onChange={(e) => setActorIndex(Number(e.target.value))}>
-            {["Alice", "Bob", "Carol", "Dave", "Eve"].map((n, i) => (
-              <option key={n} value={i}>{n}</option>
+            {ACTORS.map((a, i) => (
+              <option key={a.name} value={i}>{a.name}</option>
             ))}
           </select>
           <div className="sidebar-meta" style={{ marginTop: 8 }}>

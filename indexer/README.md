@@ -30,7 +30,7 @@ npm run demo      # spins anvil, deploys, runs the scenario, asserts 24 end-stat
 npm run demo -- --serve   # same, then serves API + UI on http://127.0.0.1:8787
 ```
 
-The demo tells four stories: (A) Punk #7 — counterfactual claim, wallet loop closed in one call,
+The demo tells four stories: (A) Punk #7 — counterfactual claim, the two-party wallet handshake (Alice names the bot's operating key, the bot points back),
 stars/ratings/review/interaction, a revocation resurrecting an older rating, then full ERC-8004
 registration joining the same UBID; (B) Punk #9 — pre-mint collection bootstrap, owner takeover,
 burn, and the collection re-claiming the reputed identity (surfaced as the

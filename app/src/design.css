@@ -252,6 +252,12 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .link-hash:hover { color: var(--accent-strong); }
 
+.role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.role { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
+.role p { margin: 6px 0 0; font-size: 12.5px; color: var(--text-2); }
+.role-name { font-weight: 600; font-size: 13px; }
+.role-what { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1px; }
+
 .review-item { border-left: 2px solid var(--border-strong); padding: 4px 0 4px 12px; }
 .review-item + .review-item { margin-top: 10px; }
 
