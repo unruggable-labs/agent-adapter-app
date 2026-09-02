@@ -7,6 +7,7 @@ import {
   ATTESTATION_TYPES,
   ZERO32,
   adapterAbi,
+  controlLine,
   displayName,
   shortHex,
   toByteHex,
@@ -38,8 +39,8 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         </span>
       </div>
       <p className="page-sub" style={{ marginBottom: 4 }}>
-        {id.subjectLabel} — {id.standard < 5 ? <>token <span className="num">#{id.tokenId}</span> of </> : ""}
-        <Addr value={id.boundAddress} n={44} /> on chain {overview.chainId}
+        Agent identity anchored to {id.subjectLabel} (<Addr value={id.boundAddress} n={44} />) on
+        chain {overview.chainId} — {controlLine(id)}.
       </p>
       <p className="mono t3 small" style={{ margin: "0 0 18px", overflowWrap: "anywhere" }}>{id.ubid}</p>
 

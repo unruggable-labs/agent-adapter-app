@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import { Addr, Badge, Callout, Section, Spinner, StatusBadge } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
-import { adapterAbi, displayName } from "../lib/chain";
+import { adapterAbi, controlLine, displayName } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
 /**
@@ -61,7 +61,7 @@ export function WalletPage() {
             <>
               <div className="row wrap" style={{ gap: 10 }}>
                 <span style={{ fontSize: 15, fontWeight: 600 }}>{displayName(myAgent)}</span>
-                <span className="t3 small">{myAgent.subjectLabel}</span>
+                <span className="t3 small">{controlLine(myAgent)}</span>
                 <StatusBadge id={myAgent} />
                 {myAgentVerified
                   ? <Badge tone="ok">verified both ways</Badge>

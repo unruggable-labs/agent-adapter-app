@@ -73,6 +73,15 @@ export function displayName(id: { agentName: string | null; subjectLabel: string
   return id.subjectLabel;
 }
 
+/** The control relationship in words: the token/contract is the ownership handle for the
+ *  identity, not the agent itself. */
+export function controlLine(id: { standard: number; subjectLabel: string }): string {
+  if (id.standard <= 4) return `controlled by whoever owns ${id.subjectLabel}`;
+  if (id.standard === 5) return `controlled by the address itself`;
+  if (id.standard === 6) return `controlled by the contract's owner()`;
+  return `controlled by the contract's admins`;
+}
+
 export function shortHex(h: string | null | undefined, n = 10): string {
   if (!h) return "—";
   return h.length <= n + 2 ? h : `${h.slice(0, n)}…${h.slice(-4)}`;
