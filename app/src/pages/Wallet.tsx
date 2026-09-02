@@ -56,7 +56,7 @@ export function WalletPage() {
       </p>
 
       <div className="stack">
-        <Section label="What this address resolves to">
+        <Section label="Who operates this wallet — your published answer">
           {myAgent ? (
             <>
               <div className="row wrap" style={{ gap: 10 }}>
@@ -69,8 +69,8 @@ export function WalletPage() {
               </div>
               <p className="t2 small" style={{ margin: "8px 0 0" }}>
                 {myAgentVerified
-                  ? <>Someone looking up this address finds {displayName(myAgent)} — and can trust it, because {displayName(myAgent)} also names this wallet as its own. Your wallet carries its reputation.</>
-                  : <>You say this wallet is operated by {displayName(myAgent)}, but {displayName(myAgent)} doesn't currently say it back. Until its controller names this wallet on the agent's side, lookups will show the link as unverified — either half alone is easy to fake.</>}
+                  ? <>Anyone who checks this address — a counterparty's software, an explorer, another agent — will see it belongs to {displayName(myAgent)}, and can trust that because {displayName(myAgent)} also names this wallet as its own. Your wallet carries its reputation.</>
+                  : <>You say this wallet is operated by {displayName(myAgent)}, but {displayName(myAgent)} doesn't currently say it back. Until its controller names this wallet on the agent's side, anyone checking will see the link as unverified — either half alone is easy to fake.</>}
               </p>
               <div className="row" style={{ marginTop: 12 }}>
                 <button className="btn" onClick={() => navigate(`/identity/${myAgent.ubid}`)}>View agent</button>
