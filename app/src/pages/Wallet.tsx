@@ -47,10 +47,16 @@ export function WalletPage() {
         <h1 className="page-title">My wallet</h1>
         <Badge tone="outline">{actor.name}</Badge>
       </div>
-      <p className="page-sub"><Addr value={actor.address} n={44} /></p>
+      <p className="page-sub">
+        <Addr value={actor.address} n={44} />
+      </p>
+      <p className="t2 small" style={{ margin: "0 0 18px", maxWidth: 560 }}>
+        On its own, an address is just a number. Anyone who sees a transaction from this wallet
+        can ask <i>"who operates it?"</i> — this page controls the answer.
+      </p>
 
       <div className="stack">
-        <Section label="The agent that speaks for this wallet">
+        <Section label="What this address resolves to">
           {myAgent ? (
             <>
               <div className="row wrap" style={{ gap: 10 }}>
@@ -59,12 +65,12 @@ export function WalletPage() {
                 <StatusBadge id={myAgent} />
                 {myAgentVerified
                   ? <Badge tone="ok">verified both ways</Badge>
-                  : <Badge tone="warn">not confirmed by the agent</Badge>}
+                  : <Badge tone="warn">agent doesn't say it back</Badge>}
               </div>
               <p className="t2 small" style={{ margin: "8px 0 0" }}>
                 {myAgentVerified
-                  ? <>You chose this agent and it names your wallet back, so anyone checking the link can trust it.</>
-                  : <>You chose this agent, but it doesn't currently name your wallet — the link won't pass verification until its controller adds your wallet on the agent's side.</>}
+                  ? <>Someone looking up this address finds {displayName(myAgent)} — and can trust it, because {displayName(myAgent)} also names this wallet as its own. Your wallet carries its reputation.</>
+                  : <>You say this wallet is operated by {displayName(myAgent)}, but {displayName(myAgent)} doesn't currently say it back. Until its controller names this wallet on the agent's side, lookups will show the link as unverified — either half alone is easy to fake.</>}
               </p>
               <div className="row" style={{ marginTop: 12 }}>
                 <button className="btn" onClick={() => navigate(`/identity/${myAgent.ubid}`)}>View agent</button>
@@ -75,14 +81,14 @@ export function WalletPage() {
             </>
           ) : (
             <p className="t2" style={{ margin: 0 }}>
-              None yet. A wallet can name one agent as the one that acts for it — accept a
-              request below, or open an agent you control and use "Link my wallet".
+              Nothing — lookups of this address find no agent. To change that, accept a request
+              below, or open an agent you control and use "Link my wallet".
             </p>
           )}
         </Section>
 
         {claims.length > 0 && (
-          <Section label="Agents that claim this wallet">
+          <Section label="Agents that say this is their wallet">
             {claims.map((i) => (
               <div key={i.ubid} className="row spread" style={{ padding: "7px 0" }}>
                 <span className="row wrap" style={{ gap: 8 }}>
@@ -95,15 +101,15 @@ export function WalletPage() {
                   disabled={busy === i.ubid}
                   onClick={() => run(i.ubid, "setWalletUBID", [i.standard, i.boundAddress, BigInt(i.tokenId)])}
                 >
-                  {busy === i.ubid ? <Spinner /> : "Accept as my agent"}
+                  {busy === i.ubid ? <Spinner /> : "Confirm it's mine"}
                 </button>
               </div>
             ))}
             <p className="hint" style={{ marginTop: 8 }}>
-              Each of these says "{actor.name}'s wallet is my operating wallet." That claim costs
-              them nothing and needed no permission from you — it only becomes meaningful if you
-              accept it. Accepting moves no assets and grants nothing, replaces any current choice
-              above, and you can unlink at any time. Ignoring it is always safe.
+              Each of these declared "{actor.name}'s address is my operating wallet" — a claim
+              that needed no permission from you and proves nothing by itself. If one really is
+              your agent, confirm it and the link becomes verified. Confirming moves no assets
+              and grants no authority; ignoring a false claim is always safe.
             </p>
           </Section>
         )}
