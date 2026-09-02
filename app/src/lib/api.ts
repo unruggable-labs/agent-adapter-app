@@ -37,6 +37,10 @@ export interface Identity {
   ubid: Hex;
   standard: number;
   standardName: string;
+  /** What the bound thing is called: "DemoPunks #7", or the contract/account name. */
+  subjectLabel: string;
+  /** The agent's self-declared name from its `name` metadata entry, when printable. */
+  agentName: string | null;
   boundAddress: Address;
   tokenId: string;
   claimed: boolean;

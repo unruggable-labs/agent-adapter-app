@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Addr, Badge, Spinner } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
-import { adapterAbi, shortHex } from "../lib/chain";
+import { adapterAbi, displayName, shortHex } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
 export function AttestationsPage() {
-  const { actor, actorIndex, overview, navigate, refresh, toast } = useApp();
+  const { actor, actorIndex, overview, identities, navigate, refresh, toast } = useApp();
   const [rows, setRows] = useState<AttestationRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [mineOnly, setMineOnly] = useState(false);
@@ -51,9 +51,12 @@ export function AttestationsPage() {
               <tr key={a.attestationId}>
                 <td><Badge tone="outline">{a.typeName}</Badge></td>
                 <td>
-                  {a.resolved
-                    ? <button className="addr" onClick={() => navigate(`/identity/${a.ubid}`)}>{shortHex(a.ubid, 10)}</button>
-                    : <span className="row" style={{ gap: 6 }}><span className="mono t3">{shortHex(a.ubid, 10)}</span><Badge tone="warn">unresolved</Badge></span>}
+                  {(() => {
+                    const target = identities.find((i) => i.ubid === a.ubid);
+                    if (target)
+                      return <button style={{ fontWeight: 600 }} onClick={() => navigate(`/identity/${a.ubid}`)}>{displayName(target)}</button>;
+                    return <span className="row" style={{ gap: 6 }}><span className="mono t3">{shortHex(a.ubid, 10)}</span><Badge tone="warn">unresolved</Badge></span>;
+                  })()}
                 </td>
                 <td><Addr value={a.attester} n={8} /></td>
                 <td className="mono t2" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

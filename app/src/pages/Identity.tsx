@@ -7,6 +7,7 @@ import {
   ATTESTATION_TYPES,
   ZERO32,
   adapterAbi,
+  displayName,
   shortHex,
   toByteHex,
   utf8ToHex,
@@ -29,17 +30,18 @@ export function IdentityPage({ ubid }: { ubid: string }) {
     <div className="page fade-in">
       <button className="btn btn-ghost btn-sm" onClick={() => navigate("/identities")}>← Identities</button>
       <div className="page-head wrap" style={{ marginTop: 10, rowGap: 6 }}>
-        <h1 className="page-title mono" style={{ fontSize: 14, overflowWrap: "anywhere" }}>{id.ubid}</h1>
+        <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
         <span className="row" style={{ gap: 8 }}>
           <StatusBadge id={id} />
           <Badge tone="outline">{id.standardName}</Badge>
           <TrustBadge t={id.trustBase} />
         </span>
       </div>
-      <p className="page-sub">
-        {id.standard < 5 ? <>Token <span className="num">#{id.tokenId}</span> of </> : "The address "}
+      <p className="page-sub" style={{ marginBottom: 4 }}>
+        {id.subjectLabel} — {id.standard < 5 ? <>token <span className="num">#{id.tokenId}</span> of </> : ""}
         <Addr value={id.boundAddress} n={44} /> on chain {overview.chainId}
       </p>
+      <p className="mono t3 small" style={{ margin: "0 0 18px", overflowWrap: "anywhere" }}>{id.ubid}</p>
 
       <div className="stack">
         <Flags id={id} />

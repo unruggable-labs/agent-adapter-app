@@ -78,7 +78,10 @@ export async function runScenario(rpcUrl: string, d: Deployment) {
     d.punks,
     7n,
     "ipfs://punkbot-7/agent.json",
-    [{ metadataKey: "skills", metadataValue: stringToHex("trading,research") }],
+    [
+      { metadataKey: "name", metadataValue: stringToHex("PunkBot") },
+      { metadataKey: "skills", metadataValue: stringToHex("trading,research") },
+    ],
   ]);
   // Forward `account` metadata naming Dave, ERC-8048 style, so his confirmation can verify.
   await adapterWrite(alice, "counterfactualSetMetadata", [

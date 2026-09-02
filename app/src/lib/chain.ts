@@ -57,6 +57,22 @@ export const ATTESTATION_TYPES = { CONFIRM_ACCOUNT: 1, STAR: 2, RATING: 3, REVIE
 
 export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 
+/** Persona name for a known demo address — how the local demo stands in for ENS/profiles. */
+export function personaName(address: string): string | null {
+  return ACTORS.find((a) => a.address === address.toLowerCase())?.name ?? null;
+}
+
+/** The one rule for naming an identity anywhere in the app: agent's own name, else what
+ *  the bound subject is called. Hashes are for verification surfaces, not for recognition. */
+export function displayName(id: { agentName: string | null; subjectLabel: string; standard: number; boundAddress: string }): string {
+  if (id.agentName) return id.agentName;
+  if (id.standard === 5) {
+    const persona = personaName(id.boundAddress);
+    if (persona) return `${persona}'s wallet`;
+  }
+  return id.subjectLabel;
+}
+
 export function shortHex(h: string | null | undefined, n = 10): string {
   if (!h) return "—";
   return h.length <= n + 2 ? h : `${h.slice(0, n)}…${h.slice(-4)}`;

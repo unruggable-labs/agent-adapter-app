@@ -1,5 +1,5 @@
 import { useApp } from "../lib/app-state";
-import { shortHex } from "../lib/chain";
+import { displayName, shortHex } from "../lib/chain";
 import { Addr, StatusBadge, TrustBadge } from "../components/ui";
 
 export function IdentitiesPage() {
@@ -23,11 +23,10 @@ export function IdentitiesPage() {
         <table className="table clickable">
           <thead>
             <tr>
+              <th>Agent</th>
               <th>UBID</th>
-              <th>Subject</th>
               <th>Standard</th>
               <th>Status</th>
-              <th>Agent URI</th>
               <th className="td-right">Rating</th>
               <th className="td-right">Stars</th>
               <th>Signals</th>
@@ -36,16 +35,13 @@ export function IdentitiesPage() {
           <tbody>
             {identities.map((id) => (
               <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
-                <td className="mono">{shortHex(id.ubid, 10)}</td>
                 <td>
-                  <span className="mono">{shortHex(id.boundAddress, 8)}</span>
-                  {id.standard < 5 && <span className="t3 num"> #{id.tokenId}</span>}
+                  <span style={{ fontWeight: 600 }}>{displayName(id)}</span>
+                  {id.agentName && <span className="t3 small"> {id.subjectLabel}</span>}
                 </td>
+                <td className="mono t3">{shortHex(id.ubid, 10)}</td>
                 <td><span className="badge badge-outline">{id.standardName}</span></td>
                 <td><StatusBadge id={id} /></td>
-                <td className="t2 small" style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {id.agentURI ?? "—"}
-                </td>
                 <td className="td-right num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
                 <td className="td-right num">{id.reputation.stars || <span className="t3">0</span>}</td>
                 <td>
@@ -58,7 +54,7 @@ export function IdentitiesPage() {
               </tr>
             ))}
             {identities.length === 0 && (
-              <tr><td colSpan={8}><div className="empty">No identities yet — run the demo scenario or create one.</div></td></tr>
+              <tr><td colSpan={7}><div className="empty">No identities yet — run the demo scenario or create one.</div></td></tr>
             )}
           </tbody>
         </table>

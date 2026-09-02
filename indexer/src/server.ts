@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Address, PublicClient } from "viem";
 import type { Ingester } from "./ingest.js";
+import { labelsFor } from "./names.js";
 import { ProjectionStore, type IdentityState } from "./projection.js";
 import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES, SINGLE_OWNER_TOKEN_STANDARDS, STANDARD_NAMES } from "./ubid.js";
@@ -32,8 +33,10 @@ async function identityView(store: ProjectionStore, client: PublicClient, id: Id
   }
   const reputation = store.reputation(id.ubid);
   const trustBase = await probeTrustBase(client, id.boundAddress).catch(() => null);
+  const labels = await labelsFor(client, id).catch(() => ({ subjectLabel: id.boundAddress as string, agentName: null }));
   return {
     ...id,
+    ...labels,
     standardName: STANDARD_NAMES[id.standard],
     reputation,
     trustBase,
