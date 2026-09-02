@@ -38,27 +38,31 @@ export function WalletPage() {
         <h1 className="page-title">My wallet</h1>
         <Badge tone="outline">{actor.name}</Badge>
       </div>
-      <p className="page-sub"><Addr value={actor.address} n={16} /></p>
+      <p className="page-sub"><Addr value={actor.address} n={44} /></p>
 
       <div className="stack">
         <Section label="Identities naming this wallet">
           {pointingAtMe.length === 0 && <div className="empty">No identity currently names {actor.name}'s address as its agent wallet.</div>}
           {pointingAtMe.map((i) => (
-            <div key={i.ubid} className="row spread" style={{ padding: "6px 0" }}>
-              <span className="row">
-                <button className="addr" onClick={() => navigate(`/identity/${i.ubid}`)}>{shortHex(i.ubid, 12)}</button>
-                <span className="t3 small">{i.standardName}{i.standard < 5 ? ` #${i.tokenId}` : ""}</span>
-                {i.flags.walletUnverified ? <Badge tone="warn">not pointed back</Badge> : <Badge tone="ok">mutually verified</Badge>}
-              </span>
-              {i.flags.walletUnverified && (
-                <button
-                  className="btn btn-sm"
-                  disabled={busy === i.ubid}
-                  onClick={() => run(i.ubid, "setWalletUBID", [i.standard, i.boundAddress, BigInt(i.tokenId)])}
-                >
-                  {busy === i.ubid ? <Spinner /> : "Point back"}
-                </button>
-              )}
+            <div key={i.ubid} style={{ padding: "6px 0" }}>
+              <div className="row spread">
+                <span className="row">
+                  <span className="t3 small">{i.standardName}{i.standard < 5 ? ` #${i.tokenId}` : ""}</span>
+                  {i.flags.walletUnverified ? <Badge tone="warn">not pointed back</Badge> : <Badge tone="ok">mutually verified</Badge>}
+                </span>
+                {i.flags.walletUnverified && (
+                  <button
+                    className="btn btn-sm"
+                    disabled={busy === i.ubid}
+                    onClick={() => run(i.ubid, "setWalletUBID", [i.standard, i.boundAddress, BigInt(i.tokenId)])}
+                  >
+                    {busy === i.ubid ? <Spinner /> : "Point back"}
+                  </button>
+                )}
+              </div>
+              <button className="mono link-hash" onClick={() => navigate(`/identity/${i.ubid}`)} title="Open profile">
+                {i.ubid}
+              </button>
             </div>
           ))}
           <p className="hint" style={{ marginTop: 8 }}>

@@ -246,6 +246,12 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .addr:hover { color: var(--text-1); border-color: var(--border-strong); }
 
+.link-hash {
+  color: var(--text-2); font-size: 12px;
+  overflow-wrap: anywhere; text-align: left; margin-top: 3px;
+}
+.link-hash:hover { color: var(--accent-strong); }
+
 .review-item { border-left: 2px solid var(--border-strong); padding: 4px 0 4px 12px; }
 .review-item + .review-item { margin-top: 10px; }
 

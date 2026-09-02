@@ -28,15 +28,17 @@ export function IdentityPage({ ubid }: { ubid: string }) {
   return (
     <div className="page fade-in">
       <button className="btn btn-ghost btn-sm" onClick={() => navigate("/identities")}>← Identities</button>
-      <div className="page-head" style={{ marginTop: 10 }}>
-        <h1 className="page-title mono" style={{ fontSize: 15 }}>{shortHex(id.ubid, 18)}</h1>
-        <StatusBadge id={id} />
-        <Badge tone="outline">{id.standardName}</Badge>
-        <TrustBadge t={id.trustBase} />
+      <div className="page-head wrap" style={{ marginTop: 10, rowGap: 6 }}>
+        <h1 className="page-title mono" style={{ fontSize: 14, overflowWrap: "anywhere" }}>{id.ubid}</h1>
+        <span className="row" style={{ gap: 8 }}>
+          <StatusBadge id={id} />
+          <Badge tone="outline">{id.standardName}</Badge>
+          <TrustBadge t={id.trustBase} />
+        </span>
       </div>
       <p className="page-sub">
         {id.standard < 5 ? <>Token <span className="num">#{id.tokenId}</span> of </> : "The address "}
-        <Addr value={id.boundAddress} /> on chain {overview.chainId}
+        <Addr value={id.boundAddress} n={44} /> on chain {overview.chainId}
       </p>
 
       <div className="stack">
