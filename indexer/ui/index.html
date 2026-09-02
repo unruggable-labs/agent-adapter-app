@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UBID Explorer — Adapter8004</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1d212b; --text: #e6e8ee; --muted: #8a91a3;
+    --accent: #6ea8fe; --ok: #4cc38a; --warn: #f0b429; --bad: #e5484d; --border: #2a2f3c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 380px 1fr; gap: 0; min-height: calc(100vh - 60px); }
+  #list { border-right: 1px solid var(--border); overflow-y: auto; }
+  .row { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .row:hover, .row.active { background: var(--panel); }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; margin-right: 6px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.std { color: var(--accent); border-color: var(--accent); }
+  .badge.reg { color: var(--ok); border-color: var(--ok); }
+  .badge.warn { color: var(--warn); border-color: var(--warn); }
+  .badge.bad { color: var(--bad); border-color: var(--bad); }
+  #detail { padding: 24px; overflow-y: auto; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 5px 8px 5px 0; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; white-space: nowrap; padding-right: 16px; }
+  .stat { display: inline-block; margin-right: 28px; }
+  .stat .n { font-size: 26px; font-weight: 600; }
+  .stat .l { color: var(--muted); font-size: 12px; }
+  .flag { padding: 10px 14px; border-radius: 8px; margin: 6px 0; font-size: 13px; }
+  .flag.warn { background: rgba(240,180,41,.12); border: 1px solid var(--warn); }
+  .flag.bad { background: rgba(229,72,77,.12); border: 1px solid var(--bad); }
+  .review { border-left: 3px solid var(--accent); padding: 6px 12px; margin: 8px 0; background: var(--panel2); border-radius: 0 8px 8px 0; }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>UBID Explorer</h1>
+  <span class="sub" id="overview">loading…</span>
+</header>
+<main>
+  <div id="list"></div>
+  <div id="detail"><div class="empty">Select an identity</div></div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const short = (h, n = 10) => h ? h.slice(0, n) + "…" : "—";
+let identities = [];
+
+async function load() {
+  const [ov, ids] = await Promise.all([
+    fetch("/api/overview").then(r => r.json()),
+    fetch("/api/identities").then(r => r.json()),
+  ]);
+  $("#overview").textContent =
+    `adapter ${short(ov.adapter, 12)} · chain ${ov.chainId} · ${ov.identities} identities · ` +
+    `${ov.agents} registered agents · ${ov.attestations} attestations · ${ov.dropped} dropped events`;
+  identities = ids;
+  renderList();
+}
+
+function renderList() {
+  $("#list").innerHTML = identities.map((id, i) => `
+    <div class="row" data-i="${i}" onclick="show(${i})">
+      <div class="mono">${short(id.ubid, 18)}</div>
+      <div style="margin-top:4px">
+        <span class="badge std">${id.standardName}</span>
+        ${id.agentIds.length ? `<span class="badge reg">agent #${id.agentIds.join(",")}</span>` : `<span class="badge">counterfactual</span>`}
+        ${id.collectionAuthoredAfterOwner ? `<span class="badge bad">⚠ post-owner collection claim</span>` : ""}
+        ${id.flags.currentlyOwnerless ? `<span class="badge warn">ownerless token</span>` : ""}
+        ${trustBadge(id)}
+      </div>
+      <div class="mono muted" style="margin-top:4px">${short(id.boundAddress, 12)}${id.standardName.startsWith("ERC") ? " / #" + id.tokenId : ""}</div>
+    </div>`).join("");
+}
+
+function trustBadge(id) {
+  const t = id.trustBase;
+  if (!t || id.standardName === "ACCOUNT") return "";
+  if (t.verdict === "ruggable") return `<span class="badge bad">ruggable trust base</span>`;
+  if (t.verdict === "unstable") return `<span class="badge warn">upgradeable trust base</span>`;
+  if (t.verdict === "burnable") return `<span class="badge warn">burnable</span>`;
+  return `<span class="badge reg">solid trust base</span>`;
+}
+
+function trustBaseDetail(id) {
+  const t = id.trustBase;
+  if (!t) return "";
+  if (t.isEoa) {
+    return `<tr><th>Trust base</th><td>${t.delegated7702
+      ? `<span class="badge warn">EIP-7702 delegated EOA</span> <span class="muted">anyone who can drive the delegate can act for this identity</span>`
+      : `<span class="badge">plain EOA</span> <span class="muted">authority is key possession alone</span>`}</td></tr>`;
+  }
+  const caps = [
+    t.canBurn ? `<span class="badge warn">burn function detected*</span>` : `<span class="badge reg">no burn detected*</span>`,
+    t.arbitraryCallSurface ? `<span class="badge warn">arbitrary-call surface*</span>` : `<span class="badge reg">no call surface detected*</span>`,
+    t.upgradeable ? `<span class="badge bad">upgradeable proxy</span>` : `<span class="badge reg">not a proxy</span>`,
+  ].join(" ");
+  return `<tr><th>Trust base</th><td>${caps}<div class="muted" style="margin-top:4px">*selector-scan heuristic — read the code before relying on it</div></td></tr>`;
+}
+
+function trustBaseFlag(id) {
+  const t = id.trustBase;
+  if (!t || t.isEoa) return "";
+  if (t.verdict === "ruggable")
+    return `<div class="flag bad"><b>Ruggable trust base.</b> The collection's code can burn tokens <i>and</i> can be made to call out. A post-burn re-claim of this identity is possible by code, at any time, without the owner acting. Binding here adopts that rule.</div>`;
+  if (t.verdict === "unstable")
+    return `<div class="flag warn"><b>Upgradeable trust base.</b> The collection is behind a proxy, so today's code guarantees nothing: it can acquire burn and call-out capabilities after identities are bound. Static review does not apply.</div>`;
+  if (t.verdict === "burnable")
+    return `<div class="flag warn"><b>Burnable tokens.</b> Tokens in this collection can cease to have an owner, reopening the collection-authority window. No outbound-call surface was detected, so a re-claim would need one to exist or be added — treat as residual risk.</div>`;
+  return "";
+}
+
+function show(i) {
+  document.querySelectorAll(".row").forEach((r, j) => r.classList.toggle("active", j === i));
+  const id = identities[i];
+  const rep = id.reputation;
+  const flags = [];
+  if (id.collectionAuthoredAfterOwner) flags.push(`<div class="flag bad"><b>Post-owner collection claim.</b> The current state includes collection-authored events emitted after a real owner had spoken — the burn-reopen pattern. Treat the current claim as suspect; reputation may describe a previous claimant's agent.</div>`);
+  if (id.flags.currentlyOwnerless) flags.push(`<div class="flag warn"><b>Bound token is currently ownerless</b> (ownerOf reverts or is zero). The collection-authority window is open.</div>`);
+  if (id.flags.walletUnverified && id.agentWallet) flags.push(`<div class="flag warn"><b>Wallet claim is one-directional.</b> The identity names ${short(id.agentWallet, 12)} but that wallet's own UBID designation does not point back. A wallet claim alone is not verification.</div>`);
+  if (!id.claimed) flags.push(`<div class="flag warn"><b>No registration claim yet.</b> Field events or attestations exist, but no CounterfactualAgentRegistered has been seen.</div>`);
+
+  $("#detail").innerHTML = `
+    <div class="card"><h2>Identity</h2>
+      <table>
+        <tr><th>UBID</th><td class="mono">${id.ubid}</td></tr>
+        <tr><th>Subject</th><td class="mono">${id.boundAddress}${id.standardName.startsWith("ERC") ? " / token #" + id.tokenId : ""}</td></tr>
+        <tr><th>Standard</th><td><span class="badge std">${id.standardName}</span></td></tr>
+        <tr><th>Status</th><td>${id.agentIds.length ? `registered — ERC-8004 agent #${id.agentIds.join(",")} (joined by UBID)` : id.claimed ? "counterfactual claim only" : "no claim"}</td></tr>
+        <tr><th>Agent URI</th><td class="mono">${id.agentURI ?? "—"}</td></tr>
+        <tr><th>Wallet</th><td class="mono">${id.agentWallet ?? "—"} ${id.agentWallet && !id.flags.walletUnverified ? '<span class="badge reg">mutually verified</span>' : ""}</td></tr>
+        <tr><th>Last event</th><td class="mono">${id.lastEvent ? `${id.lastEvent.eventName} @ block ${id.lastEvent.blockNumber} by ${short(id.lastEvent.emitter, 12)}${id.lastEventCollectionAuthored ? " (collection-authored)" : ""}` : "—"}</td></tr>
+        ${trustBaseDetail(id)}
+      </table>
+    </div>
+    ${trustBaseFlag(id)}
+    ${flags.join("")}
+    <div class="card"><h2>Reputation</h2>
+      <div style="margin-bottom:12px">
+        <span class="stat"><span class="n">${rep.stars}</span> <span class="l">stars</span></span>
+        <span class="stat"><span class="n">${rep.ratingAverage === null ? "—" : rep.ratingAverage.toFixed(0)}</span> <span class="l">avg rating (${rep.ratings.length})</span></span>
+        <span class="stat"><span class="n">${rep.reviews.length}</span> <span class="l">reviews</span></span>
+        <span class="stat"><span class="n">${rep.interactions.length}</span> <span class="l">interactions</span></span>
+      </div>
+      ${rep.ratings.map(r => `<div class="mono muted">rating ${r.value}/100 by ${short(r.attester, 12)}</div>`).join("")}
+      ${rep.reviews.map(r => `<div class="review">"${r.text}"<div class="mono muted">— ${short(r.attester, 12)}</div></div>`).join("")}
+      ${rep.interactions.map(x => `<div class="review">interaction · score ${x.score}/100 · ${x.text || "no note"}<div class="mono muted">ref ${short(x.reference, 14)} — ${short(x.attester, 12)}</div></div>`).join("")}
+      ${rep.confirmedAccounts.length ? `<div style="margin-top:10px"><span class="muted">confirmed accounts:</span> ${rep.confirmedAccounts.map(c => `<span class="mono">${short(c.attester, 12)}</span> ${c.verified ? '<span class="badge reg">verified against forward metadata</span>' : '<span class="badge warn">unverified</span>'}`).join(" · ")}</div>` : ""}
+    </div>
+    <div class="card"><h2>Metadata</h2>
+      ${Object.keys(id.metadata).length ? `<table>${Object.entries(id.metadata).map(([k, v]) => `<tr><th>${k}</th><td class="mono">${v}</td></tr>`).join("")}</table>` : `<span class="muted">none</span>`}
+    </div>`;
+}
+
+load();
+setInterval(load, 4000);
+</script>
+</body>
+</html>
