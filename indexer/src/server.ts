@@ -97,6 +97,10 @@ export function startServer(
         const account = url.pathname.split("/").pop()!.toLowerCase() as Address;
         return send(json(store.resolveWallet(account)));
       }
+      if (url.pathname.startsWith("/api/trustbase/")) {
+        const address = url.pathname.split("/").pop()! as Address;
+        return send(json(await probeTrustBase(client, address)));
+      }
       if (url.pathname === "/api/attestations") {
         return send(
           json(
