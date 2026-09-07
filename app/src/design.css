@@ -320,6 +320,21 @@ input, textarea, select { font: inherit; color: inherit; }
 .hero-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 28px; align-items: center; }
 @media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } }
 
+.hero-art { position: relative; }
+.hero-art::before {
+  content: ""; position: absolute; inset: -40px -30px;
+  background:
+    radial-gradient(60% 55% at 30% 30%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    radial-gradient(50% 50% at 75% 70%, color-mix(in srgb, var(--ok) 10%, transparent), transparent 70%);
+  filter: blur(6px); z-index: 0; pointer-events: none;
+}
+.hero-art > * { position: relative; z-index: 1; }
+
+.step-icon {
+  width: 22px; height: 22px; color: var(--accent); margin-bottom: 8px;
+  background: var(--accent-bg); border-radius: 7px; padding: 4px;
+}
+
 .mini-profile {
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
   padding: 16px 18px; box-shadow: 0 10px 30px rgba(20, 24, 40, 0.08), var(--shadow-1);

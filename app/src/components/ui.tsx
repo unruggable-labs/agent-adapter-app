@@ -2,6 +2,30 @@ import { useState, type ReactNode } from "react";
 import type { Identity, TrustBase } from "../lib/api";
 import { shortHex } from "../lib/chain";
 
+/** Deterministic identity mark derived from the UBID — imagery that means something:
+ *  the same identity renders the same face everywhere, forever. */
+export function Avatar({ seed, size = 26 }: { seed: string; size?: number }) {
+  const a = parseInt(seed.slice(2, 8) || "0", 16);
+  const b = parseInt(seed.slice(8, 14) || "0", 16);
+  const h1 = a % 360;
+  const h2 = (h1 + 50 + (b % 90)) % 360;
+  const angle = (a + b) % 360;
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "38%",
+        flexShrink: 0,
+        display: "inline-block",
+        background: `linear-gradient(${angle}deg, hsl(${h1} 72% 58%), hsl(${h2} 70% 42%))`,
+        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+      }}
+    />
+  );
+}
+
 export function Badge({ tone = "", children }: { tone?: string; children: ReactNode }) {
   return <span className={`badge ${tone ? `badge-${tone}` : ""}`}>{children}</span>;
 }

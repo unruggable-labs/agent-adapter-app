@@ -1,6 +1,6 @@
 import { useApp } from "../lib/app-state";
 import { displayName, shortHex } from "../lib/chain";
-import { Addr, StatusBadge, TrustBadge } from "../components/ui";
+import { Addr, Avatar, StatusBadge, TrustBadge } from "../components/ui";
 
 export function IdentitiesPage() {
   const { identities, overview, navigate } = useApp();
@@ -36,8 +36,11 @@ export function IdentitiesPage() {
             {identities.map((id) => (
               <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
                 <td>
-                  <span style={{ fontWeight: 600 }}>{displayName(id)}</span>
-                  {id.agentName && <span className="t3 small"> {id.subjectLabel}</span>}
+                  <span className="row" style={{ gap: 8 }}>
+                    <Avatar seed={id.ubid} size={20} />
+                    <span style={{ fontWeight: 600 }}>{displayName(id)}</span>
+                    {id.agentName && <span className="t3 small">{id.subjectLabel}</span>}
+                  </span>
                 </td>
                 <td className="mono t3">{shortHex(id.ubid, 10)}</td>
                 <td><span className="badge badge-outline">{id.standardName}</span></td>

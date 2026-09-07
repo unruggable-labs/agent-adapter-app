@@ -15,7 +15,7 @@ export function HowPage() {
             <div className="role">
               <div className="role-name">The agent</div>
               <div className="role-what">Software, off-chain</div>
-              <p>A bot running on a server somewhere. The chain never sees it directly — everything below exists to represent it.</p>
+              <p>Software running on a server somewhere. The chain never sees it directly — everything below exists to represent it.</p>
             </div>
             <div className="role">
               <div className="role-name">The record</div>
@@ -30,7 +30,7 @@ export function HowPage() {
             <div className="role">
               <div className="role-name">The hands</div>
               <div className="role-what">The operating wallet</div>
-              <p>The key the bot actually signs transactions with. Hot, replaceable, worth little. If it leaks, the deed holder points the record at a fresh key — reputation survives, because it lives on the record.</p>
+              <p>The key the agent actually signs transactions with. Hot, replaceable, worth little. If it leaks, the deed holder points the record at a fresh key — reputation survives, because it lives on the record.</p>
             </div>
           </div>
           <p className="hint" style={{ marginTop: 12 }}>

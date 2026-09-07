@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, Badge, Callout, Section, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
+import { Addr, Avatar, Badge, Callout, Section, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
 import type { Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
@@ -30,7 +30,8 @@ export function IdentityPage({ ubid }: { ubid: string }) {
   return (
     <div className="page fade-in">
       <button className="btn btn-ghost btn-sm" onClick={() => navigate("/identities")}>← Identities</button>
-      <div className="page-head wrap" style={{ marginTop: 10, rowGap: 6 }}>
+      <div className="page-head wrap" style={{ marginTop: 10, rowGap: 6, alignItems: "center" }}>
+        <Avatar seed={id.ubid} size={30} />
         <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
         <span className="row" style={{ gap: 8 }}>
           <StatusBadge id={id} />
