@@ -58,8 +58,10 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
 
 ## 4. Wallet UBID (reverse resolution)
 
-- **(contract)** Latest `WalletUBIDSet` per account wins; `WalletUBIDCleared` unsets. Both
-  authorize against the account, so any authorized party may undo any other.
+- **(contract)** Latest `WalletUBIDSet` per account wins; `WalletUBIDCleared` unsets. Since the
+  audit round, both are strictly `msg.sender`-only (the acting-for surface was removed), so the
+  event's account and actor fields always match; smart-wallet authorization is the wallet's own
+  concern. Event ABIs and topics are unchanged, so the projection is unaffected.
 - **(contract)** A designation is a self-assertion. It is **verified** only under mutual
   pointing: the designated identity's current `agentWallet` names the account back. The indexer
   exposes both directions and never presents a one-directional claim as verified.
