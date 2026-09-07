@@ -18,14 +18,14 @@ const Ctx = createContext<AppState>(null as unknown as AppState);
 export const useApp = () => useContext(Ctx);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [route, setRoute] = useState(location.hash.slice(1) || "/identities");
+  const [route, setRoute] = useState(location.hash.slice(1) || "/");
   const [actorIndex, setActorIndex] = useState(0);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const onHash = () => setRoute(location.hash.slice(1) || "/identities");
+    const onHash = () => setRoute(location.hash.slice(1) || "/");
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);

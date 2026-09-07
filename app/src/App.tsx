@@ -5,11 +5,15 @@ import { CreatePage } from "./pages/Create";
 import { HowPage } from "./pages/How";
 import { IdentitiesPage } from "./pages/Identities";
 import { IdentityPage } from "./pages/Identity";
+import { LandingPage } from "./pages/Landing";
 import { WalletPage } from "./pages/Wallet";
 
 function NavItem({ to, label, count }: { to: string; label: string; count?: number }) {
   const { route, navigate } = useApp();
-  const active = route === to || (to !== "/identities" && route.startsWith(to)) || (to === "/identities" && route.startsWith("/identity/"));
+  const active =
+    route === to ||
+    (to === "/identities" && route.startsWith("/identity")) ||
+    (to !== "/" && to !== "/identities" && route.startsWith(to));
   return (
     <button className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(to)}>
       {label}
@@ -21,8 +25,9 @@ function NavItem({ to, label, count }: { to: string; label: string; count?: numb
 function Shell() {
   const { route, overview, actorIndex, setActorIndex, actor } = useApp();
 
-  let page = <IdentitiesPage />;
+  let page = <LandingPage />;
   if (route.startsWith("/identity/")) page = <IdentityPage ubid={route.split("/")[2]} />;
+  else if (route.startsWith("/identities")) page = <IdentitiesPage />;
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/create")) page = <CreatePage />;
   else if (route.startsWith("/wallet")) page = <WalletPage />;
@@ -40,6 +45,7 @@ function Shell() {
         </button>
 
         <div className="nav-label">Registry</div>
+        <NavItem to="/" label="Start here" />
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
 
