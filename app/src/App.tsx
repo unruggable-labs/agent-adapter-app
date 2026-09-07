@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, shortHex } from "./lib/chain";
 import { AttestationsPage } from "./pages/Attestations";
@@ -24,6 +25,11 @@ function NavItem({ to, label, count }: { to: string; label: string; count?: numb
 
 function Shell() {
   const { route, overview, actorIndex, setActorIndex, actor } = useApp();
+  const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("aa-theme", theme);
+  }, [theme]);
 
   let page = <LandingPage />;
   if (route.startsWith("/identity/")) page = <IdentityPage ubid={route.split("/")[2]} />;
@@ -56,6 +62,9 @@ function Shell() {
         <NavItem to="/how" label="How identity works" />
 
         <div className="sidebar-foot">
+          <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+            {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
+          </button>
           <div className="nav-label" style={{ padding: "0 0 4px" }}>Acting as</div>
           <select className="select" value={actorIndex} onChange={(e) => setActorIndex(Number(e.target.value))}>
             {ACTORS.map((a, i) => (

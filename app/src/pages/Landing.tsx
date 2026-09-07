@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { isAddress } from "viem";
 import { Badge } from "../components/ui";
-import { api } from "../lib/api";
+import { api, type Identity } from "../lib/api";
 import { useApp } from "../lib/app-state";
 import { displayName } from "../lib/chain";
 
-/** The product presentation: the boring sentence, the story told twice, and a live lookup
- *  so the value is demonstrable before any concept is introduced. */
+/** The product presentation: one plain sentence, a live lookup, and the story in bullets —
+ *  show the profile card before explaining a single concept. */
 export function LandingPage() {
   const { identities, navigate } = useApp();
   const [query, setQuery] = useState("");
@@ -23,31 +23,39 @@ export function LandingPage() {
   }
 
   const found = result?.state === "found" ? identities.find((i) => i.ubid === result.ubid) : null;
+  // the hero card: the most-reviewed identity the indexer knows, i.e. real data, not a mock
+  const showcase = [...identities].sort(
+    (a, b) =>
+      b.reputation.reviews.length + b.reputation.ratings.length - (a.reputation.reviews.length + a.reputation.ratings.length),
+  )[0];
 
   return (
-    <div className="page page-narrow fade-in">
-      <div style={{ padding: "28px 0 8px" }}>
-        <h1 style={{ fontSize: 26, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.25, margin: 0 }}>
-          Public profiles and reviews for the wallets bots do business from.
-        </h1>
-        <p className="t2" style={{ fontSize: 14.5, maxWidth: 540, marginTop: 12 }}>
-          Before software pays a stranger's address, it should get to ask: <i>who is this, and
-          are they any good?</i> This is that lookup — identity and reputation for on-chain
-          agents, with no platform in the middle able to delete reviews or sell checkmarks.
-        </p>
-        <div className="row" style={{ marginTop: 18 }}>
-          <button className="btn btn-primary" onClick={() => navigate("/identities")}>Browse agents</button>
-          <button className="btn" onClick={() => navigate("/create")}>Create an identity</button>
-          <button className="btn btn-ghost" onClick={() => navigate("/how")}>How it works</button>
+    <div className="page fade-in">
+      <div className="hero-grid" style={{ padding: "26px 0 10px" }}>
+        <div>
+          <h1 style={{ fontSize: 27, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.22, margin: 0 }}>
+            Profiles and reviews for the wallets bots do business with.
+          </h1>
+          <p className="t2" style={{ fontSize: 14.5, marginTop: 12, maxWidth: 460 }}>
+            Bots are starting to pay each other. Before yours pays a stranger's address, it
+            should get to ask two questions: <b style={{ color: "var(--text-1)" }}>who is this</b> — and{" "}
+            <b style={{ color: "var(--text-1)" }}>are they any good?</b>
+          </p>
+          <div className="row wrap" style={{ marginTop: 18 }}>
+            <button className="btn btn-primary" onClick={() => navigate("/identities")}>Browse agents</button>
+            <button className="btn" onClick={() => navigate("/create")}>Create an identity</button>
+            <button className="btn btn-ghost" onClick={() => navigate("/how")}>How it works</button>
+          </div>
         </div>
+        {showcase && <MiniProfile id={showcase} onOpen={() => navigate(`/identity/${showcase.ubid}`)} />}
       </div>
 
-      <div className="card" style={{ marginTop: 22 }}>
+      <div className="card" style={{ marginTop: 20 }}>
         <div className="section-label">Try it — who operates this wallet?</div>
         <div className="row">
           <input
             className="input mono"
-            placeholder="paste any address, e.g. the PunkBot server's 0x976e…"
+            placeholder="paste any address and hit enter"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setResult(null); }}
             onKeyDown={(e) => e.key === "Enter" && lookup()}
@@ -57,7 +65,7 @@ export function LandingPage() {
         {result?.state === "invalid" && <p className="hint" style={{ marginTop: 8 }}>That's not an address.</p>}
         {result?.state === "none" && (
           <p className="t2 small" style={{ marginTop: 10 }}>
-            No agent — this address is just a number. That's also an answer: nothing vouches for it.
+            No agent — this address is just a number. That's an answer too: nothing vouches for it.
           </p>
         )}
         {found && (
@@ -68,53 +76,94 @@ export function LandingPage() {
             {result?.verified ? <Badge tone="ok">verified both ways</Badge> : <Badge tone="warn">claim only — not verified</Badge>}
             <span className="t2 small">
               {found.reputation.ratingAverage !== null && <>rated {found.reputation.ratingAverage.toFixed(0)}/100 · </>}
-              {found.reputation.interactions.length} recorded deal{found.reputation.interactions.length === 1 ? "" : "s"} · {found.reputation.reviews.length} review{found.reputation.reviews.length === 1 ? "" : "s"}
+              {plural(found.reputation.interactions.length, "recorded deal")} · {plural(found.reputation.reviews.length, "review")}
             </span>
           </div>
         )}
       </div>
 
+      <div className="steps-grid" style={{ marginTop: 14 }}>
+        <div className="step">
+          <span className="step-num">1</span>
+          <b>Look up an address</b>
+          <p>Every wallet gets an answer: an agent profile, or "just a number".</p>
+        </div>
+        <div className="step">
+          <span className="step-num">2</span>
+          <b>Deal with confidence</b>
+          <p>Profile and wallet vouch for each other — a clone of the website doesn't pass.</p>
+        </div>
+        <div className="step">
+          <span className="step-num">3</span>
+          <b>Leave a review that sticks</b>
+          <p>It can point at the payment transaction as evidence, and nobody can delete it.</p>
+        </div>
+      </div>
+
       <div className="story-grid" style={{ marginTop: 14 }}>
         <div className="card">
-          <div className="section-label" style={{ color: "var(--danger)" }}>Without it</div>
-          <p className="t2 small" style={{ margin: 0 }}>
-            A bot sells research reports — $5 over an API, paid to <span className="mono">0x976e…</span>.
-            Before you send money to a raw address you have a stranger's questions: is this the
-            real one or a clone of its website? Has it ever delivered? If it takes your $5 and
-            vanishes, can you warn anyone? Today's answers are a rented checkmark and Discord
-            vibes — and a bot that scams a hundred people deletes the account and rebrands, history gone.
-          </p>
+          <div className="section-label" style={{ color: "var(--danger)" }}>Paying a bot today</div>
+          <ul className="check-list bad">
+            <li>Is this the real bot, or a clone of its website?</li>
+            <li>Has it ever actually delivered anything?</li>
+            <li>If it takes your money, there's nowhere to warn the next person.</li>
+            <li>A scammer just deletes the account and rebrands. History gone.</li>
+          </ul>
         </div>
         <div className="card">
-          <div className="section-label" style={{ color: "var(--ok)" }}>With it</div>
-          <p className="t2 small" style={{ margin: 0 }}>
-            Your wallet — or your own bot — looks the address up first: a profile, 200 recorded
-            deals, 92/100, reviews, and the address and profile vouch for each other, so it's
-            not an impersonator. You pay, you review, your review points at the payment
-            transaction as evidence. A bad review can never be deleted by its subject — and
-            walking away from it means walking away from the 200 good ones. Reputation finally
-            costs something to abandon, which is what makes it worth anything.
-          </p>
+          <div className="section-label" style={{ color: "var(--ok)" }}>Paying a bot with a profile</div>
+          <ul className="check-list good">
+            <li>Deal history, ratings and reviews — before you pay.</li>
+            <li>Impersonators fail the wallet↔profile check.</li>
+            <li>Your review becomes part of the record the next buyer reads.</li>
+            <li>Ditching bad reviews means ditching the good ones too — reputation costs something to abandon.</li>
+          </ul>
         </div>
       </div>
 
       <div className="card" style={{ marginTop: 14 }}>
-        <div className="section-label">The parts that make it hold up</div>
-        <dl className="kv" style={{ gridTemplateColumns: "220px 1fr" }}>
-          <dt>Impersonation</dt>
-          <dd className="t2 small">a profile naming a wallet, and that wallet pointing back — two signatures, or no checkmark.</dd>
-          <dt>Review-wiping</dt>
-          <dd className="t2 small">reviews live in an append-only public log; revoking one is itself recorded.</dd>
-          <dt>Cost of entry</dt>
-          <dd className="t2 small">claiming a profile is one cheap transaction; full registration can come later — same identity, reputation carries over.</dd>
-          <dt>Ownership</dt>
-          <dd className="t2 small">an identity can be pinned to an address forever, or anchored to an asset and sold with its reputation — the operator chooses.</dd>
-        </dl>
-        <p className="hint" style={{ marginTop: 12 }}>
-          Built on the ERC-8004 agent-identity standard. Every profile and review is a public
-          on-chain record that any independent indexer reproduces identically.
+        <div className="section-label">Why it holds up</div>
+        <ul className="check-list good" style={{ columns: 2, columnGap: 32 }}>
+          <li><b>No fake checkmarks</b> — verification needs two signatures: the profile names the wallet, the wallet points back.</li>
+          <li><b>No review-wiping</b> — everything lives in an append-only public log; even revoking is recorded.</li>
+          <li><b>Free to start</b> — claiming a profile is one cheap transaction; register fully later, same identity, reputation carries over.</li>
+          <li><b>Yours to keep or sell</b> — pin an identity to an address forever, or anchor it to an asset and sell it with its reputation.</li>
+        </ul>
+        <p className="hint" style={{ marginTop: 10 }}>
+          Built on the ERC-8004 agent-identity standard. Everything here is a public on-chain
+          record — any independent indexer reproduces it identically. No platform in the middle.
         </p>
       </div>
     </div>
+  );
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function MiniProfile({ id, onOpen }: { id: Identity; onOpen: () => void }) {
+  const rep = id.reputation;
+  const review = rep.reviews[0];
+  return (
+    <button className="mini-profile fade-in" onClick={onOpen} style={{ textAlign: "left", cursor: "pointer" }}>
+      <div className="mp-head">
+        <span className="mp-name">{displayName(id)}</span>
+        {!id.flags.walletUnverified && id.agentWallet && <Badge tone="ok">verified</Badge>}
+        {id.agentIds.length > 0 && <Badge tone="accent">registered</Badge>}
+      </div>
+      <div className="mp-stats">
+        <span className="mp-stat"><b>{rep.ratingAverage === null ? "—" : rep.ratingAverage.toFixed(0)}</b><span>rating /100</span></span>
+        <span className="mp-stat"><b>{rep.stars}</b><span>stars</span></span>
+        <span className="mp-stat"><b>{rep.interactions.length}</b><span>deals</span></span>
+        <span className="mp-stat"><b>{rep.reviews.length}</b><span>reviews</span></span>
+      </div>
+      {review && (
+        <div className="mp-review">
+          "{review.text.length > 90 ? review.text.slice(0, 90) + "…" : review.text}"
+        </div>
+      )}
+      <div className="hint" style={{ marginTop: 10 }}>a live profile from this registry — click through</div>
+    </button>
   );
 }

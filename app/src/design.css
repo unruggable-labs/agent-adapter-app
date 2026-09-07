@@ -4,6 +4,40 @@
    numerals, aligned secondary metadata), Vercel's developer detail pages.   */
 
 :root {
+  /* light, the default — Stripe/Attio register */
+  --bg: #f7f8f9;
+  --surface-1: #ffffff;
+  --surface-2: #f2f3f5;
+  --surface-3: #e9ebee;
+  --border: #e5e7ea;
+  --border-strong: #d2d6db;
+
+  --text-1: #191b20;
+  --text-2: #5b616c;
+  --text-3: #8d939d;
+
+  --accent: #4f46e5;
+  --accent-strong: #4338ca;
+  --accent-bg: rgba(79, 70, 229, 0.08);
+
+  --ok: #0e7a47;
+  --ok-bg: rgba(16, 140, 82, 0.1);
+  --warn: #8f6400;
+  --warn-bg: rgba(214, 158, 10, 0.14);
+  --danger: #c4353b;
+  --danger-bg: rgba(212, 56, 62, 0.08);
+
+  --shadow-1: 0 1px 2px rgba(20, 22, 28, 0.06);
+  color-scheme: light;
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 10px;
+}
+
+[data-theme="dark"] {
   --bg: #08090b;
   --surface-1: #0e1012;
   --surface-2: #141619;
@@ -26,12 +60,8 @@
   --danger: #f2555a;
   --danger-bg: rgba(242, 85, 90, 0.1);
 
-  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-
-  --r-sm: 5px;
-  --r-md: 8px;
-  --r-lg: 10px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -169,11 +199,11 @@ input, textarea, select { font: inherit; color: inherit; }
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
 }
 .callout b { color: var(--text-1); font-weight: 600; }
-.callout-warn { border-color: rgba(229, 165, 10, 0.35); background: var(--warn-bg); color: #d9b45f; }
+.callout-warn { border-color: color-mix(in srgb, var(--warn) 35%, transparent); background: var(--warn-bg); }
 .callout-warn b { color: var(--warn); }
-.callout-danger { border-color: rgba(242, 85, 90, 0.35); background: var(--danger-bg); color: #e9969a; }
+.callout-danger { border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: var(--danger-bg); }
 .callout-danger b { color: var(--danger); }
-.callout-ok { border-color: rgba(61, 214, 140, 0.3); background: var(--ok-bg); color: #86cfa9; }
+.callout-ok { border-color: color-mix(in srgb, var(--ok) 30%, transparent); background: var(--ok-bg); }
 .callout-ok b { color: var(--ok); }
 
 /* ------------------------------------------------------------------ forms */
@@ -216,7 +246,7 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 2px; gap: 2px; }
 .seg button { padding: 4px 12px; border-radius: 6px; font-size: 12.5px; color: var(--text-2); }
-.seg button.active { background: var(--surface-3); color: var(--text-1); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+.seg button.active { background: var(--surface-1); color: var(--text-1); box-shadow: var(--shadow-1); }
 
 .choice {
   display: block; width: 100%; text-align: left;
@@ -279,8 +309,40 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .toast {
   position: fixed; bottom: 20px; right: 20px; z-index: 50;
-  background: var(--surface-3); border: 1px solid var(--border-strong);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
   border-radius: var(--r-md); padding: 10px 14px; font-size: 12.5px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px rgba(10, 12, 18, 0.18);
   max-width: 380px;
 }
+
+/* ------------------------------------------------------------------ landing */
+
+.hero-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 28px; align-items: center; }
+@media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } }
+
+.mini-profile {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; box-shadow: 0 10px 30px rgba(20, 24, 40, 0.08), var(--shadow-1);
+}
+.mini-profile .mp-head { display: flex; align-items: center; gap: 8px; }
+.mini-profile .mp-name { font-weight: 650; font-size: 15px; }
+.mini-profile .mp-stats { display: flex; gap: 18px; margin: 12px 0 10px; }
+.mini-profile .mp-stat b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.mini-profile .mp-stat span { display: block; font-size: 10.5px; color: var(--text-3); }
+.mini-profile .mp-review { border-left: 2px solid var(--border-strong); padding-left: 10px; font-size: 12px; color: var(--text-2); }
+
+.steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 900px) { .steps-grid { grid-template-columns: 1fr; } }
+.step { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 16px; }
+.step-num {
+  width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-bg); color: var(--accent); font-size: 12px; font-weight: 650; margin-bottom: 8px;
+}
+.step b { display: block; font-size: 13px; margin-bottom: 3px; }
+.step p { margin: 0; font-size: 12.5px; color: var(--text-2); }
+
+.check-list { list-style: none; margin: 0; padding: 0; }
+.check-list li { position: relative; padding: 3px 0 3px 24px; font-size: 12.5px; color: var(--text-2); }
+.check-list li::before { position: absolute; left: 2px; font-weight: 700; }
+.check-list.bad li::before { content: "✕"; color: var(--danger); }
+.check-list.good li::before { content: "✓"; color: var(--ok); }

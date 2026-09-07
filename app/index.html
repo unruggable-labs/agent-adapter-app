@@ -6,6 +6,10 @@
     <title>Agent Adapter</title>
   </head>
   <body>
+    <script>
+      // applied before the bundle so the first paint is already in the stored theme
+      document.documentElement.dataset.theme = localStorage.getItem("aa-theme") || "light";
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
