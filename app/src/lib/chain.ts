@@ -27,7 +27,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     ? {
         local: {
           label: "Local devnet",
-          apiBase: "http://127.0.0.1:8787",
+          apiBase: "http://127.0.0.1:8787/api",
           rpcUrl: "http://127.0.0.1:8547",
           chain: foundry,
           writable: true,
@@ -36,7 +36,8 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     : {}),
   sepolia: {
     label: "Sepolia",
-    apiBase: import.meta.env.VITE_SEPOLIA_API ?? "http://127.0.0.1:8788",
+    // dev: the standalone Node indexer; deployed: the same-origin serverless function
+    apiBase: import.meta.env.VITE_SEPOLIA_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8788/api" : "/api/sepolia"),
     rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com",
     chain: sepolia,
     writable: false,

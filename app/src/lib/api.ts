@@ -83,11 +83,11 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const api = {
-  overview: () => get<Overview>("/api/overview"),
-  identities: () => get<Identity[]>("/api/identities"),
-  identity: (ubid: string) => get<Identity>(`/api/identity/${ubid}`),
-  attestations: () => get<AttestationRow[]>("/api/attestations"),
+  overview: () => get<Overview>("/overview"),
+  identities: () => get<Identity[]>("/identities"),
+  identity: (ubid: string) => get<Identity>(`/identity/${ubid}`),
+  attestations: () => get<AttestationRow[]>("/attestations"),
   wallet: (address: string) =>
-    get<{ designation: { ubid: Hex }; verified: boolean } | null>(`/api/wallet/${address}`),
-  trustbase: (address: string) => get<TrustBase>(`/api/trustbase/${address}`),
+    get<{ designation: { ubid: Hex }; verified: boolean } | null>(`/wallet/${address}`),
+  trustbase: (address: string) => get<TrustBase>(`/trustbase/${address}`),
 };

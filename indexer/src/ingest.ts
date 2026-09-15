@@ -1,5 +1,5 @@
 import { decodeEventLog, type Address, type Log, type PublicClient } from "viem";
-import { adapterArtifact } from "./abi.js";
+import { adapterAbi } from "./abi-runtime.js";
 import { ProjectionStore, type LogEvent } from "./projection.js";
 
 /**
@@ -46,7 +46,7 @@ export function decodeAdapterLogs(logs: Log[]): LogEvent[] {
   for (const log of logs) {
     try {
       const decoded = decodeEventLog({
-        abi: adapterArtifact.abi,
+        abi: adapterAbi,
         data: log.data,
         topics: log.topics,
       });
