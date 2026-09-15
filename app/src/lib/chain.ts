@@ -9,30 +9,44 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry, sepolia } from "viem/chains";
 
-/** The two backends the app can face. Each network pairs an indexer API with the RPC the
- *  wizard's probes and the write paths use. `writable` gates writes: the demo personas hold
- *  anvil keys, which sign nothing real on a public chain. Toggle persists and reloads. */
-export const NETWORKS = {
-  local: {
-    label: "Local devnet",
-    apiBase: "http://127.0.0.1:8787",
-    rpcUrl: "http://127.0.0.1:8547",
-    chain: foundry,
-    writable: true,
-  },
+/** The backends the app can face. Each network pairs an indexer API with the RPC the wizard's
+ *  probes and the write paths use. `writable` gates writes: the demo personas hold anvil keys,
+ *  which sign nothing real on a public chain. API bases come from build-time env so a deployed
+ *  build points at hosted indexers; the local devnet exists only in dev builds, because nobody
+ *  else has our anvil. Toggle persists and reloads. */
+interface NetworkConfig {
+  label: string;
+  apiBase: string;
+  rpcUrl: string;
+  chain: typeof foundry | typeof sepolia;
+  writable: boolean;
+}
+
+export const NETWORKS: Record<string, NetworkConfig> = {
+  ...(import.meta.env.DEV
+    ? {
+        local: {
+          label: "Local devnet",
+          apiBase: "http://127.0.0.1:8787",
+          rpcUrl: "http://127.0.0.1:8547",
+          chain: foundry,
+          writable: true,
+        },
+      }
+    : {}),
   sepolia: {
     label: "Sepolia",
-    apiBase: "http://127.0.0.1:8788",
-    rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
+    apiBase: import.meta.env.VITE_SEPOLIA_API ?? "http://127.0.0.1:8788",
+    rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com",
     chain: sepolia,
     writable: false,
   },
-} as const;
+};
 
-export type NetworkId = keyof typeof NETWORKS;
-export const networkId: NetworkId =
-  (localStorage.getItem("aa-network") as NetworkId | null) ?? "local";
-export const NETWORK = NETWORKS[networkId] ?? NETWORKS.local;
+export type NetworkId = string;
+const stored = localStorage.getItem("aa-network");
+export const networkId: NetworkId = stored && NETWORKS[stored] ? stored : Object.keys(NETWORKS)[0];
+export const NETWORK = NETWORKS[networkId];
 
 export function switchNetwork(id: NetworkId) {
   localStorage.setItem("aa-network", id);
