@@ -23,7 +23,7 @@ written down in [`SPEC.md`](./SPEC.md).
 # from the repo root (artifacts must exist):
 forge build
 
-cd packages/indexer
+cd indexer
 npm install
 npm test          # 14 projection conformance tests
 npm run demo      # spins anvil, deploys, runs the scenario, asserts 24 end-state checks

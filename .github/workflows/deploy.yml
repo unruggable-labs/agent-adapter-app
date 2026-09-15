@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy adapter stack to ENS stack server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
+          script_stop: true
+          script: |
+            set -e
+            export PATH="/usr/local/bin:/usr/bin:$PATH"
+
+            echo "========== DEPLOY START =========="
+            cd /srv/adapter
+
+            SERVICE="adapter-indexer"
+
+            echo "--- Git pull ---"
+            echo "  before: $(git rev-parse --short HEAD)"
+            git fetch origin main
+            git reset --hard origin/main
+            echo "  after:  $(git rev-parse --short HEAD)"
+            git rev-parse --short HEAD > REVISION
+
+            echo "--- indexer install ---"
+            cd indexer
+            npm ci --no-audit --no-fund 2>&1 | tail -2
+
+            echo "--- app install + build ---"
+            cd ../app
+            npm ci --no-audit --no-fund 2>&1 | tail -2
+            VITE_SEPOLIA_API=/api npm run build 2>&1 | tail -5
+
+            echo "--- Restarting $SERVICE ---"
+            sudo systemctl restart "$SERVICE"
+
+            echo "--- Service status ---"
+            status=$(sudo systemctl is-active "$SERVICE" || true)
+            echo "  $SERVICE: $status"
+            if [ "$status" != "active" ]; then
+              echo "  ERROR: $SERVICE failed to start!"
+              sudo journalctl -u "$SERVICE" -n 30 --no-pager
+              exit 1
+            fi
+
+            echo "--- Health check ---"
+            sleep 5
+            curl -fsS http://127.0.0.1:8788/api/overview
+            echo
+            echo "========== DEPLOY COMPLETE =========="

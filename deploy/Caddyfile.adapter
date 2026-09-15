@@ -1,0 +1,23 @@
+# Adapter site block — appended to /etc/caddy/Caddyfile by deploy/setup.sh.
+# adapter.ens8004.xyz needs an A record at GoDaddy pointing at this box before
+# its certificate can issue; the sslip.io hostname works immediately without DNS.
+
+adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8788
+	}
+
+	handle {
+		root * /srv/adapter/app/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		-Server
+		-X-Powered-By
+		Strict-Transport-Security "max-age=15768000"
+	}
+}

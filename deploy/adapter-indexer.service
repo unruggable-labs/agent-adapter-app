@@ -1,0 +1,27 @@
+[Unit]
+Description=Adapter Sepolia indexer (event-sourced API on 127.0.0.1:8788)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/srv/adapter/indexer
+EnvironmentFile=-/etc/adapter.env
+ExecStart=/srv/adapter/indexer/node_modules/.bin/tsx src/serve.ts sepolia
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+# Hardening (mirrors ens8004.service)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/adapter
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target
