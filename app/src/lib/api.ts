@@ -74,8 +74,10 @@ export interface AttestationRow {
   resolved: boolean;
 }
 
+import { NETWORK } from "./chain";
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await fetch(NETWORK.apiBase + path);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
   return res.json();
 }

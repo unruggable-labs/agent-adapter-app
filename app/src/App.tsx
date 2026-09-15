@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, shortHex } from "./lib/chain";
+import { ACTORS, NETWORK, NETWORKS, networkId, shortHex, switchNetwork, type NetworkId } from "./lib/chain";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
 import { HowPage } from "./pages/How";
@@ -65,7 +65,16 @@ function Shell() {
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
-          <div className="nav-label" style={{ padding: "0 0 4px" }}>Acting as</div>
+          <div className="nav-label" style={{ padding: "0 0 4px" }}>Network</div>
+          <select className="select" value={networkId} onChange={(e) => switchNetwork(e.target.value as NetworkId)}>
+            {Object.entries(NETWORKS).map(([id, n]) => (
+              <option key={id} value={id}>{n.label}</option>
+            ))}
+          </select>
+          {!NETWORK.writable && (
+            <div className="hint" style={{ margin: "6px 0 2px" }}>read-only: demo personas can't sign here</div>
+          )}
+          <div className="nav-label" style={{ padding: "8px 0 4px" }}>Acting as</div>
           <select className="select" value={actorIndex} onChange={(e) => setActorIndex(Number(e.target.value))}>
             {ACTORS.map((a, i) => (
               <option key={a.name} value={i}>{a.name}</option>

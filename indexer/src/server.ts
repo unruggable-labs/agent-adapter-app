@@ -56,8 +56,9 @@ export function startServer(
   adapter: Address,
   port: number,
   ingester?: Ingester,
+  pollMs = 2000,
 ) {
-  if (ingester) setInterval(() => ingester.sync().catch(() => {}), 2000);
+  if (ingester) setInterval(() => ingester.sync().catch(() => {}), pollMs);
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");

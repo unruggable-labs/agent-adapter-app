@@ -46,7 +46,7 @@ async function main() {
   try {
     await waitForRpc(RPC_URL);
 
-    console.log("2. Deploying MockIdentityRegistry, Adapter8004 implementation, ERC1967 proxy, DemoPunks...");
+    console.log("2. Deploying MockIdentityRegistry, AdapterImplementation, ERC1967 proxy, DemoPunks...");
     const deployment = await deployStack(RPC_URL);
     console.log(`   registry ${deployment.registry}`);
     console.log(`   adapter  ${deployment.adapter} (proxy over ${deployment.implementation})`);

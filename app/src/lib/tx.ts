@@ -1,6 +1,6 @@
 import type { Abi, Address } from "viem";
 import { BaseError, ContractFunctionRevertedError } from "viem";
-import { publicClient, walletFor } from "./chain";
+import { NETWORK, publicClient, walletFor } from "./chain";
 
 export interface TxResult {
   ok: boolean;
@@ -18,6 +18,9 @@ export async function sendTx(
   functionName: string,
   args: unknown[],
 ): Promise<TxResult> {
+  if (!NETWORK.writable) {
+    return { ok: false, message: `${NETWORK.label} is read-only here — the demo personas can't sign on a public chain` };
+  }
   try {
     const wallet = walletFor(actorIndex);
     const { request } = await publicClient.simulateContract({

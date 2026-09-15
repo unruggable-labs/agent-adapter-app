@@ -7,9 +7,39 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
+import { foundry, sepolia } from "viem/chains";
 
-export const RPC_URL = "http://127.0.0.1:8547";
+/** The two backends the app can face. Each network pairs an indexer API with the RPC the
+ *  wizard's probes and the write paths use. `writable` gates writes: the demo personas hold
+ *  anvil keys, which sign nothing real on a public chain. Toggle persists and reloads. */
+export const NETWORKS = {
+  local: {
+    label: "Local devnet",
+    apiBase: "http://127.0.0.1:8787",
+    rpcUrl: "http://127.0.0.1:8547",
+    chain: foundry,
+    writable: true,
+  },
+  sepolia: {
+    label: "Sepolia",
+    apiBase: "http://127.0.0.1:8788",
+    rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
+    chain: sepolia,
+    writable: false,
+  },
+} as const;
+
+export type NetworkId = keyof typeof NETWORKS;
+export const networkId: NetworkId =
+  (localStorage.getItem("aa-network") as NetworkId | null) ?? "local";
+export const NETWORK = NETWORKS[networkId] ?? NETWORKS.local;
+
+export function switchNetwork(id: NetworkId) {
+  localStorage.setItem("aa-network", id);
+  location.reload(); // clients are module-level; a reload rebuilds everything consistently
+}
+
+export const RPC_URL = NETWORK.rpcUrl;
 
 /** Anvil's funded demo accounts — the app's persona switcher. A real deployment swaps this
  *  for an injected-wallet connector; every write path goes through the same `actor` object. */
@@ -25,10 +55,10 @@ export const ACTORS = [
   return { name: a.name, address: account.address.toLowerCase() as Address, account };
 });
 
-export const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+export const publicClient = createPublicClient({ chain: NETWORK.chain, transport: http(RPC_URL) });
 
 export function walletFor(actorIndex: number) {
-  return createWalletClient({ account: ACTORS[actorIndex].account, chain: foundry, transport: http(RPC_URL) });
+  return createWalletClient({ account: ACTORS[actorIndex].account, chain: NETWORK.chain, transport: http(RPC_URL) });
 }
 
 export const adapterAbi = parseAbi([

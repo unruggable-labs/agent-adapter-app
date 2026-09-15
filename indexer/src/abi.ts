@@ -14,7 +14,7 @@ function loadArtifact(name: string): { abi: Abi; bytecode: `0x${string}`; deploy
   };
 }
 
-export const adapterArtifact = loadArtifact("Adapter8004");
+export const adapterArtifact = loadArtifact("AdapterImplementation");
 export const mockRegistryArtifact = loadArtifact("MockIdentityRegistry");
 export const demoPunksArtifact = loadArtifact("DemoPunks");
 export const proxyArtifact = (() => {

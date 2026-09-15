@@ -15,22 +15,29 @@ export class Ingester {
     private store: ProjectionStore,
     private adapter: Address,
     fromBlock: bigint = 0n,
+    /** Public RPCs cap eth_getLogs ranges; backfills are chunked to stay under the cap. */
+    private maxRange: bigint = 10_000n,
   ) {
     this.nextBlock = fromBlock;
   }
 
-  async sync(): Promise<number> {
+  async sync(onProgress?: (from: bigint, to: bigint, head: bigint) => void): Promise<number> {
     const head = await this.client.getBlockNumber();
-    if (head < this.nextBlock) return 0;
-    const logs = await this.client.getLogs({
-      address: this.adapter,
-      fromBlock: this.nextBlock,
-      toBlock: head,
-    });
-    const events = decodeAdapterLogs(logs);
-    for (const ev of events) this.store.apply(ev);
-    this.nextBlock = head + 1n;
-    return events.length;
+    let applied = 0;
+    while (this.nextBlock <= head) {
+      const to = this.nextBlock + this.maxRange - 1n > head ? head : this.nextBlock + this.maxRange - 1n;
+      onProgress?.(this.nextBlock, to, head);
+      const logs = await this.client.getLogs({
+        address: this.adapter,
+        fromBlock: this.nextBlock,
+        toBlock: to,
+      });
+      const events = decodeAdapterLogs(logs);
+      for (const ev of events) this.store.apply(ev);
+      applied += events.length;
+      this.nextBlock = to + 1n;
+    }
+    return applied;
   }
 }
 
