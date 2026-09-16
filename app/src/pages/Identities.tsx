@@ -23,8 +23,8 @@ export function IdentitiesPage() {
         <table className="table clickable">
           <thead>
             <tr>
-              <th><Tip tip="The deed that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Subject</Tip></th>
               <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this.">UBID</Tip></th>
+              <th><Tip tip="The deed that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Subject</Tip></th>
               <th><Tip tip="What kind of deed controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-right"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
@@ -38,18 +38,20 @@ export function IdentitiesPage() {
                 <td>
                   <span className="row" style={{ gap: 8 }}>
                     <Avatar seed={id.ubid} size={20} />
-                    <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
-                      {(() => {
-                        const stripped = (id.agentName ?? displayName(id)).replace(/ #\S+$/u, "");
-                        return /^(0x|Account 0x)/.test(stripped)
-                          ? <Addr value={id.boundAddress} n={8} />
-                          : <span style={{ fontWeight: 600 }}>{stripped}</span>;
-                      })()}
-                      {id.standard < 5 && <span className="num t3 small">#{shortTokenId(id.tokenId)}</span>}
-                    </span>
+                    <span className="mono t2">{shortHex(id.ubid, 10)}</span>
                   </span>
                 </td>
-                <td className="mono t3">{shortHex(id.ubid, 10)}</td>
+                <td>
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
+                    {(() => {
+                      const stripped = (id.agentName ?? displayName(id)).replace(/ #\S+$/u, "");
+                      return /^(0x|Account 0x)/.test(stripped)
+                        ? <Addr value={id.boundAddress} n={8} />
+                        : <span style={{ fontWeight: 600 }}>{stripped}</span>;
+                    })()}
+                    {id.standard < 5 && <span className="num t3 small">#{shortTokenId(id.tokenId)}</span>}
+                  </span>
+                </td>
                 <td><Tip tip={`This identity is ${controlLine(id)}.`}><span className="badge badge-outline">{id.standardName}</span></Tip></td>
                 <td><StatusBadge id={id} /></td>
                 <td className="td-right num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
