@@ -39,7 +39,7 @@ export function IdentitiesPage() {
                 <td>
                   <span className="row" style={{ gap: 8 }}>
                     <Avatar seed={id.ubid} size={20} />
-                    {id.agentName || id.contractName || id.standard === 5 ? (
+                    {id.agentName || !id.subjectLabel.startsWith("0x") ? (
                       <span style={{ fontWeight: 600 }}>{id.agentName ?? displayName(id)}</span>
                     ) : (
                       <span className="t3">unnamed</span>
