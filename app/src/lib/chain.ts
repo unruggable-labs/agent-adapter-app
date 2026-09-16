@@ -128,6 +128,11 @@ export function controlLine(id: { standard: number; subjectLabel: string }): str
   return `controlled by the contract's admins`;
 }
 
+/** Huge token ids (30+ digit namehash-style) display hash-style. */
+export function shortTokenId(tokenId: string): string {
+  return tokenId.length > 12 ? `${tokenId.slice(0, 6)}…${tokenId.slice(-4)}` : tokenId;
+}
+
 export function shortHex(h: string | null | undefined, n = 10): string {
   if (!h) return "—";
   return h.length <= n + 2 ? h : `${h.slice(0, n)}…${h.slice(-4)}`;

@@ -1,5 +1,5 @@
 import { useApp } from "../lib/app-state";
-import { controlLine, displayName, shortHex } from "../lib/chain";
+import { controlLine, displayName, shortHex, shortTokenId } from "../lib/chain";
 import { Addr, Avatar, StatusBadge, Tip, TrustBadge } from "../components/ui";
 
 export function IdentitiesPage() {
@@ -23,7 +23,8 @@ export function IdentitiesPage() {
         <table className="table clickable">
           <thead>
             <tr>
-              <th><Tip tip="Best available name: the agent's own 'name' metadata if declared, else the collection's name() plus the token id, else the raw contract address plus token id. Long token ids display hash-style.">Agent</Tip></th>
+              <th><Tip tip="The agent's name: its own 'name' metadata if declared, else the collection's name() plus token id. 'unnamed' means neither exists yet.">Agent</Tip></th>
+              <th><Tip tip="The deed's coordinates: the NFT contract and token id whose owner controls this identity. For account standards, the address itself.">Subject</Tip></th>
               <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this.">UBID</Tip></th>
               <th><Tip tip="What kind of deed controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
@@ -38,8 +39,17 @@ export function IdentitiesPage() {
                 <td>
                   <span className="row" style={{ gap: 8 }}>
                     <Avatar seed={id.ubid} size={20} />
-                    <span style={{ fontWeight: 600 }}>{displayName(id)}</span>
-                    {id.agentName && <span className="t3 small">{id.subjectLabel}</span>}
+                    {id.agentName || id.contractName || id.standard === 5 ? (
+                      <span style={{ fontWeight: 600 }}>{id.agentName ?? displayName(id)}</span>
+                    ) : (
+                      <span className="t3">unnamed</span>
+                    )}
+                  </span>
+                </td>
+                <td>
+                  <span className="row" style={{ gap: 6 }}>
+                    <Addr value={id.boundAddress} n={8} />
+                    {id.standard < 5 && <span className="num t2 small">#{shortTokenId(id.tokenId)}</span>}
                   </span>
                 </td>
                 <td className="mono t3">{shortHex(id.ubid, 10)}</td>
@@ -65,7 +75,7 @@ export function IdentitiesPage() {
               </tr>
             ))}
             {identities.length === 0 && (
-              <tr><td colSpan={7}><div className="empty">No identities yet — run the demo scenario or create one.</div></td></tr>
+              <tr><td colSpan={8}><div className="empty">No identities yet — run the demo scenario or create one.</div></td></tr>
             )}
           </tbody>
         </table>

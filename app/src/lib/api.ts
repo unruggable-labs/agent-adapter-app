@@ -41,6 +41,8 @@ export interface Identity {
   subjectLabel: string;
   /** The agent's self-declared name from its `name` metadata entry, when printable. */
   agentName: string | null;
+  /** The bound contract's name(), when it implements the ERC-721 metadata extension. */
+  contractName: string | null;
   boundAddress: Address;
   tokenId: string;
   claimed: boolean;

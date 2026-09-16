@@ -58,10 +58,10 @@ function decodeUtf8Metadata(value: `0x${string}` | undefined): string | null {
 export async function labelsFor(
   client: PublicClient,
   id: IdentityState,
-): Promise<{ subjectLabel: string; agentName: string | null }> {
+): Promise<{ subjectLabel: string; agentName: string | null; contractName: string | null }> {
   const name = await contractName(client, id.boundAddress);
   const subjectLabel = ACCOUNT_STANDARDS.has(id.standard)
     ? (name ?? `Account ${short(id.boundAddress)}`)
     : `${name ?? short(id.boundAddress)} #${shortTokenId(id.tokenId)}`;
-  return { subjectLabel, agentName: decodeUtf8Metadata(id.metadata.get("name")) };
+  return { subjectLabel, agentName: decodeUtf8Metadata(id.metadata.get("name")), contractName: name };
 }

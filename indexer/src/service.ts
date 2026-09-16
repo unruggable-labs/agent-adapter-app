@@ -32,7 +32,7 @@ async function identityView(store: ProjectionStore, client: PublicClient, id: Id
   }
   const reputation = store.reputation(id.ubid);
   const trustBase = await probeTrustBase(client, id.boundAddress).catch(() => null);
-  const labels = await labelsFor(client, id).catch(() => ({ subjectLabel: id.boundAddress as string, agentName: null }));
+  const labels = await labelsFor(client, id).catch(() => ({ subjectLabel: id.boundAddress as string, agentName: null, contractName: null }));
   return {
     ...id,
     ...labels,
