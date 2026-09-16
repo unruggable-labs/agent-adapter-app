@@ -24,11 +24,11 @@ export function IdentitiesPage() {
           <thead>
             <tr>
               <th><Tip tip="Best available name: the agent's own 'name' metadata if declared, else the collection's name() plus the token id, else the raw contract address plus token id. Long token ids display hash-style.">Agent</Tip></th>
-              <th><Tip tip="The Universal Binding Identifier — the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this, not to the display name.">UBID</Tip></th>
+              <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this.">UBID</Tip></th>
               <th><Tip tip="What kind of deed controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-right"><Tip tip="Average of each attester's latest live 0-100 rating. Dash means nobody has rated it.">Rating</Tip></th>
-              <th className="td-right"><Tip tip="Count of attesters whose latest live star value is 1 — an endorsement toggle.">Stars</Tip></th>
+              <th className="td-right"><Tip tip="Count of attesters whose latest live star value is 1 - an endorsement toggle.">Stars</Tip></th>
               <th><Tip tip="Trust disclosures: warnings derived from the event history (e.g. a collection re-claimed a burned token's identity) and from probing the deed contract's code (burnable, upgradeable, ruggable). Disclosed, never censored.">Signals</Tip></th>
             </tr>
           </thead>
@@ -50,7 +50,7 @@ export function IdentitiesPage() {
                 <td>
                   <span className="row wrap" style={{ gap: 4 }}>
                     {id.collectionAuthoredAfterOwner && (
-                      <Tip tip="The collection contract wrote to this identity after a real owner had already spoken — the burn-reopen pattern. Its reputation may describe a previous claimant's agent.">
+                      <Tip tip="The collection contract wrote to this identity after a real owner had already spoken - the burn-reopen pattern. Its reputation may describe a previous claimant's agent.">
                         <span className="badge badge-danger">post-owner claim</span>
                       </Tip>
                     )}

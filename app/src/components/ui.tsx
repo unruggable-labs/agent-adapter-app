@@ -101,12 +101,12 @@ export function StatusBadge({ id }: { id: Identity }) {
     );
   if (id.claimed)
     return (
-      <Badge tone="accent" tip="Claimed counterfactually: the identity lives in the event log only — one cheap transaction, nothing minted. Registering fully later keeps the same UBID and history.">
+      <Badge tone="accent" tip="Claimed counterfactually: the identity lives in the event log only - one cheap transaction, nothing minted. Registering fully later keeps the same UBID and history.">
         <span className="dot" /> claim only
       </Badge>
     );
   return (
-    <Badge tone="outline" tip="No registration claim yet — this identity exists only because other events (attestations or field updates) reference it.">
+    <Badge tone="outline" tip="No registration claim yet - this identity exists only because other events (attestations or field updates) reference it.">
       unclaimed
     </Badge>
   );
@@ -116,12 +116,12 @@ export function TrustBadge({ t, compact = false }: { t: TrustBase | null; compac
   if (!t) return null;
   if (t.verdict === "eoa")
     return t.delegated7702
-      ? <Badge tone="warn" tip="This address is an EOA with an EIP-7702 delegation installed — anyone who can drive its delegate contract can act for the identity, not just the key holder.">7702-delegated EOA</Badge>
+      ? <Badge tone="warn" tip="This address is an EOA with an EIP-7702 delegation installed - anyone who can drive its delegate contract can act for the identity, not just the key holder.">7702-delegated EOA</Badge>
       : compact ? null : <Badge tone="outline" tip="A plain externally-owned account: authority is key possession, nothing else.">EOA</Badge>;
-  if (t.verdict === "ruggable") return <Badge tone="danger" tip="The collection's code can burn tokens AND make outbound calls — it could seize a bound identity without the owner acting. Binding here adopts that rule.">ruggable trust base</Badge>;
+  if (t.verdict === "ruggable") return <Badge tone="danger" tip="The collection's code can burn tokens AND make outbound calls - it could seize a bound identity without the owner acting. Binding here adopts that rule.">ruggable trust base</Badge>;
   if (t.verdict === "unstable") return <Badge tone="warn" tip="The collection is an upgradeable proxy: today's code proves nothing about tomorrow's rules.">upgradeable trust base</Badge>;
   if (t.verdict === "burnable") return <Badge tone="warn" tip="Tokens in this collection can be destroyed, which reopens the collection's authority window over the identity. No outbound-call surface was detected, so the risk is residual.">burnable</Badge>;
-  return compact ? null : <Badge tone="ok" tip="No burn function, no arbitrary-call surface, not a proxy — the deed's rules can't change out from under the owner.">solid trust base</Badge>;
+  return compact ? null : <Badge tone="ok" tip="No burn function, no arbitrary-call surface, not a proxy - the deed's rules can't change out from under the owner.">solid trust base</Badge>;
 }
 
 export function Callout({ tone = "", title, children }: { tone?: string; title?: string; children: ReactNode }) {

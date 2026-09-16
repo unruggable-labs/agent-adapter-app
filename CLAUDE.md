@@ -7,7 +7,8 @@ mutual pointing, review-wiping → append-only log, cost → counterfactual clai
 deed bindings). Vocabulary: **the agent** (off-chain software) / **the record** (UBID, where
 reputation lives) / **the deed** (what controls the record) / **the hands** (operating wallet).
 Say "agent", never "bot". Copy is written in Thomas's plain voice: short sentences,
-contractions, no jargon-first explanations.
+contractions, no jargon-first explanations, plain dashes (never em dashes) in UI copy,
+tooltips kept to the fewest sentences that do the job.
 
 ## Map
 
