@@ -365,3 +365,17 @@ input, textarea, select { font: inherit; color: inherit; }
 /* Wide tables scroll inside their card; the page itself never stretches. */
 .table-scroll { overflow-x: auto; }
 .table td { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Fixed-position tooltip bubble (see Tip in ui.tsx) — immune to scroll-container clipping. */
+.tip-bubble {
+  position: fixed; z-index: 100;
+  transform: translate(-50%, calc(-100% - 8px));
+  max-width: 320px; width: max-content;
+  background: var(--text-1); color: var(--bg);
+  border-radius: var(--r-md); padding: 8px 11px;
+  font-size: 11.5px; line-height: 1.45; font-weight: 400;
+  font-family: var(--font); letter-spacing: 0; text-transform: none;
+  white-space: normal; text-align: left;
+  box-shadow: 0 6px 20px rgba(10, 12, 18, 0.25);
+  pointer-events: none;
+}
