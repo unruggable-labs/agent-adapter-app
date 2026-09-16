@@ -10,8 +10,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { foundry, sepolia } from "viem/chains";
 
 /** The backends the app can face. Each network pairs an indexer API with the RPC the wizard's
- *  probes and the write paths use. `writable` gates writes: the demo personas hold anvil keys,
- *  which sign nothing real on a public chain. API bases come from build-time env so a deployed
+ *  probes and the write paths use. On the local devnet, demo personas sign with anvil
+ *  keys; on public networks the user's connected wallet signs. API bases come from build-time env so a deployed
  *  build points at hosted indexers; the local devnet exists only in dev builds, because nobody
  *  else has our anvil. Toggle persists and reloads. */
 interface NetworkConfig {
@@ -19,7 +19,8 @@ interface NetworkConfig {
   apiBase: string;
   rpcUrl: string;
   chain: typeof foundry | typeof sepolia;
-  writable: boolean;
+  /** true = demo personas sign with anvil keys (local devnet). false = a real connected wallet signs. */
+  personaWrites: boolean;
 }
 
 export const NETWORKS: Record<string, NetworkConfig> = {
@@ -30,7 +31,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
           apiBase: "http://127.0.0.1:8787/api",
           rpcUrl: "http://127.0.0.1:8547",
           chain: foundry,
-          writable: true,
+          personaWrites: true,
         },
       }
     : {}),
@@ -40,7 +41,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     apiBase: import.meta.env.VITE_SEPOLIA_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8788/api" : "/api/sepolia"),
     rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://gateway.tenderly.co/public/sepolia",
     chain: sepolia,
-    writable: false,
+    personaWrites: false,
   },
 };
 

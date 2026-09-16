@@ -1,6 +1,9 @@
 import type { Abi, Address } from "viem";
 import { BaseError, ContractFunctionRevertedError } from "viem";
+import { getWalletClient, switchChain } from "wagmi/actions";
+import type { Signer } from "./app-state";
 import { NETWORK, publicClient, walletFor } from "./chain";
+import { wagmiConfig } from "./wagmi";
 
 export interface TxResult {
   ok: boolean;
@@ -8,29 +11,39 @@ export interface TxResult {
 }
 
 /**
- * Simulate → write → wait. Simulation first means an unauthorized action fails with the
- * contract's own error name before anything is signed, which doubles as the authority preflight.
+ * Simulate → write → wait. Simulation runs first so an unauthorized action fails with the
+ * contract's own error name before anything is signed — the preflight and the authority
+ * check are the same code path. Local devnet signs with the persona's anvil key; public
+ * networks sign with the user's connected wallet (switching it to the right chain first).
  */
 export async function sendTx(
-  actorIndex: number,
+  signer: Signer | null,
   address: Address,
   abi: Abi,
   functionName: string,
   args: unknown[],
 ): Promise<TxResult> {
-  if (!NETWORK.writable) {
-    return { ok: false, message: `${NETWORK.label} is read-only here — the demo personas can't sign on a public chain` };
+  if (!signer) {
+    return { ok: false, message: "Connect a wallet to do this" };
   }
   try {
-    const wallet = walletFor(actorIndex);
+    const account = signer.isPersona ? walletFor(signer.actorIndex).account : signer.address;
     const { request } = await publicClient.simulateContract({
-      account: wallet.account,
+      account,
       address,
       abi,
       functionName,
       args,
     });
-    const hash = await wallet.writeContract(request);
+
+    let hash: `0x${string}`;
+    if (signer.isPersona) {
+      hash = await walletFor(signer.actorIndex).writeContract(request);
+    } else {
+      await switchChain(wagmiConfig, { chainId: NETWORK.chain.id }).catch(() => {});
+      const wallet = await getWalletClient(wagmiConfig, { chainId: NETWORK.chain.id });
+      hash = await wallet.writeContract(request);
+    }
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     return receipt.status === "success"
       ? { ok: true, message: `Confirmed in block ${receipt.blockNumber}` }

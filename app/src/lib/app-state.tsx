@@ -1,13 +1,28 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import type { Address } from "viem";
+import { useAccount } from "wagmi";
 import { api, type Identity, type Overview } from "./api";
-import { ACTORS } from "./chain";
+import { ACTORS, NETWORK, shortHex } from "./chain";
+
+/**
+ * Who signs. On the local devnet it's a demo persona (anvil key, picked in the sidebar);
+ * on public networks it's the user's connected wallet, or null when disconnected. Every
+ * page and write path works in terms of this — the persona system is devnet tooling only.
+ */
+export interface Signer {
+  address: Address;
+  label: string;
+  /** true = anvil persona (local devnet); false = real connected wallet */
+  isPersona: boolean;
+  actorIndex: number;
+}
 
 interface AppState {
   route: string;
   navigate: (r: string) => void;
   actorIndex: number;
   setActorIndex: (i: number) => void;
-  actor: (typeof ACTORS)[0];
+  signer: Signer | null;
   overview: Overview | null;
   identities: Identity[];
   refresh: () => Promise<void>;
@@ -23,6 +38,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const { address: connectedAddress } = useAccount();
+
+  const signer: Signer | null = NETWORK.personaWrites
+    ? {
+        address: ACTORS[actorIndex].address,
+        label: ACTORS[actorIndex].name,
+        isPersona: true,
+        actorIndex,
+      }
+    : connectedAddress
+      ? {
+          address: connectedAddress.toLowerCase() as Address,
+          label: shortHex(connectedAddress, 8),
+          isPersona: false,
+          actorIndex: -1,
+        }
+      : null;
 
   useEffect(() => {
     const onHash = () => setRoute(location.hash.slice(1) || "/");
@@ -58,7 +90,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         navigate,
         actorIndex,
         setActorIndex,
-        actor: ACTORS[actorIndex],
+        signer,
         overview,
         identities,
         refresh,

@@ -12,30 +12,37 @@ import { sendTx } from "../lib/tx";
  * chain state - never from link parameters.
  */
 export function WalletPage() {
-  const { actor, actorIndex, identities, overview, navigate, refresh, toast } = useApp();
+  const { signer, identities, overview, navigate, refresh, toast } = useApp();
   const [designatedUbid, setDesignatedUbid] = useState<Hex | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     setDesignatedUbid(null);
-    api.wallet(actor.address).then((w) => setDesignatedUbid(w?.designation?.ubid ?? null)).catch(() => {});
-  }, [actor.address, identities]);
+    if (signer) api.wallet(signer.address).then((w) => setDesignatedUbid(w?.designation?.ubid ?? null)).catch(() => {});
+  }, [signer?.address, identities]);
 
   if (!overview) return <div className="page"><Spinner /></div>;
+  if (!signer)
+    return (
+      <div className="page page-narrow fade-in">
+        <h1 className="page-title">My wallet</h1>
+        <p className="t2">Connect a wallet (bottom of the sidebar) to see what your address resolves to and act on requests naming it.</p>
+      </div>
+    );
 
   const myAgent = designatedUbid ? identities.find((i) => i.ubid === designatedUbid) ?? null : null;
-  const myAgentVerified = myAgent?.agentWallet === actor.address;
-  const claims = identities.filter((i) => i.agentWallet === actor.address && i.ubid !== designatedUbid);
+  const myAgentVerified = myAgent?.agentWallet === signer.address;
+  const claims = identities.filter((i) => i.agentWallet === signer.address && i.ubid !== designatedUbid);
   const listingMe = identities.filter(
     (i) =>
       Object.entries(i.metadata).some(
-        ([k, v]) => (k === "account" || k.startsWith("account[")) && v.toLowerCase().includes(actor.address.slice(2)),
-      ) && !i.reputation.confirmedAccounts.some((c) => c.attester === actor.address),
+        ([k, v]) => (k === "account" || k.startsWith("account[")) && v.toLowerCase().includes(signer.address.slice(2)),
+      ) && !i.reputation.confirmedAccounts.some((c) => c.attester === signer.address),
   );
 
   async function run(key: string, fn: string, args: unknown[]) {
     setBusy(key);
-    const r = await sendTx(actorIndex, overview!.adapter, adapterAbi, fn, args);
+    const r = await sendTx(signer, overview!.adapter, adapterAbi, fn, args);
     toast(r.message);
     if (r.ok) await settle(refresh);
     setBusy(null);
@@ -45,10 +52,10 @@ export function WalletPage() {
     <div className="page page-narrow fade-in">
       <div className="page-head">
         <h1 className="page-title">My wallet</h1>
-        <Badge tone="outline">{actor.name}</Badge>
+        <Badge tone="outline">{signer.label}</Badge>
       </div>
       <p className="page-sub">
-        <Addr value={actor.address} n={44} />
+        <Addr value={signer.address} n={44} />
       </p>
       <p className="t2 small" style={{ margin: "0 0 18px", maxWidth: 560 }}>
         On its own, an address is just a number. Anyone who sees a transaction from this wallet
@@ -107,7 +114,7 @@ export function WalletPage() {
               </div>
             ))}
             <p className="hint" style={{ marginTop: 8 }}>
-              Each of these declared "{actor.name}'s address is my operating wallet" - a claim
+              Each of these declared "{signer.label}'s address is my operating wallet" - a claim
               that needed no permission from you and proves nothing by itself. If one really is
               your agent, confirm it and the link becomes verified. Confirming moves no assets
               and grants no authority; ignoring a false claim is always safe.

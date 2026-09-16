@@ -23,7 +23,7 @@ interface Probe {
 /** "What are you registering?" - the wizard derives the standard and the authority story
  *  from the chain instead of asking the user to know the enum. */
 export function CreatePage() {
-  const { actor, actorIndex, overview, navigate, refresh, toast } = useApp();
+  const { signer, overview, navigate, refresh, toast } = useApp();
   const [kind, setKind] = useState<SubjectKind | null>(null);
   const [contract, setContract] = useState("");
   const [tokenId, setTokenId] = useState("");
@@ -42,16 +42,16 @@ export function CreatePage() {
     setDone(null);
     if (!adapter) return;
     if (kind === "eoa") {
-      probeEoa(adapter, actor.address).then(setProbe);
+      if (signer) probeEoa(adapter, signer.address).then(setProbe);
       return;
     }
     if (kind === "token" && isAddress(contract) && tokenId !== "" && !Number.isNaN(Number(tokenId))) {
       setProbing(true);
-      probeToken(adapter, contract as Address, BigInt(tokenId), actor.address)
+      probeToken(adapter, contract as Address, BigInt(tokenId ), signer?.address ?? "0x0000000000000000000000000000000000000000")
         .then(setProbe)
         .finally(() => setProbing(false));
     }
-  }, [kind, contract, tokenId, actor.address, adapter]);
+  }, [kind, contract, tokenId, signer?.address, adapter]);
 
   if (!adapter) return <div className="page"><Spinner /></div>;
 
@@ -87,8 +87,8 @@ export function CreatePage() {
       <ChoiceButton
         selected={kind === "eoa"}
         onClick={() => setKind("eoa")}
-        title={`${actor.name}'s own address`}
-        sub={`Your wallet itself becomes the agent (${shortHex(actor.address, 10)}). One transaction, nothing else needed.`}
+        title={signer ? `${signer.label}'s own address` : "My own address"}
+        sub={signer ? `Your wallet itself becomes the agent (${shortHex(signer.address, 10)}). One transaction, nothing else needed.` : "Connect a wallet first (bottom of the sidebar)."}
       />
       <ChoiceButton
         disabled
@@ -174,9 +174,9 @@ export function CreatePage() {
                   disabled={busy || !uri.trim()}
                   onClick={async () => {
                     setBusy(true);
-                    const args = [probe.standard!, (kind === "eoa" ? actor.address : (contract as Address)), kind === "eoa" ? 0n : BigInt(tokenId), uri.trim()];
+                    const args = [probe.standard!, (kind === "eoa" ? signer!.address : (contract as Address)), kind === "eoa" ? 0n : BigInt(tokenId), uri.trim()];
                     const fn = mode === "claim" ? "counterfactualRegister" : "register";
-                    const r = await sendTx(actorIndex, adapter, adapterAbi, fn, args);
+                    const r = await sendTx(signer, adapter, adapterAbi, fn, args);
                     toast(r.message);
                     if (r.ok) {
                       await settle(refresh);
@@ -185,7 +185,7 @@ export function CreatePage() {
                     setBusy(false);
                   }}
                 >
-                  {busy ? <Spinner /> : mode === "claim" ? `Claim as ${actor.name}` : `Register as ${actor.name}`}
+                  {busy ? <Spinner /> : mode === "claim" ? "Claim" : "Register"}
                 </button>
                 <span className="hint">Simulated first - an unauthorized call fails before anything is sent.</span>
               </div>

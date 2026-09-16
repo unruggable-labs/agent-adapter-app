@@ -160,17 +160,17 @@ function Flags({ id }: { id: Identity }) {
 /** Shown when the acting persona is named in the identity's forward account[...] metadata
  *  but has not yet confirmed - the chain-derived inbox pattern, no parameters trusted. */
 function ConfirmBanner({ id }: { id: Identity }) {
-  const { actor, actorIndex, overview, refresh, toast } = useApp();
+  const { signer, overview, refresh, toast } = useApp();
   const [busy, setBusy] = useState(false);
 
   const named = Object.entries(id.metadata).some(
-    ([k, v]) => (k === "account" || k.startsWith("account[")) && v.toLowerCase().includes(actor.address.slice(2)),
+    ([k, v]) => (k === "account" || k.startsWith("account[")) && signer !== null && v.toLowerCase().includes(signer.address.slice(2)),
   );
-  const confirmed = id.reputation.confirmedAccounts.some((c) => c.attester === actor.address);
+  const confirmed = id.reputation.confirmedAccounts.some((c) => c.attester === signer?.address);
   if (!named || confirmed || !overview) return null;
 
   return (
-    <Callout tone="ok" title={`This identity names ${actor.name}'s address as an additional account.`}>
+    <Callout tone="ok" title={`This identity names your address as an additional account.`}>
       <span> </span>Confirming is a self-assertion recorded on-chain; it moves no assets and grants nothing.
       <span> </span>
       <button
@@ -178,7 +178,7 @@ function ConfirmBanner({ id }: { id: Identity }) {
         disabled={busy}
         onClick={async () => {
           setBusy(true);
-          const r = await sendTx(actorIndex, overview.adapter, adapterAbi, "confirmAdditionalAccount", [id.ubid]);
+          const r = await sendTx(signer, overview.adapter, adapterAbi, "confirmAdditionalAccount", [id.ubid]);
           toast(r.message);
           await settle(refresh);
           setBusy(false);
@@ -191,7 +191,7 @@ function ConfirmBanner({ id }: { id: Identity }) {
 }
 
 function AttestPanel({ id }: { id: Identity }) {
-  const { actor, actorIndex, overview, refresh, toast } = useApp();
+  const { signer, overview, refresh, toast } = useApp();
   const [mode, setMode] = useState<"star" | "rate" | "review" | "interaction">("star");
   const [rating, setRating] = useState(80);
   const [text, setText] = useState("");
@@ -202,15 +202,15 @@ function AttestPanel({ id }: { id: Identity }) {
 
   async function attest(type: number, data: Hex) {
     setBusy(true);
-    const r = await sendTx(actorIndex, overview!.adapter, adapterAbi, "attest", [type, id.ubid, ZERO32, data]);
-    toast(r.ok ? `Attested as ${actor.name} - ${r.message}` : r.message);
+    const r = await sendTx(signer, overview!.adapter, adapterAbi, "attest", [type, id.ubid, ZERO32, data]);
+    toast(r.ok ? `Attested - ${r.message}` : r.message);
     if (r.ok) { setText(""); await settle(refresh); }
     setBusy(false);
   }
 
   return (
     <Section
-      label={`Attest as ${actor.name}`}
+      label={signer ? `Attest as ${signer.label}` : "Attest (connect a wallet)"}
       actions={
         <div className="seg">
           {(["star", "rate", "review", "interaction"] as const).map((m) => (
@@ -268,7 +268,7 @@ function AttestPanel({ id }: { id: Identity }) {
 
 /** Owner-side actions. Authority is checked by simulation - the contract's own guards decide. */
 function ManagePanel({ id }: { id: Identity }) {
-  const { actor, actorIndex, overview, refresh, toast } = useApp();
+  const { signer, overview, refresh, toast } = useApp();
   const [uri, setUri] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -278,7 +278,7 @@ function ManagePanel({ id }: { id: Identity }) {
 
   async function run(label: string, fn: string, args: unknown[]) {
     setBusy(label);
-    const r = await sendTx(actorIndex, overview!.adapter, adapterAbi, fn, args);
+    const r = await sendTx(signer, overview!.adapter, adapterAbi, fn, args);
     toast(r.message);
     if (r.ok) await settle(refresh);
     setBusy(null);
@@ -286,7 +286,7 @@ function ManagePanel({ id }: { id: Identity }) {
 
   return (
     <Section
-      label={`Manage as ${actor.name}`}
+      label={signer ? `Manage as ${signer.label}` : "Manage (connect a wallet)"}
       actions={<button className="btn btn-ghost btn-sm" onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"}</button>}
     >
       {!open ? (
@@ -306,7 +306,7 @@ function ManagePanel({ id }: { id: Identity }) {
             <button className="btn" disabled={!!busy} onClick={() => run("wallet", "counterfactualSetAgentWalletAndUBID", [...coords])}>
               {busy === "wallet" ? <Spinner /> : "Link my wallet (both directions)"}
             </button>
-            <span className="hint">One call: names {actor.name}'s address as this agent's wallet and points that wallet back - mutually verified by construction.</span>
+            <span className="hint">One call: names your address as this agent's wallet and points that wallet back - mutually verified by construction.</span>
           </div>
           <div className="row wrap">
             <button className="btn" disabled={!!busy} onClick={() => run("restate", "counterfactualRegister", [...coords, id.agentURI ?? ""])}>

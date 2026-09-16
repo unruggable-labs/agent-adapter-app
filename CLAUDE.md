@@ -19,7 +19,8 @@ tooltips kept to the fewest sentences that do the job.
   API core, also used by the Vercel function in `app/api/`.
 - `app/` — Vite/React UI (Linear/Stripe-register design, tokens in `src/design.css`, light
   default + dark toggle). Dev-only: local-devnet network + anvil persona writes. Production
-  build is Sepolia-only, read-only until real wallet connection lands (phase 2).
+  build is Sepolia-only; writes go through the user's connected wallet (wagmi, injected
+  connectors; WalletConnect enables via VITE_WC_PROJECT_ID). Personas are devnet-only.
 - `contracts/` + `indexer/artifacts/` — vendored demo mock + build artifacts; regeneration
   from the contracts repo is documented in `indexer/src/abi.ts`.
 - Contracts live in `unruggable-labs/adapter` (Prem's repo — audit-grade, don't put product

@@ -6,7 +6,7 @@ import { adapterAbi, displayName, shortHex } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
 export function AttestationsPage() {
-  const { actor, actorIndex, overview, identities, navigate, refresh, toast } = useApp();
+  const { signer, overview, identities, navigate, refresh, toast } = useApp();
   const [rows, setRows] = useState<AttestationRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [mineOnly, setMineOnly] = useState(false);
@@ -19,7 +19,7 @@ export function AttestationsPage() {
   }, []);
 
   if (!rows || !overview) return <div className="page"><Spinner /></div>;
-  const shown = (mineOnly ? rows.filter((r) => r.attester === actor.address) : rows)
+  const shown = (mineOnly ? rows.filter((r) => r.attester === signer?.address) : rows)
     .slice()
     .sort((a, b) => Number(b.order.blockNumber) - Number(a.order.blockNumber) || b.order.logIndex - a.order.logIndex);
 
@@ -30,7 +30,7 @@ export function AttestationsPage() {
         <div className="head-actions">
           <div className="seg">
             <button className={!mineOnly ? "active" : ""} onClick={() => setMineOnly(false)}>All</button>
-            <button className={mineOnly ? "active" : ""} onClick={() => setMineOnly(true)}>{actor.name}'s</button>
+            <button className={mineOnly ? "active" : ""} onClick={() => setMineOnly(true)}>{signer ? `${signer.label}'s` : "Mine"}</button>
           </div>
         </div>
       </div>
@@ -65,13 +65,13 @@ export function AttestationsPage() {
                 <td className="td-right num">{a.order.blockNumber}</td>
                 <td>{a.revoked ? <Badge tone="danger">revoked</Badge> : <Badge tone="ok">live</Badge>}</td>
                 <td className="td-right">
-                  {a.attester === actor.address && !a.revoked && (
+                  {a.attester === signer?.address && !a.revoked && (
                     <button
                       className="btn btn-sm btn-danger"
                       disabled={busy === a.attestationId}
                       onClick={async () => {
                         setBusy(a.attestationId);
-                        const r = await sendTx(actorIndex, overview.adapter, adapterAbi, "revoke", [a.attestationId]);
+                        const r = await sendTx(signer, overview.adapter, adapterAbi, "revoke", [a.attestationId]);
                         toast(r.message);
                         await settle(refresh);
                         await load();
