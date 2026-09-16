@@ -95,7 +95,7 @@ export function Section({ label, children, actions }: { label: string; children:
 export function StatusBadge({ id }: { id: Identity }) {
   if (id.agentIds.length)
     return (
-      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with id #${id.agentIds.join(", #")}. The registration and any prior claims share this UBID, so reputation carries over.`}>
+      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with id #${id.agentIds.join(", #")}.`}>
         <span className="dot" /> ERC-8004 #{id.agentIds.join(",")}
       </Badge>
     );
