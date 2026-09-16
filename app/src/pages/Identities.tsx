@@ -28,7 +28,7 @@ export function IdentitiesPage() {
               <th><Tip tip="What kind of deed controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-right"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
-              <th className="td-right"><Tip tip="Count of attesters whose latest live star value is 1 - an endorsement toggle.">Stars</Tip></th>
+              <th className="td-right">Stars</th>
               <th><Tip tip="Trust disclosures: warnings derived from the event history (e.g. a collection re-claimed a burned token's identity) and from probing the deed contract's code (burnable, upgradeable, ruggable). Disclosed, never censored.">Signals</Tip></th>
             </tr>
           </thead>
