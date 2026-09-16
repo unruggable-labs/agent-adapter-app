@@ -35,13 +35,34 @@ async function main() {
   const store = new ProjectionStore(net.chainId, net.adapter);
   const ingester = new Ingester(client, store, net.adapter, net.fromBlock);
 
-  const count = await ingester.sync((from, to, head) =>
-    console.log(`  backfill ${from} … ${to} (head ${head})`),
-  );
+  let syncedTo = net.fromBlock;
+  const count = await ingester.sync((from, to, head) => {
+    syncedTo = to;
+    console.log(`  backfill ${from} … ${to} (head ${head})`);
+  });
   console.log(
     `Synced: ${count} events → ${store.identities.size} identities, ${store.agents.size} agents, ` +
       `${store.attestations.size} attestations, ${store.dropped.length} dropped`,
   );
+
+  // Load-balanced public RPCs can silently return incomplete logs for a chunk — observed in
+  // the wild (a backfill came back one AgentBound short with no error). Cross-check the
+  // chunked backfill against one full-range query; on mismatch, exit nonzero so systemd (or
+  // the operator) restarts into a fresh, hopefully-honest replay. Skipped if the RPC caps
+  // full-range queries.
+  try {
+    const fullRange = await client.getLogs({ address: net.adapter, fromBlock: net.fromBlock, toBlock: syncedTo });
+    if (fullRange.length !== count) {
+      console.error(
+        `BACKFILL MISMATCH: chunked backfill applied ${count} events but a full-range query ` +
+          `returned ${fullRange.length} — the RPC returned incomplete logs. Exiting to retry.`,
+      );
+      process.exit(1);
+    }
+    console.log(`Backfill verified: full-range recount matches (${count} events).`);
+  } catch {
+    console.warn("Backfill verification skipped: RPC rejected the full-range query.");
+  }
 
   startServer(store, client, net.adapter, net.port, ingester, net.pollMs);
   console.log(`API + UI on http://127.0.0.1:${net.port} (polling every ${net.pollMs / 1000}s)`);

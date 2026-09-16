@@ -1,0 +1,7 @@
+{
+  "name": "agent-adapter-app",
+  "private": true,
+  "scripts": {
+    "dev:all": "bash scripts/dev.sh"
+  }
+}
