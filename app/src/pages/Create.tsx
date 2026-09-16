@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Address, Hex } from "viem";
 import { isAddress } from "viem";
-import { Addr, Badge, Callout, Spinner, TrustBadge } from "../components/ui";
+import { Addr, Badge, Callout, Spinner, Tip, TrustBadge } from "../components/ui";
 import { api, type TrustBase } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, erc721Abi, publicClient, shortHex } from "../lib/chain";
@@ -117,12 +117,12 @@ export function CreatePage() {
           <div className="card" style={{ marginTop: 16 }}>
             <div className="section-label">Preflight</div>
             <dl className="kv">
-              <dt>Standard</dt>
+              <dt><Tip tip="The kind of deed this identity binds to. It decides who can update the identity, forever: a token standard means whoever owns the token; ACCOUNT means only this address itself. Detected by probing the subject on-chain.">Standard</Tip></dt>
               <dd className="row">
                 <Badge tone="outline">{probe.standardName}</Badge>
                 {probe.tokenName && <span className="t3 small">{probe.tokenName}</span>}
               </dd>
-              <dt>Authority</dt>
+              <dt><Tip tip="The exact check the contract will run when you submit, run here first: do you currently pass this standard's control rule? A call that would fail never reaches your wallet.">Authority</Tip></dt>
               <dd>
                 {probe.youAreAuthorized
                   ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{probe.detail}</span></span>
@@ -130,11 +130,11 @@ export function CreatePage() {
               </dd>
               {probe.trust && !probe.trust.isEoa && (
                 <>
-                  <dt>Trust base</dt>
+                  <dt><Tip tip="What the subject contract's code allows that could affect this identity later - burnable tokens, upgradeability, arbitrary calls. Binding adopts the contract's rules, so read this before you sign.">Trust base</Tip></dt>
                   <dd><TrustBadge t={probe.trust} /></dd>
                 </>
               )}
-              <dt>UBID</dt>
+              <dt><Tip tip="The identity's permanent name - a hash the live contract computes from exactly these details. It never changes, and it's the same whether you claim now or register fully later, so anything attached to it carries over.">UBID</Tip></dt>
               <dd className="mono" style={{ overflowWrap: "anywhere" }}>{probe.ubid ?? "—"}</dd>
             </dl>
           </div>
