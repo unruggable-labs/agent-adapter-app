@@ -1,9 +1,16 @@
+import { useState } from "react";
 import { useApp } from "../lib/app-state";
 import { controlLine, displayName, shortHex, shortTokenId } from "../lib/chain";
 import { Addr, Avatar, StatusBadge, Tip, TrustBadge } from "../components/ui";
 
+const PAGE_SIZE = 25;
+
 export function IdentitiesPage() {
   const { identities, overview, navigate } = useApp();
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(identities.length / PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const visible = identities.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
 
   return (
     <div className="page fade-in">
@@ -33,7 +40,7 @@ export function IdentitiesPage() {
             </tr>
           </thead>
           <tbody>
-            {identities.map((id) => (
+            {visible.map((id) => (
               <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
                 <td>
                   <span className="row" style={{ gap: 8 }}>
@@ -65,7 +72,7 @@ export function IdentitiesPage() {
                     )}
                     {id.flags.currentlyOwnerless && (
                       <Tip tip="The bound token currently has no owner (ownerOf reverts or is zero), so the collection contract temporarily holds authority over this identity.">
-                        <span className="badge badge-warn">ownerless</span>
+                        <span className="badge badge-ownerless">ownerless</span>
                       </Tip>
                     )}
                     <TrustBadge t={id.trustBase} compact />
@@ -79,9 +86,20 @@ export function IdentitiesPage() {
           </tbody>
         </table>
       </div>
-      <p className="hint" style={{ marginTop: 10 }}>
-        <Addr value={overview?.adapter ?? ""} /> is the adapter every UBID is scoped to on chain {overview?.chainId}.
-      </p>
+      <div className="row spread" style={{ marginTop: 10 }}>
+        <p className="hint" style={{ margin: 0 }}>
+          <Addr value={overview?.adapter ?? ""} /> is the adapter every UBID is scoped to on chain {overview?.chainId}.
+        </p>
+        {pages > 1 && (
+          <span className="row" style={{ gap: 8 }}>
+            <span className="hint num">
+              {current * PAGE_SIZE + 1}-{Math.min((current + 1) * PAGE_SIZE, identities.length)} of {identities.length}
+            </span>
+            <button className="btn btn-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>Prev</button>
+            <button className="btn btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
