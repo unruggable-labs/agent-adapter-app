@@ -47,9 +47,9 @@ export function IdentitiesPage() {
                   </span>
                 </td>
                 <td>
-                  <span className="row" style={{ gap: 6 }}>
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
                     <Addr value={id.boundAddress} n={8} />
-                    {id.standard < 5 && <span className="num t2 small">#{shortTokenId(id.tokenId)}</span>}
+                    {id.standard < 5 && <span className="num t3 small">#{shortTokenId(id.tokenId)}</span>}
                   </span>
                 </td>
                 <td className="mono t3">{shortHex(id.ubid, 10)}</td>
