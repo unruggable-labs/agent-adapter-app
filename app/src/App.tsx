@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, NETWORK, NETWORKS, networkId, shortHex, switchNetwork, type NetworkId } from "./lib/chain";
 import { AttestationsPage } from "./pages/Attestations";
@@ -28,10 +28,29 @@ function WalletControl() {
   const { signer } = useApp();
   const { connectors, connect, isPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const { chain } = useAccount();
+  const { switchChain } = useSwitchChain();
+  const wrongChain = signer !== null && chain?.id !== NETWORK.chain.id;
+
+  // nudge the wallet onto this network's chain as soon as it connects
+  useEffect(() => {
+    if (wrongChain) switchChain({ chainId: NETWORK.chain.id });
+  }, [signer?.address]);
+
   if (signer)
     return (
       <div>
         <div className="mono t3">{signer.label}</div>
+        {wrongChain ? (
+          <div style={{ marginTop: 4 }}>
+            <div className="hint" style={{ color: "var(--warn)" }}>wallet is on {chain?.name ?? "another network"}</div>
+            <button className="btn btn-sm" style={{ marginTop: 4 }} onClick={() => switchChain({ chainId: NETWORK.chain.id })}>
+              Switch to {NETWORK.chain.name}
+            </button>
+          </div>
+        ) : (
+          <div className="hint" style={{ color: "var(--ok)" }}>on {chain?.name}</div>
+        )}
         <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => disconnect()}>Disconnect</button>
       </div>
     );

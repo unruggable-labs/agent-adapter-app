@@ -40,7 +40,11 @@ export async function sendTx(
     if (signer.isPersona) {
       hash = await walletFor(signer.actorIndex).writeContract(request);
     } else {
-      await switchChain(wagmiConfig, { chainId: NETWORK.chain.id }).catch(() => {});
+      try {
+        await switchChain(wagmiConfig, { chainId: NETWORK.chain.id });
+      } catch {
+        return { ok: false, message: `Your wallet is on the wrong network - switch it to ${NETWORK.chain.name} and retry` };
+      }
       const wallet = await getWalletClient(wagmiConfig, { chainId: NETWORK.chain.id });
       hash = await wallet.writeContract(request);
     }
