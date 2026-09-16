@@ -14,7 +14,7 @@ export function IdentitiesPage() {
         </div>
       </div>
       <p className="page-sub">
-        Every identity is a UBID — one hash naming a subject, whether it has only claimed
+        Every identity is a UBID - one hash naming a subject, whether it has only claimed
         counterfactually or fully registered as an ERC-8004 agent.
         {overview && overview.dropped > 0 && <span className="t3"> · {overview.dropped} events dropped at verification</span>}
       </p>
@@ -72,7 +72,7 @@ export function IdentitiesPage() {
               </tr>
             ))}
             {identities.length === 0 && (
-              <tr><td colSpan={7}><div className="empty">No identities yet — run the demo scenario or create one.</div></td></tr>
+              <tr><td colSpan={7}><div className="empty">No identities yet - run the demo scenario or create one.</div></td></tr>
             )}
           </tbody>
         </table>

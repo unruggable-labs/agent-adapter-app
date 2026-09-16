@@ -41,7 +41,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
       </div>
       <p className="page-sub" style={{ marginBottom: 4 }}>
         Agent identity anchored to {id.subjectLabel} (<Addr value={id.boundAddress} n={44} />) on
-        chain {overview.chainId} — {controlLine(id)}.
+        chain {overview.chainId} - {controlLine(id)}.
       </p>
       <p className="mono t3 small" style={{ margin: "0 0 18px", overflowWrap: "anywhere" }}>{id.ubid}</p>
 
@@ -65,7 +65,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
           {id.reputation.interactions.map((x) => (
             <div key={x.attestationId} className="review-item">
               <div><span className="num">{x.score}/100</span> {x.text && <span className="t2">· {x.text}</span>}</div>
-              <div className="t3 small">interaction · ref <span className="mono">{shortHex(x.reference, 10)}</span> — <span className="mono">{shortHex(x.attester, 8)}</span></div>
+              <div className="t3 small">interaction · ref <span className="mono">{shortHex(x.reference, 10)}</span> - <span className="mono">{shortHex(x.attester, 8)}</span></div>
             </div>
           ))}
           {id.reputation.confirmedAccounts.length > 0 && (
@@ -99,7 +99,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
               ) : <span className="t3">not set</span>}
             </dd>
             <dt>ERC-8004 agent</dt>
-            <dd>{id.agentIds.length ? `#${id.agentIds.join(", #")} — joined by UBID, no link assertion needed` : <span className="t3">not registered</span>}</dd>
+            <dd>{id.agentIds.length ? `#${id.agentIds.join(", #")} - joined by UBID, no link assertion needed` : <span className="t3">not registered</span>}</dd>
             <dt>Last event</dt>
             <dd className="small t2">
               {id.lastEvent
@@ -133,7 +133,7 @@ function Flags({ id }: { id: Identity }) {
       {id.collectionAuthoredAfterOwner && (
         <Callout tone="danger" title="Post-owner collection claim.">
           The current state includes collection-authored events emitted after a real owner had
-          spoken — the burn-reopen pattern. The reputation below may describe a previous
+          spoken - the burn-reopen pattern. The reputation below may describe a previous
           claimant's agent.
         </Callout>
       )}
@@ -144,7 +144,7 @@ function Flags({ id }: { id: Identity }) {
       )}
       {t?.verdict === "ruggable" && (
         <Callout tone="danger" title="Ruggable trust base.">
-          The collection can burn tokens and can be made to call out — a post-burn re-claim of
+          The collection can burn tokens and can be made to call out - a post-burn re-claim of
           this identity is possible by code, without the owner acting. Binding here adopts that rule.
         </Callout>
       )}
@@ -158,7 +158,7 @@ function Flags({ id }: { id: Identity }) {
 }
 
 /** Shown when the acting persona is named in the identity's forward account[...] metadata
- *  but has not yet confirmed — the chain-derived inbox pattern, no parameters trusted. */
+ *  but has not yet confirmed - the chain-derived inbox pattern, no parameters trusted. */
 function ConfirmBanner({ id }: { id: Identity }) {
   const { actor, actorIndex, overview, refresh, toast } = useApp();
   const [busy, setBusy] = useState(false);
@@ -203,7 +203,7 @@ function AttestPanel({ id }: { id: Identity }) {
   async function attest(type: number, data: Hex) {
     setBusy(true);
     const r = await sendTx(actorIndex, overview!.adapter, adapterAbi, "attest", [type, id.ubid, ZERO32, data]);
-    toast(r.ok ? `Attested as ${actor.name} — ${r.message}` : r.message);
+    toast(r.ok ? `Attested as ${actor.name} - ${r.message}` : r.message);
     if (r.ok) { setText(""); await settle(refresh); }
     setBusy(false);
   }
@@ -258,7 +258,7 @@ function AttestPanel({ id }: { id: Identity }) {
             >
               {busy ? <Spinner /> : "Record interaction"}
             </button>
-            <span className="hint">score ‖ reference ‖ note — a stream entry, one per dealing.</span>
+            <span className="hint">score ‖ reference ‖ note - a stream entry, one per dealing.</span>
           </div>
         </div>
       )}
@@ -266,7 +266,7 @@ function AttestPanel({ id }: { id: Identity }) {
   );
 }
 
-/** Owner-side actions. Authority is checked by simulation — the contract's own guards decide. */
+/** Owner-side actions. Authority is checked by simulation - the contract's own guards decide. */
 function ManagePanel({ id }: { id: Identity }) {
   const { actor, actorIndex, overview, refresh, toast } = useApp();
   const [uri, setUri] = useState("");
@@ -291,7 +291,7 @@ function ManagePanel({ id }: { id: Identity }) {
     >
       {!open ? (
         <p className="hint" style={{ margin: 0 }}>
-          Update this identity's claim — available to whoever passes the {id.standardName} authority
+          Update this identity's claim - available to whoever passes the {id.standardName} authority
           check. Unauthorized attempts fail in simulation before anything is sent.
         </p>
       ) : (
@@ -306,20 +306,20 @@ function ManagePanel({ id }: { id: Identity }) {
             <button className="btn" disabled={!!busy} onClick={() => run("wallet", "counterfactualSetAgentWalletAndUBID", [...coords])}>
               {busy === "wallet" ? <Spinner /> : "Link my wallet (both directions)"}
             </button>
-            <span className="hint">One call: names {actor.name}'s address as this agent's wallet and points that wallet back — mutually verified by construction.</span>
+            <span className="hint">One call: names {actor.name}'s address as this agent's wallet and points that wallet back - mutually verified by construction.</span>
           </div>
           <div className="row wrap">
             <button className="btn" disabled={!!busy} onClick={() => run("restate", "counterfactualRegister", [...coords, id.agentURI ?? ""])}>
               {busy === "restate" ? <Spinner /> : "Re-state claim"}
             </button>
-            <span className="hint">A fresh registration event replacing prior state — the move after buying a bound token.</span>
+            <span className="hint">A fresh registration event replacing prior state - the move after buying a bound token.</span>
           </div>
           {!id.agentIds.length && (
             <div className="row wrap">
               <button className="btn" disabled={!!busy} onClick={() => run("register", "register", [...coords, id.agentURI ?? ""])}>
                 {busy === "register" ? <Spinner /> : "Register fully (mint ERC-8004 agent)"}
               </button>
-              <span className="hint">Same UBID — the counterfactual history and reputation join automatically.</span>
+              <span className="hint">Same UBID - the counterfactual history and reputation join automatically.</span>
             </div>
           )}
         </div>

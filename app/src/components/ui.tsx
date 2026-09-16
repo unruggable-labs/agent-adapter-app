@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Identity, TrustBase } from "../lib/api";
 import { shortHex } from "../lib/chain";
 
-/** Deterministic identity mark derived from the UBID — imagery that means something:
+/** Deterministic identity mark derived from the UBID - imagery that means something:
  *  the same identity renders the same face everywhere, forever. */
 export function Avatar({ seed, size = 26 }: { seed: string; size?: number }) {
   const a = parseInt(seed.slice(2, 8) || "0", 16);

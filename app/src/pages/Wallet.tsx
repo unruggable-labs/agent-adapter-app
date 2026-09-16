@@ -9,7 +9,7 @@ import { sendTx } from "../lib/tx";
 /**
  * The wallet holder's side of the system, in their terms: which agent speaks for this wallet,
  * which agents claim it, and the reciprocal actions. Every prompt here is derived from indexed
- * chain state — never from link parameters.
+ * chain state - never from link parameters.
  */
 export function WalletPage() {
   const { actor, actorIndex, identities, overview, navigate, refresh, toast } = useApp();
@@ -52,11 +52,11 @@ export function WalletPage() {
       </p>
       <p className="t2 small" style={{ margin: "0 0 18px", maxWidth: 560 }}>
         On its own, an address is just a number. Anyone who sees a transaction from this wallet
-        can ask <i>"who operates it?"</i> — this page controls the answer.
+        can ask <i>"who operates it?"</i> - this page controls the answer.
       </p>
 
       <div className="stack">
-        <Section label="Who operates this wallet — your published answer">
+        <Section label="Who operates this wallet - your published answer">
           {myAgent ? (
             <>
               <div className="row wrap" style={{ gap: 10 }}>
@@ -70,8 +70,8 @@ export function WalletPage() {
               </div>
               <p className="t2 small" style={{ margin: "8px 0 0" }}>
                 {myAgentVerified
-                  ? <>Anyone who checks this address — a counterparty's software, an explorer, another agent — will see it belongs to {displayName(myAgent)}, and can trust that because {displayName(myAgent)} also names this wallet as its own. Your wallet carries its reputation.</>
-                  : <>You say this wallet is operated by {displayName(myAgent)}, but {displayName(myAgent)} doesn't currently say it back. Until its controller names this wallet on the agent's side, anyone checking will see the link as unverified — either half alone is easy to fake.</>}
+                  ? <>Anyone who checks this address - a counterparty's software, an explorer, another agent - will see it belongs to {displayName(myAgent)}, and can trust that because {displayName(myAgent)} also names this wallet as its own. Your wallet carries its reputation.</>
+                  : <>You say this wallet is operated by {displayName(myAgent)}, but {displayName(myAgent)} doesn't currently say it back. Until its controller names this wallet on the agent's side, anyone checking will see the link as unverified - either half alone is easy to fake.</>}
               </p>
               <div className="row" style={{ marginTop: 12 }}>
                 <button className="btn" onClick={() => navigate(`/identity/${myAgent.ubid}`)}>View agent</button>
@@ -82,7 +82,7 @@ export function WalletPage() {
             </>
           ) : (
             <p className="t2" style={{ margin: 0 }}>
-              Nothing — lookups of this address find no agent. To change that, accept a request
+              Nothing - lookups of this address find no agent. To change that, accept a request
               below, or open an agent you control and use "Link my wallet".
             </p>
           )}
@@ -107,7 +107,7 @@ export function WalletPage() {
               </div>
             ))}
             <p className="hint" style={{ marginTop: 8 }}>
-              Each of these declared "{actor.name}'s address is my operating wallet" — a claim
+              Each of these declared "{actor.name}'s address is my operating wallet" - a claim
               that needed no permission from you and proves nothing by itself. If one really is
               your agent, confirm it and the link becomes verified. Confirming moves no assets
               and grants no authority; ignoring a false claim is always safe.

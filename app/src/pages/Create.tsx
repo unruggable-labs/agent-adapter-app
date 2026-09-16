@@ -20,7 +20,7 @@ interface Probe {
   tokenName: string | null;
 }
 
-/** "What are you registering?" — the wizard derives the standard and the authority story
+/** "What are you registering?" - the wizard derives the standard and the authority story
  *  from the chain instead of asking the user to know the enum. */
 export function CreatePage() {
   const { actor, actorIndex, overview, navigate, refresh, toast } = useApp();
@@ -82,7 +82,7 @@ export function CreatePage() {
         selected={kind === "token"}
         onClick={() => setKind("token")}
         title="A token I hold"
-        sub="An NFT or token — its identity travels with ownership of the token."
+        sub="An NFT or token - its identity travels with ownership of the token."
       />
       <ChoiceButton
         selected={kind === "eoa"}
@@ -95,7 +95,7 @@ export function CreatePage() {
         selected={false}
         onClick={() => {}}
         title="A contract, as itself"
-        sub="Requires the contract to make the call — via a Safe transaction or an integration snippet. Coming in the next phase."
+        sub="Requires the contract to make the call - via a Safe transaction or an integration snippet. Coming in the next phase."
       />
 
       {kind === "token" && (
@@ -147,7 +147,7 @@ export function CreatePage() {
           )}
           {probe.trust?.verdict === "unstable" && (
             <Callout tone="warn" title="Before you bind:">
-              <span> </span>the collection is an upgradeable proxy — its rules can change after you bind.
+              <span> </span>the collection is an upgradeable proxy - its rules can change after you bind.
             </Callout>
           )}
 
@@ -160,7 +160,7 @@ export function CreatePage() {
               </div>
               <p className="hint" style={{ marginTop: 0 }}>
                 {mode === "claim"
-                  ? "One cheap transaction; the identity lives in the event log. Reputation earned now carries over if you register later — the UBID is the same."
+                  ? "One cheap transaction; the identity lives in the event log. Reputation earned now carries over if you register later - the UBID is the same."
                   : "Mints a real ERC-8004 agent NFT bound to this subject. Any counterfactual history under this UBID joins automatically."}
               </p>
               <div className="field">
@@ -187,7 +187,7 @@ export function CreatePage() {
                 >
                   {busy ? <Spinner /> : mode === "claim" ? `Claim as ${actor.name}` : `Register as ${actor.name}`}
                 </button>
-                <span className="hint">Simulated first — an unauthorized call fails before anything is sent.</span>
+                <span className="hint">Simulated first - an unauthorized call fails before anything is sent.</span>
               </div>
             </div>
           )}
@@ -222,7 +222,7 @@ async function probeEoa(adapter: Address, address: Address): Promise<Probe> {
     standardName: "ACCOUNT",
     owner: address,
     youAreAuthorized: true,
-    detail: "an ACCOUNT subject authorizes exactly its own address — you are it",
+    detail: "an ACCOUNT subject authorizes exactly its own address - you are it",
     trust,
     ubid: await computeUbid(adapter, 5, address, 0n),
     tokenName: null,
@@ -249,7 +249,7 @@ async function probeToken(adapter: Address, contract: Address, tokenId: bigint, 
       standardName: "ERC721",
       owner,
       youAreAuthorized: yours,
-      detail: yours ? `ownerOf(${tokenId}) is your address` : `ownerOf(${tokenId}) is ${shortHex(owner, 10)} — a delegate.xyz delegation would also pass`,
+      detail: yours ? `ownerOf(${tokenId}) is your address` : `ownerOf(${tokenId}) is ${shortHex(owner, 10)} - a delegate.xyz delegation would also pass`,
       trust,
       ubid: await computeUbid(adapter, 0, contract, tokenId),
       tokenName: tokenName as string | null,
@@ -270,7 +270,7 @@ async function probeToken(adapter: Address, contract: Address, tokenId: bigint, 
         standardName: "ERC1155",
         owner: null,
         youAreAuthorized: yours,
-        detail: yours ? `your balance of id ${tokenId} is ${bal}` : `your balance of id ${tokenId} is 0 — positive balance is the authority`,
+        detail: yours ? `your balance of id ${tokenId} is ${bal}` : `your balance of id ${tokenId} is 0 - positive balance is the authority`,
         trust,
         ubid: await computeUbid(adapter, 1, contract, tokenId),
         tokenName: tokenName as string | null,
@@ -281,7 +281,7 @@ async function probeToken(adapter: Address, contract: Address, tokenId: bigint, 
         standardName: "ERC721",
         owner: null,
         youAreAuthorized: false,
-        detail: `ownerOf(${tokenId}) reverts — the token doesn't exist (or is burned), so only the collection contract itself may claim right now`,
+        detail: `ownerOf(${tokenId}) reverts - the token doesn't exist (or is burned), so only the collection contract itself may claim right now`,
         trust,
         ubid: await computeUbid(adapter, 0, contract, tokenId).catch(() => null as unknown as Hex),
         tokenName: tokenName as string | null,

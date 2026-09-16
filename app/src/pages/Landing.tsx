@@ -177,7 +177,7 @@ function MiniProfile({ id, onOpen }: { id: Identity; onOpen: () => void }) {
           "{review.text.length > 90 ? review.text.slice(0, 90) + "…" : review.text}"
         </div>
       )}
-      <div className="hint" style={{ marginTop: 10 }}>a live profile from this registry — click through</div>
+      <div className="hint" style={{ marginTop: 10 }}>a live profile from this registry - click through</div>
     </button>
   );
 }
