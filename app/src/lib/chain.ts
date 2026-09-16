@@ -38,7 +38,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     label: "Sepolia",
     // dev: the standalone Node indexer; deployed: the same-origin serverless function
     apiBase: import.meta.env.VITE_SEPOLIA_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8788/api" : "/api/sepolia"),
-    rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://ethereum-sepolia-rpc.publicnode.com",
+    rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://gateway.tenderly.co/public/sepolia",
     chain: sepolia,
     writable: false,
   },

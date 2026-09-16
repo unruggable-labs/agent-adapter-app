@@ -24,7 +24,7 @@ async function getState() {
   if (!state) {
     const client = createPublicClient({
       chain: sepolia,
-      transport: http(process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com"),
+      transport: http(process.env.SEPOLIA_RPC_URL ?? "https://gateway.tenderly.co/public/sepolia"),
     });
     const store = new ProjectionStore(CHAIN_ID, ADAPTER);
     const ingester = new Ingester(client, store, ADAPTER, FROM_BLOCK);
