@@ -39,7 +39,7 @@ export function AttestationsPage() {
         it was made — and revoked — is permanent. Only the original attester's revocation counts.
       </p>
 
-      <div className="card" style={{ padding: "4px 14px" }}>
+      <div className="card table-scroll" style={{ padding: "4px 14px" }}>
         <table className="table">
           <thead>
             <tr>

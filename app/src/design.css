@@ -361,3 +361,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .check-list li::before { position: absolute; left: 2px; font-weight: 700; }
 .check-list.bad li::before { content: "✕"; color: var(--danger); }
 .check-list.good li::before { content: "✓"; color: var(--ok); }
+
+/* Wide tables scroll inside their card; the page itself never stretches. */
+.table-scroll { overflow-x: auto; }
+.table td { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }

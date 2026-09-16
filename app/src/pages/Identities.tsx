@@ -19,7 +19,7 @@ export function IdentitiesPage() {
         {overview && overview.dropped > 0 && <span className="t3"> · {overview.dropped} events dropped at verification</span>}
       </p>
 
-      <div className="card" style={{ padding: "4px 14px" }}>
+      <div className="card table-scroll" style={{ padding: "4px 14px" }}>
         <table className="table clickable">
           <thead>
             <tr>

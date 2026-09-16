@@ -34,6 +34,13 @@ function short(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+/** NameWrapper-style token ids are 30+ digit namehashes — all digits, no information.
+ *  Anything longer than 12 digits displays hash-style. */
+function shortTokenId(tokenId: bigint): string {
+  const s = tokenId.toString();
+  return s.length > 12 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
+}
+
 function decodeUtf8Metadata(value: `0x${string}` | undefined): string | null {
   if (!value || value === "0x") return null;
   try {
@@ -55,6 +62,6 @@ export async function labelsFor(
   const name = await contractName(client, id.boundAddress);
   const subjectLabel = ACCOUNT_STANDARDS.has(id.standard)
     ? (name ?? `Account ${short(id.boundAddress)}`)
-    : `${name ?? short(id.boundAddress)} #${id.tokenId}`;
+    : `${name ?? short(id.boundAddress)} #${shortTokenId(id.tokenId)}`;
   return { subjectLabel, agentName: decodeUtf8Metadata(id.metadata.get("name")) };
 }
