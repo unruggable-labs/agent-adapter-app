@@ -82,9 +82,14 @@ async function main() {
     check("interaction score", rep7.interactions[0]?.score, 95);
     check("dave confirmed and verified", rep7.confirmedAccounts, [{ attester: s.actors.dave, verified: true }]);
     const wallet = store.resolveWallet(s.actors.bot)!;
-    check("bot's wallet-UBID resolves to #7", wallet.designation.ubid, s.ubid7);
+    check("bot's wallet-UBID resolves to #7", wallet.designation?.ubid, s.ubid7);
     check("mutual pointing verified", wallet.verified, true);
-    check("alice's own wallet has no designation", store.resolveWallet(s.actors.alice), null);
+    check("bot's wallet is an operating wallet only, not an agent itself", wallet.self, null);
+    check("alice's wallet resolves to nothing at all", store.resolveWallet(s.actors.alice), null);
+    // An ACCOUNT record's controller IS the address, so the address resolves with no designation set.
+    const eveWallet = store.resolveWallet(s.actors.eve)!;
+    check("eve's address resolves to itself as an agent", eveWallet.self?.ubid, s.ubidEve);
+    check("eve needed no designation to resolve", eveWallet.designation, null);
 
     console.log("  -- B: Punk #9 (burn-reopen hijack is flagged)");
     const id9 = store.identities.get(s.ubid9)!;

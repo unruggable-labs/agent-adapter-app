@@ -91,9 +91,9 @@ export async function runScenario(rpcUrl: string, d: Deployment) {
     "account[31337][0]",
     encodeAbiParameters([{ type: "address" }], [dave.account.address]),
   ]);
-  // The three roles are three addresses: Alice's wallet holds the deed (token #7), the
+  // The three roles are three addresses: Alice's wallet holds the controller (token #7), the
   // identity record carries the reputation, and the bot's server key does the day-to-day
-  // signing. Alice, as deed holder, names the bot's key as the operating wallet; the bot
+  // signing. Alice, as controller holder, names the bot's key as the operating wallet; the bot
   // points back from its own key — two statements, two signers, a verified link.
   await adapterWrite(alice, "counterfactualSetAgentWallet", [Standard.ERC721, d.punks, 7n, bot.account.address]);
   await adapterWrite(bot, "setWalletUBID", [Standard.ERC721, d.punks, 7n]);

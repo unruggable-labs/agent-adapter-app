@@ -2,7 +2,7 @@ import type { Address, PublicClient } from "viem";
 import { labelsFor } from "./names.js";
 import { ProjectionStore, type IdentityState } from "./projection.js";
 import { probeTrustBase } from "./trustbase.js";
-import { ATTESTATION_TYPE_NAMES, SINGLE_OWNER_TOKEN_STANDARDS, STANDARD_NAMES } from "./ubid.js";
+import { ATTESTATION_TYPE_NAMES, SINGLE_OWNER_TOKEN_STANDARDS, Standard, STANDARD_NAMES } from "./ubid.js";
 
 /** The API core, host-agnostic: the Node server and the serverless function both delegate here.
  *  Subpaths are relative — "overview", "identities", "identity/<ubid>", "wallet/<addr>",
@@ -14,9 +14,19 @@ export function toJson(value: unknown): string {
   );
 }
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 async function identityView(store: ProjectionStore, client: PublicClient, id: IdentityState) {
-  // Read-time advisory: is the bound token currently ownerless (reverting/zero ownerOf)?
+  // Read-time advisory: who currently holds the controller, and is the bound token ownerless?
+  //
+  // `currentControllerHolder` is the address that passes _hasBindingControl today. It is only
+  // resolvable where control is a single address: the single-owner token standards, ACCOUNT
+  // (the address itself), and CONTRACT_OWNABLE (owner()). The balance standards (ERC1155,
+  // ERC6909) and CONTRACT_ADMIN have no single holder to name, and delegate.xyz delegates also
+  // pass control without appearing here - so null means "not expressible", never "nobody".
   let currentlyOwnerless: boolean | null = null;
+  let currentControllerHolder: Address | null = null;
+
   if (SINGLE_OWNER_TOKEN_STANDARDS.has(id.standard)) {
     try {
       const owner = (await client.readContract({
@@ -25,10 +35,23 @@ async function identityView(store: ProjectionStore, client: PublicClient, id: Id
         functionName: "ownerOf",
         args: [id.tokenId],
       })) as Address;
-      currentlyOwnerless = owner === "0x0000000000000000000000000000000000000000";
+      currentlyOwnerless = owner === ZERO_ADDRESS;
+      if (!currentlyOwnerless) currentControllerHolder = owner.toLowerCase() as Address;
     } catch {
       currentlyOwnerless = true;
     }
+  } else if (id.standard === Standard.ACCOUNT) {
+    currentControllerHolder = id.boundAddress;
+  } else if (id.standard === Standard.CONTRACT_OWNABLE) {
+    // No extra call for the standards above - this one is the only added read.
+    currentControllerHolder = await client
+      .readContract({
+        address: id.boundAddress,
+        abi: [{ type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }],
+        functionName: "owner",
+      })
+      .then((o) => ((o as Address) === ZERO_ADDRESS ? null : ((o as Address).toLowerCase() as Address)))
+      .catch(() => null);
   }
   const reputation = store.reputation(id.ubid);
   const trustBase = await probeTrustBase(client, id.boundAddress).catch(() => null);
@@ -37,6 +60,7 @@ async function identityView(store: ProjectionStore, client: PublicClient, id: Id
     ...id,
     ...labels,
     standardName: STANDARD_NAMES[id.standard],
+    currentControllerHolder,
     reputation,
     trustBase,
     flags: {

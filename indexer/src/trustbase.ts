@@ -81,12 +81,21 @@ export function verdictOf(t: Omit<TrustBase, "verdict">): TrustBase["verdict"] {
   return "solid";
 }
 
-const cache = new Map<Address, TrustBase>();
+/**
+ * Cached readings expire. A trust base is not a constant: an upgradeable proxy can swap its
+ * implementation for one that burns and calls out, and a cache with no expiry would keep serving
+ * the reading taken when the process started - which, for a long-running server, means forever.
+ * A stale "solid" on a contract that has since become ruggable is the worst failure this module
+ * has, so the TTL bounds it.
+ */
+export const TRUST_BASE_TTL_MS = 10 * 60 * 1000;
+
+const cache = new Map<Address, { at: number; value: TrustBase }>();
 
 export async function probeTrustBase(client: PublicClient, address: Address): Promise<TrustBase> {
   const key = address.toLowerCase() as Address;
   const cached = cache.get(key);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.at < TRUST_BASE_TTL_MS) return cached.value;
 
   const code = ((await client.getCode({ address })) ?? "0x") as Hex;
   const fromCode = analyzeBytecode(code);
@@ -100,11 +109,11 @@ export async function probeTrustBase(client: PublicClient, address: Address): Pr
   }
   const partial = { ...fromCode, upgradeable };
   const result: TrustBase = { ...partial, verdict: verdictOf(partial) };
-  cache.set(key, result);
+  cache.set(key, { at: Date.now(), value: result });
   return result;
 }
 
-/** For tests and long-running servers: upgradeable targets can change; callers may clear. */
+/** For tests, and for callers that need a reading fresher than the TTL. */
 export function clearTrustBaseCache() {
   cache.clear();
 }

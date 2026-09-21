@@ -387,12 +387,15 @@ export class ProjectionStore {
   }
 
   reputation(ubid: Hex) {
-    // STAR aggregates by counting attesters whose live value is 1.
-    let stars = 0;
+    // STAR aggregates by counting attesters whose live value is 1. The attesters are returned
+    // alongside the count, because the count alone cannot answer "have I starred this?" - which
+    // a toggle in a UI has to know.
+    const starredBy: Address[] = [];
     for (const attester of this.attestersOf(ubid, AttestationType.STAR)) {
       const live = this.liveStateValue(ubid, attester, AttestationType.STAR);
-      if (live && ProjectionStore.payloadByte(live.data) === 1) stars++;
+      if (live && ProjectionStore.payloadByte(live.data) === 1) starredBy.push(attester);
     }
+    const stars = starredBy.length;
     // RATING aggregates by averaging each attester's live value; 0-100, invalid at read otherwise.
     const ratings: { attester: Address; value: number }[] = [];
     for (const attester of this.attestersOf(ubid, AttestationType.RATING)) {
@@ -425,18 +428,38 @@ export class ProjectionStore {
       confirmedAccounts.push({ attester, verified: identityNamesAccount(identity, attester) });
     }
 
-    return { stars, ratingAverage, ratings, reviews, interactions, confirmedAccounts };
+    return { stars, starredBy, ratingAverage, ratings, reviews, interactions, confirmedAccounts };
   }
 
-  /** Wallet reverse-resolution with the mutual-pointing check (claims, not proof). */
+  /**
+   * Wallet reverse-resolution: "who operates this address?"
+   *
+   * Two ways an address resolves, and they are not the same relationship:
+   *
+   *  - `self`: the address IS an agent. An ACCOUNT record's controller is the address itself, and its
+   *    UBID is derivable from the address alone - no designation is needed or possible, so this
+   *    needs no mutual-pointing check. Nothing can fake it: only the address can bind it.
+   *  - `designation`: the address is the OPERATING WALLET of an agent controlled elsewhere (a token, a
+   *    contract). That is a claim by the wallet, so it carries the mutual-pointing check.
+   *
+   * Both can hold at once. Returning null means neither does.
+   */
   resolveWallet(account: Address) {
-    const designation = this.walletUbid.get(account.toLowerCase() as Address) ?? null;
-    if (!designation) return null;
-    const identity = this.identities.get(designation.ubid) ?? null;
+    const addr = account.toLowerCase() as Address;
+
+    const selfUbid = computeUbid(this.chainId, this.adapter, Standard.ACCOUNT, addr, 0n)
+      .toLowerCase() as Hex;
+    const self = this.identities.get(selfUbid) ?? null;
+
+    const designation = this.walletUbid.get(addr) ?? null;
+    const identity = designation ? this.identities.get(designation.ubid) ?? null : null;
+
+    if (!self && !designation) return null;
     return {
+      self,
       designation,
       identity,
-      verified: identity !== null && identity.agentWallet === designation.account,
+      verified: identity !== null && designation !== null && identity.agentWallet === designation.account,
     };
   }
 }
