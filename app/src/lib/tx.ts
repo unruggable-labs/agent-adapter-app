@@ -57,6 +57,34 @@ export async function sendTx(
   }
 }
 
+/**
+ * Would this call succeed if sent? Runs only the simulation half of `sendTx` - nothing is
+ * signed and nothing is sent.
+ *
+ * This is how the app answers "may I manage this profile?" without re-implementing the
+ * contract's rules in the client. `_hasBindingControl` is internal and there is no
+ * coordinate-based public view, but simulating a gated call exercises the real thing: the
+ * holder, a scoped or unscoped delegate.xyz delegation, and the ownerless-collection carve-out
+ * all resolve correctly, and the answer cannot drift from the contract because it *is* the
+ * contract.
+ */
+export async function canSend(
+  signer: Signer | null,
+  address: Address,
+  abi: Abi,
+  functionName: string,
+  args: unknown[],
+): Promise<boolean> {
+  if (!signer) return false;
+  try {
+    const account = signer.isPersona ? walletFor(signer.actorIndex).account : signer.address;
+    await publicClient.simulateContract({ account, address, abi, functionName, args });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function revertReason(err: unknown): string {
   if (err instanceof BaseError) {
     const revert = err.walk((e) => e instanceof ContractFunctionRevertedError);

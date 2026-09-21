@@ -35,8 +35,7 @@ export function AttestationsPage() {
         </div>
       </div>
       <p className="page-sub">
-        Public statements about UBIDs. Revocation withdraws a statement's effect; the record that
-        it was made - and revoked - is permanent. Only the original attester's revocation counts.
+        Public statements about agents.
       </p>
 
       <div className="card table-scroll" style={{ padding: "4px 14px" }}>

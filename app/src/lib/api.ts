@@ -21,6 +21,9 @@ export interface TrustBase {
 
 export interface Reputation {
   stars: number;
+  /** Attesters whose live star value is 1 - lets a viewer see whether they are one of them.
+   *  Optional: an indexer that predates this field simply omits it. */
+  starredBy?: Address[];
   ratingAverage: number | null;
   ratings: { attester: Address; value: number }[];
   reviews: { attester: Address; text: string; attestationId: Hex; order: Order }[];
@@ -45,6 +48,10 @@ export interface Identity {
   contractName: string | null;
   boundAddress: Address;
   tokenId: string;
+  /** Who holds the controller right now, where control is a single nameable address. null means the
+   *  standard has no single holder (balance standards, CONTRACT_ADMIN) or the read failed -
+   *  never "nobody controls it". Delegates also pass control without appearing here. */
+  currentControllerHolder: Address | null;
   claimed: boolean;
   agentURI: string | null;
   metadata: Record<string, Hex>;
@@ -89,7 +96,14 @@ export const api = {
   identities: () => get<Identity[]>("/identities"),
   identity: (ubid: string) => get<Identity>(`/identity/${ubid}`),
   attestations: () => get<AttestationRow[]>("/attestations"),
+  /** `self` = the address IS an agent (an ACCOUNT record whose controller is the address; its UBID is
+   *  derivable from the address, so it needs no designation). `designation` = the address is some
+   *  agent's operating wallet, a claim that carries the mutual-pointing check. Both can hold. */
   wallet: (address: string) =>
-    get<{ designation: { ubid: Hex }; verified: boolean } | null>(`/wallet/${address}`),
+    get<{
+      self: { ubid: Hex } | null;
+      designation: { ubid: Hex } | null;
+      verified: boolean;
+    } | null>(`/wallet/${address}`),
   trustbase: (address: string) => get<TrustBase>(`/trustbase/${address}`),
 };

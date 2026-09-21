@@ -80,7 +80,9 @@ function Shell() {
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/create")) page = <CreatePage />;
   else if (route.startsWith("/wallet")) page = <WalletPage />;
-  else if (route.startsWith("/how")) page = <HowPage />;
+  // /how/<part> keeps the selected component in the URL, so a reload or a shared link lands
+  // on the same explanation.
+  else if (route.startsWith("/how")) page = <HowPage part={route.split("/")[2]} />;
 
   return (
     <div className="shell">
@@ -102,7 +104,7 @@ function Shell() {
         <NavItem to="/wallet" label="My wallet" />
 
         <div className="nav-label">Learn</div>
-        <NavItem to="/how" label="How identity works" />
+        <NavItem to="/how" label="Agent identity" />
 
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>

@@ -147,3 +147,29 @@ export function utf8ToHex(s: string): Hex {
   return ("0x" +
     Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, "0")).join("")) as Hex;
 }
+
+/** "1 star", "2 stars". Regular plurals only - the app has no irregular count nouns. */
+export function plural(n: number, word: string): string {
+  return `${n} ${pluralise(n, word)}`;
+}
+
+/** Just the noun, for places that render the number separately (stat tiles). */
+export function pluralise(n: number, word: string): string {
+  return n === 1 ? word : `${word}s`;
+}
+
+/** Metadata values are arbitrary bytes. Most are UTF-8 text, so show that when the bytes decode
+ *  cleanly and hold no control characters; otherwise the caller falls back to raw hex. */
+export function hexToUtf8(h: string): string | null {
+  const body = h.startsWith("0x") ? h.slice(2) : h;
+  if (body.length === 0 || body.length % 2 !== 0) return null;
+  const bytes = new Uint8Array(body.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(body.slice(i * 2, i * 2 + 2), 16);
+  if (bytes.some((b) => Number.isNaN(b))) return null;
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return [...text].some((c) => c.codePointAt(0)! < 0x20) ? null : text;
+  } catch {
+    return null;
+  }
+}

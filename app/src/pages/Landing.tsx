@@ -3,7 +3,7 @@ import { isAddress } from "viem";
 import { Avatar, Badge } from "../components/ui";
 import { api, type Identity } from "../lib/api";
 import { useApp } from "../lib/app-state";
-import { displayName } from "../lib/chain";
+import { displayName, plural, pluralise } from "../lib/chain";
 
 /** The product presentation: one plain sentence, a live lookup, and the story in bullets.
  *  Show a real profile before explaining a single concept. */
@@ -18,7 +18,10 @@ export function LandingPage() {
       return;
     }
     const w = await api.wallet(query.trim().toLowerCase()).catch(() => null);
-    if (w?.designation) setResult({ state: "found", ubid: w.designation.ubid, verified: w.verified });
+    // An address that IS an agent needs no designation and no mutual-pointing check: only that
+    // address could have bound the record, so there is no second half left to fake.
+    if (w?.self) setResult({ state: "found", ubid: w.self.ubid, verified: true });
+    else if (w?.designation) setResult({ state: "found", ubid: w.designation.ubid, verified: w.verified });
     else setResult({ state: "none" });
   }
 
@@ -80,7 +83,7 @@ export function LandingPage() {
             {result?.verified ? <Badge tone="ok">verified both ways</Badge> : <Badge tone="warn">claim only, not verified</Badge>}
             <span className="t2 small">
               {found.reputation.ratingAverage !== null && <>rated {found.reputation.ratingAverage.toFixed(0)}/100 · </>}
-              {plural(found.reputation.interactions.length, "recorded deal")} · {plural(found.reputation.reviews.length, "review")}
+              {plural(found.reputation.interactions.length, "recorded transaction")} · {plural(found.reputation.reviews.length, "review")}
             </span>
           </div>
         )}
@@ -143,9 +146,6 @@ export function LandingPage() {
   );
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
 
 function StepIcon({ d }: { d: string }) {
   return (
@@ -168,9 +168,9 @@ function MiniProfile({ id, onOpen }: { id: Identity; onOpen: () => void }) {
       </div>
       <div className="mp-stats">
         <span className="mp-stat"><b>{rep.ratingAverage === null ? "—" : rep.ratingAverage.toFixed(0)}</b><span>rating /100</span></span>
-        <span className="mp-stat"><b>{rep.stars}</b><span>stars</span></span>
-        <span className="mp-stat"><b>{rep.interactions.length}</b><span>deals</span></span>
-        <span className="mp-stat"><b>{rep.reviews.length}</b><span>reviews</span></span>
+        <span className="mp-stat"><b>{rep.stars}</b><span>{pluralise(rep.stars, "star")}</span></span>
+        <span className="mp-stat"><b>{rep.interactions.length}</b><span>{pluralise(rep.interactions.length, "transaction")}</span></span>
+        <span className="mp-stat"><b>{rep.reviews.length}</b><span>{pluralise(rep.reviews.length, "review")}</span></span>
       </div>
       {review && (
         <div className="mp-review">

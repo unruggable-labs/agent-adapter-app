@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Address, Hex } from "viem";
 import { isAddress } from "viem";
-import { Addr, Badge, Callout, Spinner, Tip, TrustBadge } from "../components/ui";
+import { Addr, Badge, isReassuringSignal, SignalCallout, Spinner, Tip, trustSignal, TrustBadge } from "../components/ui";
 import { api, type TrustBase } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, erc721Abi, publicClient, shortHex } from "../lib/chain";
@@ -117,7 +117,7 @@ export function CreatePage() {
           <div className="card" style={{ marginTop: 16 }}>
             <div className="section-label">Preflight</div>
             <dl className="kv">
-              <dt><Tip tip="The kind of deed this identity binds to. It decides who can update the identity, forever: a token standard means whoever owns the token; ACCOUNT means only this address itself. Detected by probing the subject on-chain.">Standard</Tip></dt>
+              <dt><Tip tip="The kind of controller this identity binds to. It decides who can update the identity, forever: a token standard means whoever owns the token; ACCOUNT means only this address itself. Detected by probing the subject on-chain.">Standard</Tip></dt>
               <dd className="row">
                 <Badge tone="outline">{probe.standardName}</Badge>
                 {probe.tokenName && <span className="t3 small">{probe.tokenName}</span>}
@@ -139,17 +139,12 @@ export function CreatePage() {
             </dl>
           </div>
 
-          {probe.trust?.verdict === "ruggable" && (
-            <Callout tone="danger" title="Before you bind:">
-              <span> </span>this collection can burn tokens and can be made to call out, so a post-burn
-              re-claim of the identity is possible by code. Binding adopts the collection's rules.
-            </Callout>
-          )}
-          {probe.trust?.verdict === "unstable" && (
-            <Callout tone="warn" title="Before you bind:">
-              <span> </span>the collection is an upgradeable proxy - its rules can change after you bind.
-            </Callout>
-          )}
+          {/* Binding adopts the controller's rules, so disclose them in the same words the
+              profile and the table will use once this identity exists. */}
+          {(() => {
+            const k = trustSignal(probe.trust);
+            return k && !isReassuringSignal(k) ? <SignalCallout k={k} /> : null;
+          })()}
 
           {probe.youAreAuthorized && (
             <div className="card" style={{ marginTop: 14 }}>

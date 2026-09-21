@@ -17,6 +17,10 @@ export interface Signer {
   actorIndex: number;
 }
 
+/** "loading" only until the first fetch resolves; a later poll failing keeps the last good data
+ *  on screen rather than blanking a page the user is reading. */
+export type LoadStatus = "loading" | "ready" | "error";
+
 interface AppState {
   route: string;
   navigate: (r: string) => void;
@@ -25,6 +29,7 @@ interface AppState {
   signer: Signer | null;
   overview: Overview | null;
   identities: Identity[];
+  status: LoadStatus;
   refresh: () => Promise<void>;
   toast: (msg: string) => void;
 }
@@ -38,6 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [status, setStatus] = useState<LoadStatus>("loading");
   const { address: connectedAddress } = useAccount();
 
   const signer: Signer | null = NETWORK.personaWrites
@@ -63,14 +69,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
-    const [ov, ids] = await Promise.all([api.overview(), api.identities()]);
-    setOverview(ov);
-    setIdentities(ids);
+    try {
+      const [ov, ids] = await Promise.all([api.overview(), api.identities()]);
+      setOverview(ov);
+      setIdentities(ids);
+      setStatus("ready");
+    } catch {
+      setStatus((s) => (s === "ready" ? s : "error"));
+    }
   }, []);
 
   useEffect(() => {
-    refresh().catch(() => {});
-    const t = setInterval(() => refresh().catch(() => {}), 4000);
+    refresh();
+    const t = setInterval(refresh, 4000);
     return () => clearInterval(t);
   }, [refresh]);
 
@@ -93,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         signer,
         overview,
         identities,
+        status,
         refresh,
         toast,
       }}

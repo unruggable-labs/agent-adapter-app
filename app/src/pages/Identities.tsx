@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useApp } from "../lib/app-state";
 import { controlLine, displayName, shortHex, shortTokenId } from "../lib/chain";
-import { Addr, Avatar, StatusBadge, Tip, TrustBadge } from "../components/ui";
+import { Addr, Avatar, Signal, signalsFor, Skeleton, StatusBadge, Tip } from "../components/ui";
 
 const PAGE_SIZE = 25;
 
 export function IdentitiesPage() {
-  const { identities, overview, navigate } = useApp();
+  const { identities, overview, status, navigate } = useApp();
   const [page, setPage] = useState(0);
   const pages = Math.max(1, Math.ceil(identities.length / PAGE_SIZE));
   const current = Math.min(page, pages - 1);
@@ -21,8 +21,7 @@ export function IdentitiesPage() {
         </div>
       </div>
       <p className="page-sub">
-        Every identity is a UBID - one hash naming a subject, whether it has only claimed
-        counterfactually or fully registered as an ERC-8004 agent.
+        Register an agent identity. <i>Anything</i> can be registered as an agent identity - it will receive a UBID, a unique hash representing it.
         {overview && overview.dropped > 0 && <span className="t3"> · {overview.dropped} events dropped at verification</span>}
       </p>
 
@@ -31,12 +30,12 @@ export function IdentitiesPage() {
           <thead>
             <tr>
               <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this.">UBID</Tip></th>
-              <th><Tip tip="The deed that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Subject</Tip></th>
-              <th><Tip tip="What kind of deed controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
+              <th><Tip tip="The controller that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Subject</Tip></th>
+              <th><Tip tip="What kind of controller controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-right"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
               <th className="td-right">Stars</th>
-              <th><Tip tip="Trust disclosures: warnings derived from the event history (e.g. a collection re-claimed a burned token's identity) and from probing the deed contract's code (burnable, upgradeable, ruggable). Disclosed, never censored.">Signals</Tip></th>
+              <th><Tip tip="Trust disclosures: warnings derived from the event history (e.g. a collection re-claimed a burned token's identity) and from probing the controller contract's code (burnable, upgradeable, ruggable). Disclosed, never censored.">Signals</Tip></th>
             </tr>
           </thead>
           <tbody>
@@ -65,31 +64,29 @@ export function IdentitiesPage() {
                 <td className="td-right num">{id.reputation.stars || <span className="t3">0</span>}</td>
                 <td>
                   <span className="row wrap" style={{ gap: 4 }}>
-                    {id.collectionAuthoredAfterOwner && (
-                      <Tip tip="The collection contract wrote to this identity after a real owner had already spoken - the burn-reopen pattern. Its reputation may describe a previous claimant's agent.">
-                        <span className="badge badge-danger">post-owner claim</span>
-                      </Tip>
-                    )}
-                    {id.flags.currentlyOwnerless && (
-                      <Tip tip="The bound token currently has no owner (ownerOf reverts or is zero), so the collection contract temporarily holds authority over this identity.">
-                        <span className="badge badge-ownerless">ownerless</span>
-                      </Tip>
-                    )}
-                    <TrustBadge t={id.trustBase} compact />
+                    {signalsFor(id, { compact: true }).map((k) => <Signal key={k} k={k} />)}
                   </span>
                 </td>
               </tr>
             ))}
-            {identities.length === 0 && (
+            {identities.length === 0 && status === "loading" && <SkeletonRows />}
+            {identities.length === 0 && status === "error" && (
+              <tr><td colSpan={7}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
+            )}
+            {identities.length === 0 && status === "ready" && (
               <tr><td colSpan={7}><div className="empty">No identities yet - run the demo scenario or create one.</div></td></tr>
             )}
           </tbody>
         </table>
       </div>
       <div className="row spread" style={{ marginTop: 10 }}>
-        <p className="hint" style={{ margin: 0 }}>
-          <Addr value={overview?.adapter ?? ""} /> is the adapter every UBID is scoped to on chain {overview?.chainId}.
-        </p>
+        {overview ? (
+          <p className="hint" style={{ margin: 0 }}>
+            <Addr value={overview.adapter} /> is the adapter every UBID is scoped to on chain {overview.chainId}.
+          </p>
+        ) : (
+          <span />
+        )}
         {pages > 1 && (
           <span className="row" style={{ gap: 8 }}>
             <span className="hint num">
@@ -101,5 +98,24 @@ export function IdentitiesPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Placeholder rows in the real column shape, so the first paint says "coming" instead of "none". */
+function SkeletonRows() {
+  return (
+    <>
+      {[0, 1, 2, 3].map((i) => (
+        <tr key={i} className="skel-row" aria-hidden>
+          <td><span className="row" style={{ gap: 8 }}><Skeleton size={20} /><Skeleton w={80} /></span></td>
+          <td><Skeleton w={60} /></td>
+          <td><Skeleton w={50} /></td>
+          <td><Skeleton w={60} /></td>
+          <td className="td-right"><Skeleton w={30} /></td>
+          <td className="td-right"><Skeleton w={30} /></td>
+          <td><Skeleton w={70} /></td>
+        </tr>
+      ))}
+    </>
   );
 }
