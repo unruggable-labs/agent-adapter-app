@@ -120,7 +120,45 @@ input, textarea, select { font: inherit; color: inherit; }
 .sidebar-meta { font-size: 11px; color: var(--text-3); line-height: 1.7; }
 .sidebar-meta .mono { font-size: 10.5px; }
 
-.main { flex: 1; overflow-y: auto; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.main-scroll { flex: 1; overflow-y: auto; }
+
+/* ------------------------------------------------------------------ header: search + account */
+
+.topbar {
+  display: grid; grid-template-columns: 1fr minmax(0, 560px) 1fr; align-items: center; gap: 16px;
+  height: 54px; padding: 0 20px; flex-shrink: 0;
+  background: var(--surface-1); border-bottom: 1px solid var(--border);
+}
+.topbar-right { justify-self: end; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.account-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
+
+.search { position: relative; width: 100%; }
+.search-icon { position: absolute; left: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.search-input {
+  width: 100%; height: 34px; padding: 0 12px 0 32px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  font: inherit; font-size: 13px; color: var(--text-1); outline: none;
+}
+.search-input::placeholder { color: var(--text-3); }
+.search-input:focus { background: var(--surface-1); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(123, 131, 235, 0.15); }
+.search-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 150;
+  padding: 4px; background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg); box-shadow: 0 12px 36px rgba(10, 12, 18, 0.18);
+}
+.search-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 7px 10px; border-radius: var(--r-md);
+}
+.search-item.is-active { background: var(--surface-2); }
+.search-item-text { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.search-item-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-empty { padding: 10px 12px; }
+@media (max-width: 760px) {
+  .topbar { grid-template-columns: 1fr auto; }
+  .topbar > span:first-child { display: none; }
+}
 .page { max-width: 1040px; margin: 0 auto; padding: 28px 32px 80px; }
 /* Table pages get the room their columns need before falling back to a scroll. */
 .page-wide { max-width: 1360px; }

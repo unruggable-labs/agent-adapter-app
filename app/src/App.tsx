@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { SearchBar } from "./components/search";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, NETWORK, NETWORKS, networkId, shortHex, switchNetwork, type NetworkId } from "./lib/chain";
 import { AttestationsPage } from "./pages/Attestations";
@@ -24,8 +25,10 @@ function NavItem({ to, label, count }: { to: string; label: string; count?: numb
   );
 }
 
+/** The account, in the header: who is connected, whether they are on the right chain, and the
+ *  way in or out. On the devnet the "account" is a persona picked from a list instead. */
 function WalletControl() {
-  const { signer } = useApp();
+  const { signer, actorIndex, setActorIndex } = useApp();
   const { connectors, connect, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { chain } = useAccount();
@@ -37,25 +40,34 @@ function WalletControl() {
     if (wrongChain) switchChain({ chainId: NETWORK.chain.id });
   }, [signer?.address]);
 
+  if (NETWORK.personaWrites)
+    return (
+      <label className="row" style={{ gap: 8 }}>
+        <span className="hint">Acting as</span>
+        <select className="select" style={{ width: "auto", padding: "4px 8px" }} value={actorIndex} onChange={(e) => setActorIndex(Number(e.target.value))}>
+          {ACTORS.map((a, i) => (
+            <option key={a.name} value={i}>{a.name}</option>
+          ))}
+        </select>
+      </label>
+    );
+
   if (signer)
     return (
-      <div>
-        <div className="mono t3">{signer.label}</div>
+      <div className="row" style={{ gap: 8 }}>
         {wrongChain ? (
-          <div style={{ marginTop: 4 }}>
-            <div className="hint" style={{ color: "var(--warn)" }}>wallet is on {chain?.name ?? "another network"}</div>
-            <button className="btn btn-sm" style={{ marginTop: 4 }} onClick={() => switchChain({ chainId: NETWORK.chain.id })}>
-              Switch to {NETWORK.chain.name}
-            </button>
-          </div>
+          <button className="btn btn-sm" style={{ color: "var(--warn)" }} onClick={() => switchChain({ chainId: NETWORK.chain.id })}>
+            Switch to {NETWORK.chain.name}
+          </button>
         ) : (
-          <div className="hint" style={{ color: "var(--ok)" }}>on {chain?.name}</div>
+          <span className="account-dot" title={`on ${chain?.name}`} />
         )}
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => disconnect()}>Disconnect</button>
+        <span className="mono t2 small">{signer.label}</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => disconnect()}>Disconnect</button>
       </div>
     );
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div className="row" style={{ gap: 6 }}>
       {connectors.map((c) => (
         <button key={c.uid} className="btn btn-sm" disabled={isPending} onClick={() => connect({ connector: c })}>
           Connect {c.name}
@@ -67,7 +79,7 @@ function WalletControl() {
 }
 
 function Shell() {
-  const { route, overview, actorIndex, setActorIndex, signer } = useApp();
+  const { route, overview, signer } = useApp();
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -116,21 +128,6 @@ function Shell() {
               <option key={id} value={id}>{n.label}</option>
             ))}
           </select>
-          {NETWORK.personaWrites ? (
-            <>
-              <div className="nav-label" style={{ padding: "8px 0 4px" }}>Acting as (devnet persona)</div>
-              <select className="select" value={actorIndex} onChange={(e) => setActorIndex(Number(e.target.value))}>
-                {ACTORS.map((a, i) => (
-                  <option key={a.name} value={i}>{a.name}</option>
-                ))}
-              </select>
-            </>
-          ) : (
-            <>
-              <div className="nav-label" style={{ padding: "8px 0 4px" }}>Wallet</div>
-              <WalletControl />
-            </>
-          )}
           <div className="sidebar-meta" style={{ marginTop: 8 }}>
             {NETWORK.personaWrites && <div className="mono t3">{shortHex(signer?.address ?? "", 12)}</div>}
             <div style={{ marginTop: 4 }}>chain {overview?.chainId ?? "…"} · <span className="mono">{shortHex(overview?.adapter ?? "", 6)}</span></div>
@@ -138,7 +135,16 @@ function Shell() {
           </div>
         </div>
       </aside>
-      <main className="main">{page}</main>
+      <main className="main">
+        <header className="topbar">
+          <span />
+          <SearchBar />
+          <div className="topbar-right">
+            <WalletControl />
+          </div>
+        </header>
+        <div className="main-scroll">{page}</div>
+      </main>
     </div>
   );
 }
