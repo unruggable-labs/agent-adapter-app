@@ -113,7 +113,39 @@ function suggest(kind: Kind, f: Facts, you: Address | null): { standard: number;
   return { standard: 0, why: "ownerOf reverts for this id - the token may not exist yet, or be burned. Only the collection contract can claim it right now." };
 }
 
+type Path = "wallet" | "developer";
+
+/** The root question: will this identity be created by signing here, or by a contract? */
 export function CreatePage() {
+  const [path, setPath] = useState<Path | null>(null);
+  return (
+    <div className="page page-narrow fade-in">
+      <h1 className="page-title">Create an identity</h1>
+      <p className="page-sub">Give something you control a profile. The UBID it gets is permanent.</p>
+
+      <Step n={1} title="How will this identity come to exist?">
+        <Choice
+          selected={path === "wallet"}
+          onClick={() => setPath("wallet")}
+          title="I'll sign a transaction here"
+          sub="For a token I hold, my own address, or a contract I already control. Ends in a button."
+        />
+        <Choice
+          selected={path === "developer"}
+          onClick={() => setPath("developer")}
+          title="I'm writing a contract"
+          sub="It will claim identities itself - for the tokens it mints, or for itself. Ends in code."
+        />
+      </Step>
+
+      {path === "wallet" && <WalletFlow />}
+      {path === "developer" && <DeveloperFlow />}
+    </div>
+  );
+}
+
+/** Steps 2 to 5 for someone who will sign from the connected wallet. */
+function WalletFlow() {
   const { signer, overview, identities, navigate, refresh, toast } = useApp();
   const [kind, setKind] = useState<Kind | null>(null);
   const [address, setAddress] = useState("");
@@ -188,12 +220,12 @@ export function CreatePage() {
   );
   const existing = useMemo(() => identities.find((i) => i.ubid === ubid) ?? null, [identities, ubid]);
 
-  if (!adapter) return <div className="page"><Spinner /></div>;
+  if (!adapter) return <Spinner />;
 
   if (done) {
     return (
-      <div className="page page-narrow fade-in">
-        <h1 className="page-title">Identity {mode === "claim" ? "claimed" : "registered"}</h1>
+      <div className="step-block fade-in">
+        <h2 className="h-section">Identity {mode === "claim" ? "claimed" : "registered"}</h2>
         <p className="page-sub">This UBID is the identity's permanent name on this chain.</p>
         <div className="card">
           <div className="section-label">UBID</div>
@@ -211,11 +243,8 @@ export function CreatePage() {
   const contractAsItself = kind === "contract" && standard === 5;
 
   return (
-    <div className="page page-narrow fade-in">
-      <h1 className="page-title">Create an identity</h1>
-      <p className="page-sub">Give something you control a profile. The UBID it gets is permanent.</p>
-
-      <Step n={1} title="What are you registering?">
+    <>
+      <Step n={2} title="What are you registering?">
         <Choice selected={kind === "token"} onClick={() => setKind("token")} title="A token I hold" sub="An NFT or a token id. The identity travels with the token." />
         <Choice
           selected={kind === "eoa"}
@@ -228,7 +257,7 @@ export function CreatePage() {
       </Step>
 
       {kind && kind !== "eoa" && (
-        <Step n={2} title={kind === "token" ? "Which token?" : "Which contract?"}>
+        <Step n={3} title={kind === "token" ? "Which token?" : "Which contract?"}>
           <div className="field">
             <label>{kind === "token" ? "Token contract" : "Contract address"}</label>
             <input className="input mono" placeholder="0x…" value={address} onChange={(e) => setAddress(e.target.value.trim())} />
@@ -246,7 +275,7 @@ export function CreatePage() {
       )}
 
       {kind && facts && standard !== null && info && (kind === "eoa" || facts.hasCode) && (
-        <Step n={kind === "eoa" ? 2 : 3} title="Who controls it?">
+        <Step n={kind === "eoa" ? 3 : 4} title="Who controls it?">
           <p className="t2 small" style={{ margin: "0 0 10px" }}>
             The control rule is part of the identity's name, so it can't change later. Pick the one that
             describes how this {kind === "token" ? "token" : kind === "eoa" ? "address" : "contract"} is actually held.
@@ -273,7 +302,7 @@ export function CreatePage() {
                 : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, false)}</span></span>}
             </dd>
             <dt><Tip tip="The identity's permanent name - a hash the live contract computes from the standard, the address and the token id. Same whether you claim now or register fully later.">UBID</Tip></dt>
-            <dd className="mono" style={{ overflowWrap: "anywhere" }}>{ubid ?? "—"}</dd>
+            <dd className="mono" style={{ overflowWrap: "anywhere" }}>{ubid ?? "-"}</dd>
           </dl>
 
           {existing && (
@@ -296,7 +325,7 @@ export function CreatePage() {
 
       {kind && facts && standard !== null && authorized !== null && ubid && (kind === "eoa" || facts.hasCode) && (
         authorized ? (
-          <Step n={kind === "eoa" ? 3 : 4} title="Claim it">
+          <Step n={kind === "eoa" ? 4 : 5} title="Claim it">
             <div className="seg" style={{ marginBottom: 12 }}>
               <button className={mode === "claim" ? "active" : ""} onClick={() => setMode("claim")}>Claim (counterfactual)</button>
               <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Register (mint an ERC-8004 agent)</button>
@@ -333,9 +362,9 @@ export function CreatePage() {
             </div>
           </Step>
         ) : contractAsItself ? (
-          <ContractGuide n={4} adapter={adapter} contract={bound!} ubid={ubid} uri={uri} setUri={setUri} you={signer?.address ?? null} />
+          <ContractGuide n={5} adapter={adapter} contract={bound!} ubid={ubid} uri={uri} setUri={setUri} you={signer?.address ?? null} />
         ) : (
-          <Step n={kind === "eoa" ? 3 : 4} title="Not from this wallet">
+          <Step n={kind === "eoa" ? 4 : 5} title="Not from this wallet">
             <p className="t2 small" style={{ margin: 0 }}>
               {kind === "contract"
                 ? standard === 6
@@ -348,7 +377,129 @@ export function CreatePage() {
           </Step>
         )
       )}
-    </div>
+    </>
+  );
+}
+
+type Plan = "mint" | "self" | "controlled";
+
+/** Steps 2 and 3 for someone writing a contract: what it will do, then the code for that. */
+function DeveloperFlow() {
+  const { signer, overview } = useApp();
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [uri, setUri] = useState("");
+  const adapter = overview?.adapter;
+  if (!adapter) return <Spinner />;
+  return (
+    <>
+      <Step n={2} title="What will the contract do?">
+        <Choice selected={plan === "mint"} onClick={() => setPlan("mint")} title="Mint tokens that each get an identity" sub="An NFT collection whose every token is an agent. The identity exists before the first owner does." />
+        <Choice selected={plan === "self"} onClick={() => setPlan("self")} title="Be an agent itself" sub="The contract is the agent. It claims and manages its own identity." />
+        <Choice selected={plan === "controlled"} onClick={() => setPlan("controlled")} title="Be controlled by its owner or admins" sub="The contract is the subject; a person claims for it. Usually no new code at all." />
+      </Step>
+      {plan === "mint" && <MintGuide n={3} adapter={adapter} />}
+      {plan === "self" && <ContractGuide n={3} adapter={adapter} contract={null} ubid={null} uri={uri} setUri={setUri} you={signer?.address ?? null} title="Give the contract a voice" />}
+      {plan === "controlled" && <ControlledGuide n={3} />}
+    </>
+  );
+}
+
+/**
+ * The mint-time pattern. The adapter lets a token contract act for one of its own tokens while
+ * ownerOf reverts or returns zero, so a collection that claims inside mint(), before _mint,
+ * gives every token an identity that the first owner then inherits.
+ */
+function MintGuide({ n, adapter }: { n: number; adapter: Address }) {
+  const [standard, setStandard] = useState<0 | 3 | 4>(0);
+  const [full, setFull] = useState(false);
+  const name = BY_STANDARD[standard].name;
+  const call = full ? "register" : "counterfactualRegister";
+  const code = `interface IAdapter8004 {
+    function ${call}(uint8 standard, address boundAddress, uint256 tokenId, string calldata agentURI)
+        external returns (${full ? "uint256 agentId" : "bytes32 ubid"});
+    function hashBinding(uint8 standard, address boundAddress, uint256 tokenId) external view returns (bytes32);
+}
+
+contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1155 /* with ownerOf */" : "ERC6909 /* with ownerOf */"} {
+    IAdapter8004 public constant ADAPTER = IAdapter8004(${adapter});
+    uint8 private constant STANDARD = ${standard}; // ${name}
+
+    function mint(address to, uint256 tokenId, string calldata agentURI) external {
+        // ownerOf(tokenId) still reverts here, so this contract may speak for the token.
+        ADAPTER.${call}(STANDARD, address(this), tokenId, agentURI);
+        _${standard === 0 ? "safeMint(to, tokenId)" : "mint(to, tokenId, 1, \"\")"};
+        // From here on, only the holder (or their delegate.xyz delegate) controls the identity.
+    }
+
+    // The UBID is known before the token exists - put it in the token's metadata if you like.
+    function ubidOf(uint256 tokenId) external view returns (bytes32) {
+        return ADAPTER.hashBinding(STANDARD, address(this), tokenId);
+    }
+}`;
+  return (
+    <Step n={n} title="Claim inside mint, before the token exists">
+      <p className="t2 small" style={{ margin: "0 0 10px" }}>
+        The adapter lets a token contract act for one of its own tokens while <span className="mono">ownerOf</span> reverts
+        or returns zero. Claim first, mint second, and the identity is waiting for the first owner. After
+        the mint, the holder controls it and the collection does not.
+      </p>
+      <div className="row wrap" style={{ gap: 10, marginBottom: 10 }}>
+        <label className="row" style={{ gap: 8 }}>
+          <span className="hint">Token standard</span>
+          <select className="select" style={{ width: "auto" }} value={standard} onChange={(e) => setStandard(Number(e.target.value) as 0 | 3 | 4)}>
+            <option value={0}>ERC721</option>
+            <option value={3}>ERC1155F - ERC-1155 with ownerOf</option>
+            <option value={4}>ERC6909F - ERC-6909 with ownerOf</option>
+          </select>
+        </label>
+        <label className="row" style={{ gap: 8 }}>
+          <span className="hint">Per token</span>
+          <select className="select" style={{ width: "auto" }} value={full ? "register" : "claim"} onChange={(e) => setFull(e.target.value === "register")}>
+            <option value="claim">claim (event only, cheap)</option>
+            <option value="register">register (mints an ERC-8004 agent)</option>
+          </select>
+        </label>
+      </div>
+      <p className="hint" style={{ margin: "0 0 8px" }}>
+        Only the single-owner standards have this window: plain ERC-1155 and ERC-6909 control by balance, so
+        there is no ownerless moment. {full ? "Registering at mint costs an ERC-8004 mint per token; the UBID is the same either way." : "A claim is one event per mint. Anyone can register fully later under the same UBID."}
+      </p>
+      <CodeBlock code={code} />
+      <div className="callout callout-warn" style={{ marginTop: 14 }}>
+        <b>The window reopens after a burn.</b> A collection that burns a token and re-claims its identity is
+        allowed to, and Adapterscan says so: the profile's history shows a collection-authored claim after
+        an owner existed. Worth knowing before you promise holders anything.
+      </div>
+    </Step>
+  );
+}
+
+/** Ownable or AccessControl is all the contract needs; the claim itself is a wallet transaction. */
+function ControlledGuide({ n }: { n: number }) {
+  const code = `import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+// owner() is the whole requirement for CONTRACT_OWNABLE: whoever it returns can claim and
+// manage the identity from their wallet - here, on the "I'll sign a transaction here" path.
+contract MyThing is Ownable {
+    constructor() Ownable(msg.sender) {}
+}
+
+// Or AccessControl: holders of DEFAULT_ADMIN_ROLE control a CONTRACT_ADMIN identity.`;
+  return (
+    <Step n={n} title="No new code, most likely">
+      <p className="t2 small" style={{ margin: "0 0 10px" }}>
+        A contract bound as CONTRACT_OWNABLE is controlled by whatever <span className="mono">owner()</span> returns;
+        bound as CONTRACT_ADMIN, by holders of AccessControl's <span className="mono">DEFAULT_ADMIN_ROLE</span>. If the
+        contract already has either, there is nothing to add: deploy it, connect as the owner or an admin, and
+        take the "I'll sign a transaction here" path above with the contract's address.
+      </p>
+      <p className="hint" style={{ margin: "0 0 8px" }}>If it has neither yet, the smallest version:</p>
+      <CodeBlock code={code} />
+      <p className="hint" style={{ margin: "10px 0 0" }}>
+        The owner can also grant a delegate.xyz delegation so another wallet manages the identity without
+        holding the contract.
+      </p>
+    </Step>
   );
 }
 
@@ -366,12 +517,13 @@ function authorityDetail(kind: Kind, standard: number, f: Facts, you: Address | 
  * bound address and nothing else. So this step is instructions, not a button - the code to add,
  * or the exact call to send from a contract that can already execute arbitrary calls.
  */
-function ContractGuide({ n, adapter, contract, ubid, uri, setUri, you }: { n: number; adapter: Address; contract: Address; ubid: Hex; uri: string; setUri: (v: string) => void; you: Address | null }) {
+function ContractGuide({ n, adapter, contract, ubid, uri, setUri, you, title }: { n: number; adapter: Address; contract: Address | null; ubid: Hex | null; uri: string; setUri: (v: string) => void; you: Address | null; title?: string }) {
   const { navigate } = useApp();
-  const [route, setRoute] = useState<"execute" | "code" | "delegate">("execute");
+  const [route, setRoute] = useState<"execute" | "code" | "delegate">(contract ? "execute" : "code");
   const agentURI = uri.trim() || "ipfs://…/agent.json";
-  const registerData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualRegister", args: [5, contract, 0n, agentURI] });
-  const walletData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualSetAgentWalletAndUBID", args: [5, contract, 0n] });
+  const target = contract ?? ZERO_ADDRESS;
+  const registerData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualRegister", args: [5, target, 0n, agentURI] });
+  const walletData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualSetAgentWalletAndUBID", args: [5, target, 0n] });
 
   const solidity = `interface IAdapter8004 {
     function counterfactualRegister(uint8 standard, address boundAddress, uint256 tokenId, string calldata agentURI)
@@ -401,19 +553,19 @@ contract MyAgent {
 delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
 
   return (
-    <Step n={n} title="The contract has to speak for itself">
+    <Step n={n} title={title ?? "The contract has to speak for itself"}>
       <p className="t2 small" style={{ margin: "0 0 12px" }}>
         Bound as ACCOUNT, an identity is controlled by the address itself: the adapter checks that the
         caller <i>is</i> the contract. No wallet can do this on its behalf, so this step is what the contract
-        needs to do. Three ways, pick the one that fits.
+        needs to do. {contract ? "Three ways, pick the one that fits." : "Add the code now; once it is deployed, the other two routes work too."}
       </p>
       <div className="field">
         <label>Agent URI <span className="t3">(fills the calls below)</span></label>
         <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
       </div>
       <div className="seg" style={{ margin: "12px 0" }}>
-        <button className={route === "execute" ? "active" : ""} onClick={() => setRoute("execute")}>It can execute calls</button>
         <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
+        <button className={route === "execute" ? "active" : ""} disabled={!contract} title={contract ? undefined : "Needs the deployed address"} onClick={() => setRoute("execute")}>It can execute calls</button>
         <button className={route === "delegate" ? "active" : ""} onClick={() => setRoute("delegate")}>Delegate to my wallet</button>
       </div>
 
@@ -449,9 +601,14 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       )}
 
       <div className="callout" style={{ marginTop: 14 }}>
-        <b>Then come back.</b> Once the call lands, the identity appears here under its UBID{" "}
-        <span className="mono small" style={{ overflowWrap: "anywhere" }}>{ubid}</span>.{" "}
-        <button className="agent-link" onClick={() => navigate(`/identity/${ubid}`)}>Its profile page</button> will show it as soon as the indexer sees the event.
+        <b>Then come back.</b>{" "}
+        {ubid ? (
+          <>Once the call lands, the identity appears here under its UBID{" "}
+            <span className="mono small" style={{ overflowWrap: "anywhere" }}>{ubid}</span>.{" "}
+            <button className="agent-link" onClick={() => navigate(`/identity/${ubid}`)}>Its profile page</button> will show it as soon as the indexer sees the event.</>
+        ) : (
+          <>Once the contract is deployed and has made the call, search its address here: the identity appears under a UBID computed from the contract address, and nothing else.</>
+        )}
       </div>
     </Step>
   );
