@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../lib/app-state";
-import { Addr, ControllerCell, Skeleton, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
+import { Addr, ControllerCell, registrationOf, Skeleton, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
 
 const PAGE_SIZE = 25;
 
@@ -28,7 +28,7 @@ export function IdentitiesPage() {
         <table className="table clickable">
           <thead>
             <tr>
-              <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this.">UBID</Tip></th>
+              <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this. The mark beside it: a chain link means an ERC-8004 agent is minted, a dashed ring means a counterfactual claim only.">UBID</Tip></th>
               <th><Tip tip="What kind of controller controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="The thing that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Controller</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
@@ -39,7 +39,7 @@ export function IdentitiesPage() {
           <tbody>
             {visible.map((id) => (
               <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
-                <td><UbidCell ubid={id.ubid} image={id.image} /></td>
+                <td><UbidCell ubid={id.ubid} image={id.image} registration={registrationOf(id)} /></td>
                 <td><StandardBadge id={id} /></td>
                 <td><ControllerCell id={id} /></td>
                 <td><StatusBadge id={id} /></td>

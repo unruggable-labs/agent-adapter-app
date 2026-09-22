@@ -102,11 +102,44 @@ export function Addr({ value, n = 10 }: { value: string; n?: number }) {
   );
 }
 
-/** A UBID as a table cell: the identity's picture and its short hash. */
-export function UbidCell({ ubid, image }: { ubid: string; image?: string | null }) {
+/** How an identity exists, at a glance. */
+export type Registration = "onchain" | "claim" | "none";
+
+export function registrationOf(id: Identity): Registration {
+  return id.agentIds.length ? "onchain" : id.claimed ? "claim" : "none";
+}
+
+const REGISTRATION_TIP: Record<Registration, string> = {
+  onchain: "On-chain: an ERC-8004 agent is minted on the shared registry for this identity.",
+  claim: "Counterfactual: claimed in the event log only, nothing minted. Same UBID either way.",
+  none: "Unclaimed: this identity exists only because other events reference it.",
+};
+
+/** A small mark for the registration state: a solid chain link for on-chain, a dashed ring
+ *  for a counterfactual claim, a faint dotted ring for unclaimed. Same everywhere it appears. */
+export function RegistrationMark({ r }: { r: Registration }) {
+  return (
+    <Tip tip={REGISTRATION_TIP[r]}>
+      <svg className={`reg-mark reg-${r}`} viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-label={REGISTRATION_TIP[r]}>
+        {r === "onchain" ? (
+          <>
+            <path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.9.9" />
+            <path d="M9.4 6.6a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.9-.9" />
+          </>
+        ) : (
+          <circle cx="8" cy="8" r="5.5" strokeDasharray={r === "claim" ? "3 2.4" : "1 2.6"} />
+        )}
+      </svg>
+    </Tip>
+  );
+}
+
+/** A UBID as a table cell: the identity's picture, its registration mark, and its short hash. */
+export function UbidCell({ ubid, image, registration }: { ubid: string; image?: string | null; registration?: Registration }) {
   return (
     <span className="row" style={{ gap: 8 }}>
       <Avatar seed={ubid} image={image} size={28} />
+      {registration && <RegistrationMark r={registration} />}
       <span className="mono t2">{shortHex(ubid, 10)}</span>
     </span>
   );

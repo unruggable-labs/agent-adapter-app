@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Addr, Badge, ControllerCell, Modal, MultiSelect, Spinner, StandardBadge, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
+import { Addr, Badge, ControllerCell, Modal, MultiSelect, registrationOf, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, shortHex, STANDARD_NAMES } from "../lib/chain";
@@ -51,7 +51,7 @@ export function AttestationsPage() {
         <table className="table clickable">
           <thead>
             <tr>
-              <th>UBID</th><th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
+              <th><Tip tip="The identity the statement is about. The mark beside it: a chain link means an ERC-8004 agent is minted for it, a dashed ring means it is a counterfactual claim only, a dotted ring means nothing has claimed it yet.">UBID</Tip></th><th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -61,7 +61,7 @@ export function AttestationsPage() {
                 <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
                   <td>
                     <span className="row" style={{ gap: 6 }}>
-                      <UbidCell ubid={a.ubid} image={target?.image} />
+                      <UbidCell ubid={a.ubid} image={target?.image} registration={target ? registrationOf(target) : "none"} />
                       {!target && <Badge tone="warn" tip="No claim or binding matches this UBID yet. The statement is kept and gains meaning if one arrives.">unresolved</Badge>}
                     </span>
                   </td>
