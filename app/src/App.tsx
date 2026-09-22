@@ -1,8 +1,10 @@
+import { AppKitButton, useAppKitTheme } from "@reown/appkit/react";
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { SearchBar } from "./components/search";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, NETWORK, NETWORKS, networkId, shortHex, switchNetwork, type NetworkId } from "./lib/chain";
+import { appKitEnabled } from "./lib/wagmi";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
 import { HowPage } from "./pages/How";
@@ -52,6 +54,10 @@ function WalletControl() {
       </label>
     );
 
+  // The standard modal: wallet list, QR for mobile, account and network pills once connected.
+  if (appKitEnabled) return <AppKitButton balance="hide" size="sm" />;
+
+  // No project id configured: plain injected-wallet buttons, so a checkout still works.
   if (signer)
     return (
       <div className="row" style={{ gap: 8 }}>
@@ -78,6 +84,14 @@ function WalletControl() {
   );
 }
 
+/** Keeps AppKit's modal in the app's theme. Its hook needs AppKit created, so this only
+ *  mounts when it is. */
+function AppKitTheme({ theme }: { theme: string }) {
+  const { setThemeMode } = useAppKitTheme();
+  useEffect(() => setThemeMode(theme === "dark" ? "dark" : "light"), [theme]);
+  return null;
+}
+
 function Shell() {
   const { route, overview, signer } = useApp();
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
@@ -98,6 +112,7 @@ function Shell() {
 
   return (
     <div className="shell">
+      {appKitEnabled && <AppKitTheme theme={theme} />}
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">A8</span> Agent Adapter

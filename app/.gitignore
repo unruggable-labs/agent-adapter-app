@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# local env - the WalletConnect project id lives here on the box, never in git
+.env*.local

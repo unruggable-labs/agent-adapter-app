@@ -13,6 +13,11 @@ What runs where:
 - No database: the indexer's state is derived from chain events and rebuilt on
   restart (seconds at current volume). `/etc/adapter.env` is optional
   (`SEPOLIA_RPC_URL=` to use a dedicated RPC).
+- Wallet connection is Reown AppKit (the WalletConnect modal). It needs a project id
+  from https://cloud.reown.com, free. Put it in `/srv/adapter/app/.env.production.local`
+  as `VITE_WC_PROJECT_ID=…` once; Vite reads that file at build time, the deploy leaves it
+  alone (it is git-ignored), and every later deploy picks it up. Without it the app falls
+  back to plain injected-wallet buttons.
 
 ## First boot (once, needs sudo)
 
