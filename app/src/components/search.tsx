@@ -3,7 +3,7 @@ import { isAddress } from "viem";
 import { api, type Identity } from "../lib/api";
 import { useApp } from "../lib/app-state";
 import { displayName } from "../lib/chain";
-import { Avatar, Badge } from "./ui";
+import { Avatar, Badge, StandardBadge } from "./ui";
 
 interface Hit {
   id: Identity;
@@ -141,8 +141,11 @@ export function SearchBar() {
             >
               <Avatar seed={h.id.ubid} image={h.id.image} size={24} />
               <span className="search-item-text">
-                <span className="search-item-name">{displayName(h.id)}</span>
-                <span className="mono t3 small">{h.id.ubid.slice(0, 12)}…{h.id.ubid.slice(-4)}</span>
+                <span className="row" style={{ gap: 8 }}>
+                  <span className="search-item-ubid mono">{h.id.ubid.slice(0, 14)}…{h.id.ubid.slice(-6)}</span>
+                  <StandardBadge name={h.id.standardName} />
+                </span>
+                <span className="search-item-name t2">{displayName(h.id)}</span>
               </span>
               {h.note && <Badge tone={h.tone ?? "outline"}>{h.note}</Badge>}
             </button>
