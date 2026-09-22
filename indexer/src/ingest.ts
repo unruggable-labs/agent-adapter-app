@@ -55,6 +55,7 @@ export function decodeAdapterLogs(logs: Log[]): LogEvent[] {
         logIndex: log.logIndex!,
         eventName: decoded.eventName,
         args: decoded.args as unknown as Record<string, unknown>,
+        transactionHash: log.transactionHash ?? undefined,
       });
     } catch {
       // A topic0 the adapter ABI does not know — not part of any projection.

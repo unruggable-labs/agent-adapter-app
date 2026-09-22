@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
 import { Addr, AgentIds, Avatar, Badge, Callout, Section, Spinner, StandardBadge, Stat, StatusBadge } from "../components/ui";
-import type { Identity } from "../lib/api";
+import { api, type HistoryEntry, type Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
   ATTESTATION_TYPES,
@@ -9,6 +9,7 @@ import {
   adapterAbi,
   controlLine,
   displayName,
+  explorerTxUrl,
   plural,
   pluralise,
   shortHex,
@@ -18,9 +19,12 @@ import {
 } from "../lib/chain";
 import { canSend, sendTx } from "../lib/tx";
 
+type Tab = "profile" | "history";
+
 export function IdentityPage({ ubid }: { ubid: string }) {
   const { identities, overview, status, navigate } = useApp();
   const id = identities.find((i) => i.ubid === ubid);
+  const [tab, setTab] = useState<Tab>("profile");
 
   // "not found" is only true once the indexer has actually answered — on a deep link the first
   // render has no identities yet, and claiming the UBID doesn't exist would be a lie.
@@ -51,7 +55,14 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         </div>
       </div>
 
-      <div className="stack">
+      <div className="seg" style={{ marginBottom: 16 }}>
+        <button className={tab === "profile" ? "active" : ""} onClick={() => setTab("profile")}>Profile</button>
+        <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>History</button>
+      </div>
+
+      {tab === "history" && <HistoryPanel id={id} />}
+
+      <div className="stack" hidden={tab !== "profile"}>
         <ConfirmBanner id={id} />
         <WalletLinkBanner id={id} />
 
@@ -135,6 +146,75 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         <ManagePanel id={id} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The audit trail. The indexer keeps no database - this identity's state is replayed from
+ * exactly these events - so the list is the whole story, newest first. Rows that did not
+ * count (a forged claim, a revocation by the wrong address) are shown and marked, because
+ * seeing what was attempted is part of reading the record.
+ */
+function HistoryPanel({ id }: { id: Identity }) {
+  const [rows, setRows] = useState<HistoryEntry[] | null>(null);
+  const [error, setError] = useState(false);
+  const last = id.lastEvent ? `${id.lastEvent.blockNumber}:${id.lastEvent.logIndex}` : "";
+
+  // Re-fetch when the identity's latest event moves, so a fresh transaction shows up here too.
+  useEffect(() => {
+    let cancelled = false;
+    api.history(id.ubid).then((h) => !cancelled && setRows(h)).catch(() => !cancelled && setError(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [id.ubid, last, id.reputation.stars, id.reputation.reviews.length, id.reputation.interactions.length]);
+
+  if (error) return <Section label="History"><p className="t2 small" style={{ margin: 0 }}>Couldn't load the history.</p></Section>;
+  if (!rows) return <Section label="History"><Spinner /></Section>;
+  const newestFirst = [...rows].reverse();
+
+  return (
+    <Section label={`History · ${plural(rows.length, "event")}`}>
+      <p className="t2 small" style={{ margin: "0 0 12px" }}>
+        Every on-chain event that touched this identity, newest first. There is no database
+        behind this page: what you see on the profile is replayed from exactly these.
+      </p>
+      {rows.length === 0 ? (
+        <div className="empty">Nothing has touched this identity yet.</div>
+      ) : (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr><th className="td-right">Block</th><th>Event</th><th>By</th><th>What it did</th><th>Tx</th></tr>
+            </thead>
+            <tbody>
+              {newestFirst.map((h) => {
+                const url = h.transactionHash ? explorerTxUrl(h.transactionHash) : null;
+                return (
+                  <tr key={`${h.order.blockNumber}:${h.order.logIndex}`} className={h.outcome !== "applied" ? "is-muted" : undefined}>
+                    <td className="td-right num">{h.order.blockNumber}</td>
+                    <td><span className="mono small">{h.eventName}</span></td>
+                    <td>{h.actor ? <Addr value={h.actor} n={8} /> : <span className="t3">—</span>}</td>
+                    <td className="td-wrap">
+                      {h.outcome !== "applied" && <Badge tone={h.outcome === "dropped" ? "danger" : "warn"}>{h.outcome}</Badge>}
+                      {h.outcome !== "applied" && " "}
+                      <span className="small">{h.effect}</span>
+                    </td>
+                    <td>
+                      {h.transactionHash ? (
+                        url
+                          ? <a className="agent-link mono small" href={url} target="_blank" rel="noopener noreferrer">{shortHex(h.transactionHash, 8)}</a>
+                          : <span className="mono small t2">{shortHex(h.transactionHash, 8)}</span>
+                      ) : <span className="t3">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
   );
 }
 

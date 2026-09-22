@@ -197,3 +197,26 @@ describe("attestations (spec §5)", () => {
     expect(store.identities.get(UBID7)!.claimed).toBe(true);
   });
 });
+
+describe("audit trail", () => {
+  it("records every event that touched an identity, including the ones that did not count", () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    const cf = (eventName: string, block: number, extra: Record<string, unknown>, emitter = ALICE) =>
+      ({ blockNumber: BigInt(block), logIndex: 0, eventName, transactionHash: `0x${block.toString(16).padStart(64, "0")}` as `0x${string}`, args: { standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, ubid: UBID7, emitter, ...extra } }) as const;
+    store.apply(cf("CounterfactualAgentRegistered", 1, { agentURI: "ipfs://a", metadata: [] }));
+    store.apply(cf("CounterfactualAgentURISet", 2, { newURI: "ipfs://b" }));
+    // a forged claim: the UBID topic does not match the coordinates
+    store.apply({ ...cf("CounterfactualAgentURISet", 3, { newURI: "ipfs://evil" }), args: { ...cf("CounterfactualAgentURISet", 3, { newURI: "ipfs://evil" }).args, tokenId: 8n } });
+    const trail = store.history.get(UBID7)!;
+    expect(trail.map((h) => [h.eventName, h.outcome])).toEqual([
+      ["CounterfactualAgentRegistered", "applied"],
+      ["CounterfactualAgentURISet", "applied"],
+      ["CounterfactualAgentURISet", "dropped"],
+    ]);
+    expect(trail[0].effect).toMatch(/^Claimed by the holder/);
+    expect(trail[1].effect).toContain("ipfs://b");
+    expect(trail[0].transactionHash).toBe(`0x${"1".padStart(64, "0")}`);
+    expect(trail.every((h) => h.actor === ALICE)).toBe(true);
+    expect(store.identities.get(UBID7)!.agentURI).toBe("ipfs://b");
+  });
+});

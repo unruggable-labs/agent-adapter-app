@@ -75,6 +75,17 @@ export interface Identity {
   };
 }
 
+/** One line of an identity's audit trail. `outcome` says whether the event counted: `dropped`
+ *  failed its own consistency check, `inert` is a revocation by someone other than the attester. */
+export interface HistoryEntry {
+  order: Order;
+  transactionHash: Hex | null;
+  eventName: string;
+  actor: Address | null;
+  effect: string;
+  outcome: "applied" | "dropped" | "inert";
+}
+
 export interface AttestationRow {
   attestationId: Hex;
   attester: Address;
@@ -100,6 +111,7 @@ export const api = {
   overview: () => get<Overview>("/overview"),
   identities: () => get<Identity[]>("/identities"),
   identity: (ubid: string) => get<Identity>(`/identity/${ubid}`),
+  history: (ubid: string) => get<HistoryEntry[]>(`/history/${ubid}`),
   attestations: () => get<AttestationRow[]>("/attestations"),
   /** `self` = the address IS an agent (an ACCOUNT record whose controller is the address; its UBID is
    *  derivable from the address, so it needs no designation). `designation` = the address is some

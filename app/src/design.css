@@ -208,6 +208,10 @@ input, textarea, select { font: inherit; color: inherit; }
 /* Scoped under .table so they outrank the th's own left alignment - headers line up with values. */
 .td-right, .table .td-right { text-align: right; }
 .td-center, .table .td-center { text-align: center; }
+/* A prose cell: sentences wrap, unlike the address and number cells. */
+.table .td-wrap { white-space: normal; max-width: 520px; overflow: visible; text-overflow: clip; line-height: 1.5; }
+.table tr.is-muted td { color: var(--text-3); }
+.agent-link.mono { color: var(--text-2); }
 
 .kv { display: grid; grid-template-columns: 160px 1fr; row-gap: 7px; column-gap: 16px; }
 .kv dt { color: var(--text-3); font-size: 12.5px; }

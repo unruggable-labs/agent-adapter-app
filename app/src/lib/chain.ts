@@ -122,6 +122,14 @@ export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 /** 8004Scan's chain slugs. A chain it doesn't index (the local devnet) gets no link. */
 const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia" };
 
+/** Etherscan's chain hosts. The local devnet has no explorer, so its transactions get no link. */
+const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io" };
+
+export function explorerTxUrl(hash: string): string | null {
+  const base = EXPLORER[NETWORK.chain.id];
+  return base ? `${base}/tx/${hash}` : null;
+}
+
 /** The 8004Scan page for an ERC-8004 agent id on the current network, or null when there isn't one. */
 export function scanAgentUrl(agentId: string): string | null {
   const slug = SCAN_SLUGS[NETWORK.chain.id];

@@ -13,6 +13,25 @@ export interface LogEvent {
   logIndex: number;
   eventName: string;
   args: Record<string, unknown>;
+  /** The transaction that emitted it, when the source knows (synthetic test events don't). */
+  transactionHash?: Hex;
+}
+
+/**
+ * One line of an identity's audit trail: an event that touched it, what it did, and whether
+ * it counted. `dropped` is an event that failed its own consistency check (a UBID or
+ * attestation id that does not match its fields); `inert` is a revocation by someone other
+ * than the attester. Both are kept, because the trail is the whole story, not the winning one.
+ */
+export interface HistoryEntry {
+  order: OrderKey;
+  transactionHash: Hex | null;
+  eventName: string;
+  /** Who did it, when the event says. */
+  actor: Address | null;
+  /** What it did, in plain words. */
+  effect: string;
+  outcome: "applied" | "dropped" | "inert";
 }
 
 export type EmitterClass = "collection" | "owner-or-delegate" | "self" | "external";
@@ -100,6 +119,8 @@ export class ProjectionStore {
   /** Revocations that matched no statement or the wrong revoker: recorded, inert (spec §5 rules 3-4). */
   inertRevocations: { attestationId: Hex; revoker: Address; order: OrderKey }[] = [];
   dropped: DroppedEvent[] = [];
+  /** Every event that touched an identity, per UBID, in log order - see HistoryEntry. */
+  history = new Map<Hex, HistoryEntry[]>();
 
   private lastApplied: OrderKey | null = null;
 
@@ -131,23 +152,27 @@ export class ProjectionStore {
         this.applyAgentBound(ev, order);
         break;
       case "AgentURISet":
-        this.withAgent(ev, (a) => (a.agentURI = ev.args.newURI as string));
+        this.withAgent(ev, (a) => (a.agentURI = ev.args.newURI as string), (a) => `ERC-8004 #${a.agentId}: registry URI set to ${JSON.stringify(a.agentURI)}.`);
         break;
       case "MetadataSet":
-        this.withAgent(ev, (a) => a.metadata.set(ev.args.metadataKey as string, ev.args.metadataValue as Hex));
+        this.withAgent(ev, (a) => a.metadata.set(ev.args.metadataKey as string, ev.args.metadataValue as Hex), (a) => `ERC-8004 #${a.agentId}: registry metadata "${ev.args.metadataKey as string}" set.`);
         break;
       case "AgentWalletSet":
-        this.withAgent(ev, (a) => (a.agentWallet = (ev.args.newWallet as string).toLowerCase() as Address));
+        this.withAgent(ev, (a) => (a.agentWallet = (ev.args.newWallet as string).toLowerCase() as Address), (a) => `ERC-8004 #${a.agentId}: registry wallet set to ${a.agentWallet}.`);
         break;
       case "AgentWalletUnset":
-        this.withAgent(ev, (a) => (a.agentWallet = null));
+        this.withAgent(ev, (a) => (a.agentWallet = null), (a) => `ERC-8004 #${a.agentId}: registry wallet unset.`);
         break;
       case "WalletUBIDSet":
         this.applyWalletUbidSet(ev, order);
         break;
-      case "WalletUBIDCleared":
-        this.walletUbid.set((ev.args.account as string).toLowerCase() as Address, null);
+      case "WalletUBIDCleared": {
+        const account = (ev.args.account as string).toLowerCase() as Address;
+        const previous = this.walletUbid.get(account);
+        if (previous) this.record(previous.ubid, ev, order, account, `Wallet ${account} stopped pointing at this identity.`);
+        this.walletUbid.set(account, null);
         break;
+      }
       case "Attested":
         this.applyAttested(ev, order);
         break;
@@ -157,6 +182,13 @@ export class ProjectionStore {
       default:
         break; // Upgraded, Initialized, OwnershipTransferred — not part of any projection
     }
+  }
+
+  private record(ubid: Hex, ev: LogEvent, order: OrderKey, actor: Address | null, effect: string, outcome: HistoryEntry["outcome"] = "applied"): void {
+    const key = ubid.toLowerCase() as Hex;
+    const list = this.history.get(key) ?? [];
+    list.push({ order, transactionHash: ev.transactionHash ?? null, eventName: ev.eventName, actor, effect, outcome });
+    this.history.set(key, list);
   }
 
   // ---------------------------------------------------------------- counterfactual fold
@@ -197,6 +229,7 @@ export class ProjectionStore {
     const derived = computeUbid(this.chainId, this.adapter, standard, boundAddress, tokenId);
     if (derived.toLowerCase() !== claimedUbid) {
       this.dropped.push({ eventName: ev.eventName, order, reason: "ubid does not match coordinates" });
+      this.record(claimedUbid, ev, order, emitter, "Dropped: the event's UBID does not match its own coordinates.", "dropped");
       return;
     }
 
@@ -216,41 +249,47 @@ export class ProjectionStore {
     id.lastEventCollectionAuthored = collectionAuthored;
     id.lastEvent = { ...order, emitter, eventName: ev.eventName };
 
+    const who = collectionAuthored ? "the collection contract" : "the holder";
     switch (ev.eventName) {
       case "CounterfactualAgentRegistered": {
         // A registration is a full re-statement: it resets URI and replaces the metadata map
         // with exactly the entries it carries.
+        const entries = ev.args.metadata as { metadataKey: string; metadataValue: Hex }[];
         id.claimed = true;
         id.agentURI = ev.args.agentURI as string;
         id.metadata = new Map();
-        for (const entry of ev.args.metadata as { metadataKey: string; metadataValue: Hex }[]) {
-          id.metadata.set(entry.metadataKey, entry.metadataValue);
-        }
+        for (const entry of entries) id.metadata.set(entry.metadataKey, entry.metadataValue);
+        this.record(id.ubid, ev, order, emitter, `Claimed by ${who}: URI ${JSON.stringify(id.agentURI)}, ${entries.length} metadata ${entries.length === 1 ? "entry" : "entries"}. A claim restates the whole record.`);
         break;
       }
       case "CounterfactualAgentURISet":
         id.agentURI = ev.args.newURI as string;
+        this.record(id.ubid, ev, order, emitter, `Agent URI set to ${JSON.stringify(id.agentURI)}.`);
         break;
       case "CounterfactualMetadataSet":
         id.metadata.set(ev.args.metadataKey as string, ev.args.metadataValue as Hex);
+        this.record(id.ubid, ev, order, emitter, `Metadata "${ev.args.metadataKey as string}" set.`);
         break;
-      case "CounterfactualMetadataBatchSet":
-        for (const entry of ev.args.metadata as { metadataKey: string; metadataValue: Hex }[]) {
-          id.metadata.set(entry.metadataKey, entry.metadataValue);
-        }
+      case "CounterfactualMetadataBatchSet": {
+        const entries = ev.args.metadata as { metadataKey: string; metadataValue: Hex }[];
+        for (const entry of entries) id.metadata.set(entry.metadataKey, entry.metadataValue);
+        this.record(id.ubid, ev, order, emitter, `Metadata set: ${entries.map((e) => `"${e.metadataKey}"`).join(", ")}.`);
         break;
+      }
       case "CounterfactualAgentWalletSet":
         id.agentWallet = (ev.args.newWallet as string).toLowerCase() as Address;
+        this.record(id.ubid, ev, order, emitter, `Operating wallet set to ${id.agentWallet}. The wallet still has to point back for the link to count.`);
         break;
       case "CounterfactualAgentWalletUnset":
         id.agentWallet = null; // field-level: the rest of the claim stands
+        this.record(id.ubid, ev, order, emitter, "Operating wallet unset.");
         break;
     }
   }
 
   // ---------------------------------------------------------------- registration join
 
-  private applyAgentBound(ev: LogEvent, _order: OrderKey): void {
+  private applyAgentBound(ev: LogEvent, order: OrderKey): void {
     const agentId = BigInt(ev.args.agentId as bigint);
     const standard = Number(ev.args.standard) as Standard;
     const boundAddress = (ev.args.boundAddress as string).toLowerCase() as Address;
@@ -273,11 +312,15 @@ export class ProjectionStore {
     // counterfactual claims for these coordinates. No link assertion exists or is needed.
     const id = this.identityFor(standard, boundAddress, tokenId);
     if (!id.agentIds.includes(agentId)) id.agentIds.push(agentId);
+    const registeredBy = (ev.args.registeredBy as string).toLowerCase() as Address;
+    this.record(id.ubid, ev, order, registeredBy, `ERC-8004 agent #${agentId} minted on the shared registry for these coordinates. Same UBID, so the history above and below is one record.`);
   }
 
-  private withAgent(ev: LogEvent, fn: (a: AgentState) => void): void {
+  private withAgent(ev: LogEvent, fn: (a: AgentState) => void, effect?: (a: AgentState) => string): void {
     const agent = this.agents.get(BigInt(ev.args.agentId as bigint));
-    if (agent) fn(agent);
+    if (!agent) return;
+    fn(agent);
+    if (effect) this.record(agent.ubid, ev, { blockNumber: ev.blockNumber, logIndex: ev.logIndex }, null, effect(agent));
   }
 
   // ---------------------------------------------------------------- wallet UBID
@@ -292,14 +335,12 @@ export class ProjectionStore {
     const derived = computeUbid(this.chainId, this.adapter, standard, boundAddress, tokenId);
     if (derived.toLowerCase() !== claimedUbid) {
       this.dropped.push({ eventName: ev.eventName, order, reason: "ubid does not match coordinates" });
+      this.record(claimedUbid, ev, order, account, "Dropped: the wallet designation's UBID does not match its coordinates.", "dropped");
       return;
     }
-    this.walletUbid.set(account, {
-      account,
-      ubid: claimedUbid,
-      setBy: (ev.args.setBy as string).toLowerCase() as Address,
-      order,
-    });
+    const setBy = (ev.args.setBy as string).toLowerCase() as Address;
+    this.walletUbid.set(account, { account, ubid: claimedUbid, setBy, order });
+    this.record(claimedUbid, ev, order, setBy, `Wallet ${account} pointed at this identity${setBy !== account ? ` (set by ${setBy})` : ""}. Verified only while the record names it back.`);
   }
 
   // ---------------------------------------------------------------- attestations (spec §5)
@@ -324,6 +365,7 @@ export class ProjectionStore {
     );
     if (derived.toLowerCase() !== attestationId) {
       this.dropped.push({ eventName: ev.eventName, order, reason: "attestationId does not match fields" });
+      this.record(ubid, ev, order, attester, `Dropped: a ${ATTESTATION_LABEL[attestationType] ?? "statement"} whose id does not match its fields.`, "dropped");
       return;
     }
 
@@ -331,8 +373,10 @@ export class ProjectionStore {
     if (existing) {
       // Rule 1 (collapse): byte-identical content is one statement. Rule 3: re-emitting a
       // revoked id in log order reactivates it.
+      const was = existing.revoked ? "reactivated" : "restated";
       existing.revoked = false;
       existing.order = order;
+      this.record(ubid, ev, order, attester, `${describeAttestation(attestationType, data)} ${was} (same statement, same id).`);
       return;
     }
     this.attestations.set(attestationId, {
@@ -345,6 +389,7 @@ export class ProjectionStore {
       order,
       revoked: false,
     });
+    this.record(ubid, ev, order, attester, `${describeAttestation(attestationType, data)}${variant !== ZERO32 ? ` referencing ${variant}` : ""}.`);
   }
 
   private applyRevoked(ev: LogEvent, order: OrderKey): void {
@@ -355,8 +400,10 @@ export class ProjectionStore {
     // Everything else — unknown id, zero id, wrong revoker — is recorded, inert history.
     if (statement && statement.attester === revoker) {
       statement.revoked = true;
+      this.record(statement.ubid, ev, order, revoker, `${describeAttestation(statement.attestationType, statement.data)} revoked by its attester.`);
     } else {
       this.inertRevocations.push({ attestationId, revoker, order });
+      if (statement) this.record(statement.ubid, ev, order, revoker, `Revocation ignored: ${revoker} is not the attester of that ${ATTESTATION_LABEL[statement.attestationType] ?? "statement"}.`, "inert");
     }
   }
 
@@ -493,4 +540,34 @@ function identityNamesAccount(identity: IdentityState | null | undefined, accoun
     }
   }
   return false;
+}
+
+const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
+
+const ATTESTATION_LABEL: Record<number, string> = {
+  [AttestationType.CONFIRM_ACCOUNT]: "account confirmation",
+  [AttestationType.STAR]: "star",
+  [AttestationType.RATING]: "rating",
+  [AttestationType.REVIEW]: "review",
+  [AttestationType.INTERACTION]: "transaction record",
+};
+
+/** A statement in words, with its value where the value is short enough to say. */
+function describeAttestation(type: AttestationType, data: Hex): string {
+  const label = ATTESTATION_LABEL[type] ?? `type ${type} statement`;
+  const first = parseInt(data.slice(2, 4), 16);
+  switch (type) {
+    case AttestationType.STAR:
+      return data === "0x01" ? "Star given" : "Star withdrawn";
+    case AttestationType.RATING:
+      return Number.isNaN(first) ? "Rating (unreadable)" : `Rating ${first}/100`;
+    case AttestationType.INTERACTION:
+      return Number.isNaN(first) ? "Transaction record (unreadable)" : `Transaction record scored ${first}/100`;
+    case AttestationType.REVIEW: {
+      const text = hexToUtf8(data);
+      return `Review: ${JSON.stringify(text.length > 80 ? `${text.slice(0, 77)}…` : text)}`;
+    }
+    default:
+      return label.charAt(0).toUpperCase() + label.slice(1);
+  }
 }

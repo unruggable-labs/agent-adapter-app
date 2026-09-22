@@ -6,8 +6,8 @@ import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES, SINGLE_OWNER_TOKEN_STANDARDS, Standard, STANDARD_NAMES } from "./ubid.js";
 
 /** The API core, host-agnostic: the Node server and the serverless function both delegate here.
- *  Subpaths are relative — "overview", "identities", "identity/<ubid>", "wallet/<addr>",
- *  "trustbase/<addr>", "attestations". */
+ *  Subpaths are relative — "overview", "identities", "identity/<ubid>", "history/<ubid>",
+ *  "wallet/<addr>", "trustbase/<addr>", "attestations". */
 
 export function toJson(value: unknown): string {
   return JSON.stringify(value, (_k, v) =>
@@ -112,6 +112,11 @@ export async function handleApi(
     const id = store.identities.get(arg.toLowerCase() as `0x${string}`);
     if (!id) return { status: 404, body: toJson({ error: "unknown identity", ubid: arg }) };
     return { status: 200, body: toJson(await identityView(store, client, id)) };
+  }
+  if (head === "history" && arg) {
+    // The audit trail: every event that touched this identity, in log order, dropped and
+    // inert ones included. Empty for a UBID nothing has touched.
+    return { status: 200, body: toJson(store.history.get(arg.toLowerCase() as `0x${string}`) ?? []) };
   }
   if (head === "wallet" && arg) {
     return { status: 200, body: toJson(store.resolveWallet(arg.toLowerCase() as Address)) };
