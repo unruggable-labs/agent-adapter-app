@@ -614,13 +614,13 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
             <li>Optionally send call 2, which names the contract as its own operating wallet.</li>
           </ol>
           {!known && (
-            <div className="field" style={{ marginBottom: 10 }}>
+            <div className="field">
               <label>Contract address <span className="t3">(the calls are built for this address)</span></label>
               <input className="input mono" placeholder="0x…" value={typed} onChange={(e) => setTyped(e.target.value.trim())} />
               {typed && !isAddress(typed) && <span className="hint" style={{ color: "var(--danger)" }}>That's not an address.</span>}
             </div>
           )}
-          <div className="field" style={{ marginBottom: 4 }}>
+          <div className="field">
             <label>Agent URI <span className="t3">(encoded into the register call below)</span></label>
             <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
           </div>
@@ -630,7 +630,7 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
               <CallBlock label="2. Link its wallet (optional)" to={adapter} data={walletData} />
             </>
           ) : (
-            <p className="hint" style={{ margin: "8px 0 0" }}>Enter the contract's address to see the exact calls.</p>
+            <p className="hint" style={{ margin: 0 }}>Enter the contract's address to see the exact calls.</p>
           )}
         </>
       )}

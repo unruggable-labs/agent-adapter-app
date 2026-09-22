@@ -247,7 +247,12 @@ input, textarea, select { font: inherit; color: inherit; }
 .guide-list { margin: 0 0 4px; padding-left: 20px; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
 .guide-list li { margin: 3px 0; }
 .guide-list li b { color: var(--text-1); }
-.guide-list + .codeblock, .guide-list + .callblock { margin-top: 10px; }
+/* Whatever follows a list - a field, code, a call, a note - gets the same breathing room. */
+.guide-list + .field, .guide-list + .codeblock, .guide-list + .callblock, .guide-list + .callout,
+.guide-list + p, .guide-list + .row, .guide-list + .seg { margin-top: 18px; }
+.guide-label + .guide-list { margin-top: 0; }
+.field + .codeblock, .field + .callblock, .field + p.hint { margin-top: 14px; }
+.callblock + .callblock { margin-top: 12px; }
 .codeblock { position: relative; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
 .codeblock-bar { position: absolute; top: 4px; right: 4px; }
 .codeblock pre { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; color: var(--text-1); }
