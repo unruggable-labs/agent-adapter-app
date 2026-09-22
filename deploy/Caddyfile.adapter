@@ -1,12 +1,12 @@
-# Adapter site block — appended to /etc/caddy/Caddyfile by deploy/setup.sh.
-# adapter.ens8004.xyz needs an A record at GoDaddy pointing at this box before
-# its certificate can issue; the sslip.io hostname works immediately without DNS.
+# --- adapterscan (managed by deploy/setup.sh; everything below this line is replaced) ---
+# One static build, two hostnames. The app picks its network from the hostname and Caddy
+# routes /api to the matching indexer: Sepolia on 8788, Ethereum on 8789.
 
-adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
+(adapterscan) {
 	encode gzip zstd
 
 	handle /api/* {
-		reverse_proxy 127.0.0.1:8788
+		reverse_proxy 127.0.0.1:{args[0]}
 	}
 
 	handle {
@@ -20,4 +20,17 @@ adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
 		-X-Powered-By
 		Strict-Transport-Security "max-age=15768000"
 	}
+}
+
+# Sepolia. The older hostnames keep working and serve the same thing.
+testnet.adapterscan.com, adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
+	import adapterscan 8788
+}
+
+# Ethereum. The mainnet proxy is not on v0.0.17 yet, so there is no mainnet indexer to route
+# to; until there is, the apex sends people to testnet. When the upgrade lands: set
+# MAINNET_FROM_BLOCK in /etc/adapter.env, `systemctl enable --now adapter-indexer@mainnet`,
+# and swap the redir for `import adapterscan 8789`.
+adapterscan.com, www.adapterscan.com {
+	redir https://testnet.adapterscan.com{uri} temporary
 }

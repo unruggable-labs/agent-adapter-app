@@ -39,21 +39,36 @@ echo "== 3/6 sudoers (validated before install) =="
 visudo -cf "$DIR/deploy/adapter.sudoers"
 $SUDO install -m 0440 "$DIR/deploy/adapter.sudoers" /etc/sudoers.d/adapter
 
-echo "== 4/6 systemd unit =="
-$SUDO install -m 0644 "$DIR/deploy/adapter-indexer.service" /etc/systemd/system/adapter-indexer.service
+echo "== 4/6 systemd unit (one instance per network) =="
+$SUDO install -m 0644 "$DIR/deploy/adapter-indexer@.service" /etc/systemd/system/adapter-indexer@.service
+# The pre-template single unit, if this box still has it.
+if [ -f /etc/systemd/system/adapter-indexer.service ]; then
+  $SUDO systemctl disable --now adapter-indexer.service || true
+  $SUDO rm -f /etc/systemd/system/adapter-indexer.service
+fi
 $SUDO systemctl daemon-reload
 
 echo "== 5/6 caddy site block =="
-if ! $SUDO grep -q "adapter.ens8004.xyz" /etc/caddy/Caddyfile; then
-  $SUDO cp /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.bak.$(date +%s)"
-  $SUDO tee -a /etc/caddy/Caddyfile < "$DIR/deploy/Caddyfile.adapter" > /dev/null
-fi
-$SUDO caddy validate --config /etc/caddy/Caddyfile
+# Our block sits at the end of the shared Caddyfile. Cut from its marker (or the pre-marker
+# header) to end of file and append the current version, so re-runs replace rather than stack.
+$SUDO cp /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.bak.$(date +%s)"
+$SUDO awk '/^# --- adapterscan \(managed by deploy\/setup.sh/ || /^adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io \{/ { exit } { print }' \
+  /etc/caddy/Caddyfile > /tmp/Caddyfile.adapterscan
+cat "$DIR/deploy/Caddyfile.adapter" >> /tmp/Caddyfile.adapterscan
+$SUDO caddy validate --config /tmp/Caddyfile.adapterscan
+$SUDO install -m 0644 /tmp/Caddyfile.adapterscan /etc/caddy/Caddyfile
 $SUDO systemctl reload caddy
 
-echo "== 6/6 service =="
-$SUDO systemctl enable --now adapter-indexer
+echo "== 6/6 services =="
+$SUDO systemctl enable --now adapter-indexer@sepolia
 sleep 8
-$SUDO systemctl is-active adapter-indexer
+$SUDO systemctl is-active adapter-indexer@sepolia
 curl -fsS http://127.0.0.1:8788/api/overview && echo
-echo "== done: https://adapter.178-105-235-22.sslip.io (and adapter.ens8004.xyz once DNS exists) =="
+# Mainnet starts only once /etc/adapter.env carries MAINNET_FROM_BLOCK (see serve.ts).
+if grep -qs '^MAINNET_FROM_BLOCK=.' /etc/adapter.env; then
+  $SUDO systemctl enable --now adapter-indexer@mainnet
+  sleep 8
+  $SUDO systemctl is-active adapter-indexer@mainnet
+  curl -fsS http://127.0.0.1:8789/api/overview && echo
+fi
+echo "== done: https://testnet.adapterscan.com (apex redirects there until mainnet is indexed) =="

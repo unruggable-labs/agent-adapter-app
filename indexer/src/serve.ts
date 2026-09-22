@@ -1,5 +1,5 @@
 import { createPublicClient, http, type Address } from "viem";
-import { sepolia } from "viem/chains";
+import { mainnet, sepolia } from "viem/chains";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
 import { startServer } from "./server.js";
@@ -9,6 +9,7 @@ import { startServer } from "./server.js";
  * (it deploys the stack it indexes); this entrypoint points at an already-deployed adapter.
  *
  *   npm run serve:sepolia
+ *   npx tsx src/serve.ts mainnet   (needs MAINNET_FROM_BLOCK, see below)
  */
 const NETWORKS = {
   sepolia: {
@@ -23,12 +24,27 @@ const NETWORKS = {
     port: 8788,
     pollMs: 12_000,
   },
+  mainnet: {
+    chain: mainnet,
+    chainId: 1n,
+    rpcUrl: process.env.MAINNET_RPC_URL ?? "https://ethereum-rpc.publicnode.com",
+    adapter: "0xde152AfB7db5373F34876E1499fbD893A82dD336" as Address, // the mainnet proxy
+    // The mainnet proxy has not been upgraded to v0.0.17 yet. Events under the older scheme
+    // MUST NOT be indexed into this namespace, so there is no default: the cutover block is
+    // set in /etc/adapter.env when the upgrade lands, and until then this network refuses to
+    // start. See the Sepolia note above for why the cutover doubles as the backfill start.
+    fromBlock: process.env.MAINNET_FROM_BLOCK ? BigInt(process.env.MAINNET_FROM_BLOCK) : null,
+    port: 8789,
+    pollMs: 12_000,
+  },
 } as const;
 
 async function main() {
   const name = (process.argv[2] ?? "sepolia") as keyof typeof NETWORKS;
   const net = NETWORKS[name];
   if (!net) throw new Error(`unknown network ${String(name)}; known: ${Object.keys(NETWORKS).join(", ")}`);
+  if (net.fromBlock === null)
+    throw new Error(`${name}: no cutover block. Set MAINNET_FROM_BLOCK to the block the v0.0.17 upgrade landed in; older events must not be indexed.`);
 
   console.log(`Indexing ${name}: adapter ${net.adapter} from block ${net.fromBlock} via ${net.rpcUrl}`);
   const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) });

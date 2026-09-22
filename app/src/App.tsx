@@ -130,10 +130,10 @@ function Shell() {
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
-          {/* Which backend the app reads - the local devnet or Sepolia. A dev-build choice: the
-              production build knows one network, and the wallet's own network menu is a
-              different thing (it moves the wallet, not the indexer). */}
-          {Object.keys(NETWORKS).length > 1 && (
+          {/* Which backend the app reads. Dev only: a deployed build takes its network from the
+              hostname (adapterscan.com vs testnet.adapterscan.com). The wallet's own network
+              menu is a different thing - it moves the wallet, not the indexer. */}
+          {import.meta.env.DEV && (
             <>
               <div className="nav-label" style={{ padding: "0 0 4px" }}>Network</div>
               <select className="select" value={networkId} onChange={(e) => switchNetwork(e.target.value as NetworkId)}>

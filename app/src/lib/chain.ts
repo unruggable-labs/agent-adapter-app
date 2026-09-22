@@ -7,7 +7,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry, sepolia } from "viem/chains";
+import { foundry, mainnet, sepolia } from "viem/chains";
 
 /** The backends the app can face. Each network pairs an indexer API with the RPC the wizard's
  *  probes and the write paths use. On the local devnet, demo personas sign with anvil
@@ -18,7 +18,7 @@ interface NetworkConfig {
   label: string;
   apiBase: string;
   rpcUrl: string;
-  chain: typeof foundry | typeof sepolia;
+  chain: typeof foundry | typeof sepolia | typeof mainnet;
   /** true = demo personas sign with anvil keys (local devnet). false = a real connected wallet signs. */
   personaWrites: boolean;
 }
@@ -37,22 +37,44 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     : {}),
   sepolia: {
     label: "Sepolia",
-    // dev: the standalone Node indexer; deployed: the same-origin serverless function
-    apiBase: import.meta.env.VITE_SEPOLIA_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8788/api" : "/api/sepolia"),
+    // dev: the standalone Node indexer; deployed: same-origin, Caddy routes by hostname
+    apiBase: import.meta.env.VITE_SEPOLIA_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8788/api" : "/api"),
     rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://gateway.tenderly.co/public/sepolia",
     chain: sepolia,
+    personaWrites: false,
+  },
+  mainnet: {
+    label: "Ethereum",
+    apiBase: import.meta.env.VITE_MAINNET_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8789/api" : "/api"),
+    rpcUrl: import.meta.env.VITE_MAINNET_RPC ?? "https://ethereum-rpc.publicnode.com",
+    chain: mainnet,
     personaWrites: false,
   },
 };
 
 export type NetworkId = string;
+
+/**
+ * Which network a deployed build serves is decided by its hostname: adapterscan.com is
+ * Ethereum, testnet.adapterscan.com (and the older hostnames) is Sepolia. One static build
+ * behind two hostnames, with Caddy routing /api to the matching indexer. In dev there is no
+ * hostname to go by, so the sidebar's switch (persisted) picks.
+ */
+const HOST_NETWORK: Record<string, NetworkId> = {
+  "adapterscan.com": "mainnet",
+  "www.adapterscan.com": "mainnet",
+};
 const stored = localStorage.getItem("aa-network");
-export const networkId: NetworkId = stored && NETWORKS[stored] ? stored : Object.keys(NETWORKS)[0];
+export const networkId: NetworkId = import.meta.env.DEV
+  ? stored && NETWORKS[stored] ? stored : Object.keys(NETWORKS)[0]
+  : (HOST_NETWORK[location.hostname] ?? "sepolia");
 export const NETWORK = NETWORKS[networkId];
 
+/** Dev only: switch which backend the app reads. Clients are module-level, so a reload rebuilds
+ *  everything consistently. Deployed builds take the network from the hostname instead. */
 export function switchNetwork(id: NetworkId) {
   localStorage.setItem("aa-network", id);
-  location.reload(); // clients are module-level; a reload rebuilds everything consistently
+  location.reload();
 }
 
 export const RPC_URL = NETWORK.rpcUrl;

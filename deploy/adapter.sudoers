@@ -1,3 +1,4 @@
-# Allows the deploy user to manage the adapter indexer service without a password,
-# so the GitHub Actions deploy can restart it. Mirrors /etc/sudoers.d/ens8004.
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl stop adapter-indexer, /usr/bin/systemctl start adapter-indexer, /usr/bin/systemctl restart adapter-indexer, /usr/bin/systemctl reload adapter-indexer, /usr/bin/systemctl enable adapter-indexer, /usr/bin/systemctl disable adapter-indexer, /usr/bin/systemctl is-active adapter-indexer, /usr/bin/systemctl status adapter-indexer*, /usr/bin/journalctl -u adapter-indexer*
+# Allows the deploy user to manage the adapter indexer services without a password,
+# so the GitHub Actions deploy can restart them. Mirrors /etc/sudoers.d/ens8004.
+# adapter-indexer@* covers one instance per network (sepolia, mainnet).
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl stop adapter-indexer@*, /usr/bin/systemctl start adapter-indexer@*, /usr/bin/systemctl restart adapter-indexer@*, /usr/bin/systemctl reload adapter-indexer@*, /usr/bin/systemctl enable adapter-indexer@*, /usr/bin/systemctl disable adapter-indexer@*, /usr/bin/systemctl is-active adapter-indexer@*, /usr/bin/systemctl is-enabled adapter-indexer@*, /usr/bin/systemctl status adapter-indexer*, /usr/bin/journalctl -u adapter-indexer*

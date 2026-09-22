@@ -24,7 +24,11 @@ jobs:
             echo "========== DEPLOY START =========="
             cd /srv/adapter
 
-            SERVICE="adapter-indexer"
+            SERVICES="adapter-indexer@sepolia"
+            # Mainnet joins once its cutover block is configured on the box.
+            if sudo systemctl is-enabled adapter-indexer@mainnet >/dev/null 2>&1; then
+              SERVICES="$SERVICES adapter-indexer@mainnet"
+            fi
 
             echo "--- Git pull ---"
             echo "  before: $(git rev-parse --short HEAD)"
@@ -42,20 +46,23 @@ jobs:
             npm ci --no-audit --no-fund 2>&1 | tail -2
             VITE_SEPOLIA_API=/api npm run build 2>&1 | tail -5
 
-            echo "--- Restarting $SERVICE ---"
-            sudo systemctl restart "$SERVICE"
+            for SERVICE in $SERVICES; do
+              echo "--- Restarting $SERVICE ---"
+              sudo systemctl restart "$SERVICE"
+            done
 
-            echo "--- Service status ---"
-            status=$(sudo systemctl is-active "$SERVICE" || true)
-            echo "  $SERVICE: $status"
-            if [ "$status" != "active" ]; then
-              echo "  ERROR: $SERVICE failed to start!"
-              sudo journalctl -u "$SERVICE" -n 30 --no-pager
-              exit 1
-            fi
+            sleep 5
+            for SERVICE in $SERVICES; do
+              status=$(sudo systemctl is-active "$SERVICE" || true)
+              echo "  $SERVICE: $status"
+              if [ "$status" != "active" ]; then
+                echo "  ERROR: $SERVICE failed to start!"
+                sudo journalctl -u "$SERVICE" -n 30 --no-pager
+                exit 1
+              fi
+            done
 
             echo "--- Health check ---"
-            sleep 5
-            curl -fsS http://127.0.0.1:8788/api/overview
-            echo
+            curl -fsS http://127.0.0.1:8788/api/overview; echo
+            if echo "$SERVICES" | grep -q mainnet; then curl -fsS http://127.0.0.1:8789/api/overview; echo; fi
             echo "========== DEPLOY COMPLETE =========="

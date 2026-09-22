@@ -18,14 +18,15 @@ tooltips kept to the fewest sentences that do the job.
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
   API core, also used by the Vercel function in `app/api/`.
 - `app/` — Vite/React UI (Linear/Stripe-register design, tokens in `src/design.css`, light
-  default + dark toggle). Dev-only: local-devnet network + anvil persona writes. Production
-  build is Sepolia-only; writes go through the user's connected wallet (wagmi, injected
-  connectors; WalletConnect enables via VITE_WC_PROJECT_ID). Personas are devnet-only.
+  default + dark toggle). Dev-only: local-devnet network + anvil persona writes + a network
+  switch. Production picks Sepolia or Ethereum from the hostname; writes go through the user's
+  connected wallet (wagmi + Reown AppKit, needs VITE_WC_PROJECT_ID). Personas are devnet-only.
 - `contracts/` + `indexer/artifacts/` — vendored demo mock + build artifacts; regeneration
   from the contracts repo is documented in `indexer/src/abi.ts`.
 - Contracts live in `unruggable-labs/adapter` (Prem's repo — audit-grade, don't put product
   code there). Sepolia proxy `0x7621630cB63a73a194f45A3E6801B8C6A7eC2f92`, v0.0.17 cutover
-  block 11661779.
+  block 11661779. Ethereum proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336`, not yet on
+  v0.0.17 - its indexer waits on MAINNET_FROM_BLOCK.
 
 ## Commands
 
@@ -36,13 +37,15 @@ tooltips kept to the fewest sentences that do the job.
 ## Deploy
 
 Push to `main` = production deploy (GitHub Action → Hetzner box shared with ens8004.xyz →
-systemd `adapter-indexer` + Caddy). Live at https://adapter.178-105-235-22.sslip.io until a
-real domain is chosen. Server config is versioned in `deploy/`; box access:
+systemd `adapter-indexer@<network>` + Caddy). Live at https://testnet.adapterscan.com (Sepolia);
+https://adapterscan.com is Ethereum and redirects to testnet until the mainnet proxy runs
+v0.0.17 and its indexer is enabled (deploy/README.md "Mainnet"). One static build serves both:
+the app picks its network from the hostname. Server config is versioned in `deploy/`; box access:
 `ssh ens8004` (deploy) or `root@178.105.235.22` (same key, admin). RPC is PublicNode's free
 endpoint by default (`SEPOLIA_RPC_URL` in `/etc/adapter.env` overrides; beware: load-balanced
 free RPCs have been observed returning incomplete logs — serve.ts verifies backfills).
 
 ## Open decisions
 
-Repo/product name and domain are placeholders pending branding (with Prem). The trust-flag
+The product is Adapterscan at adapterscan.com; the repo name is still the old placeholder. The trust-flag
 policy is disclosure-not-suppression by explicit decision (see indexer/SPEC.md §6).
