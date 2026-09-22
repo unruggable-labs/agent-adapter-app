@@ -30,11 +30,11 @@ export function IdentitiesPage() {
           <thead>
             <tr>
               <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this.">UBID</Tip></th>
-              <th><Tip tip="The controller that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Subject</Tip></th>
               <th><Tip tip="What kind of controller controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
+              <th><Tip tip="The thing that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Controller</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
-              <th className="td-right"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
-              <th className="td-right">Stars</th>
+              <th className="td-center"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
+              <th className="td-center">Stars</th>
             </tr>
           </thead>
           <tbody>
@@ -46,6 +46,7 @@ export function IdentitiesPage() {
                     <span className="mono t2">{shortHex(id.ubid, 10)}</span>
                   </span>
                 </td>
+                <td><Tip tip={`This identity is ${controlLine(id)}.`}><span className="badge badge-outline">{id.standardName}</span></Tip></td>
                 <td>
                   <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
                     {(() => {
@@ -57,10 +58,9 @@ export function IdentitiesPage() {
                     {id.standard < 5 && <span className="num t3 small">#{shortTokenId(id.tokenId)}</span>}
                   </span>
                 </td>
-                <td><Tip tip={`This identity is ${controlLine(id)}.`}><span className="badge badge-outline">{id.standardName}</span></Tip></td>
                 <td><StatusBadge id={id} /></td>
-                <td className="td-right num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
-                <td className="td-right num">{id.reputation.stars || <span className="t3">0</span>}</td>
+                <td className="td-center num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
+                <td className="td-center num">{id.reputation.stars || <span className="t3">0</span>}</td>
               </tr>
             ))}
             {identities.length === 0 && status === "loading" && <SkeletonRows />}
@@ -102,11 +102,11 @@ function SkeletonRows() {
       {[0, 1, 2, 3].map((i) => (
         <tr key={i} className="skel-row" aria-hidden>
           <td><span className="row" style={{ gap: 8 }}><Skeleton size={20} /><Skeleton w={80} /></span></td>
-          <td><Skeleton w={60} /></td>
           <td><Skeleton w={50} /></td>
           <td><Skeleton w={60} /></td>
-          <td className="td-right"><Skeleton w={30} /></td>
-          <td className="td-right"><Skeleton w={30} /></td>
+          <td><Skeleton w={60} /></td>
+          <td className="td-center"><Skeleton w={30} /></td>
+          <td className="td-center"><Skeleton w={30} /></td>
         </tr>
       ))}
     </>

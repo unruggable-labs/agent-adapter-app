@@ -164,6 +164,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .table td:first-child, .table th:first-child { padding-left: 4px; }
 .table td:last-child, .table th:last-child { padding-right: 4px; }
 .td-right { text-align: right; }
+.td-center { text-align: center; }
 
 .kv { display: grid; grid-template-columns: 160px 1fr; row-gap: 7px; column-gap: 16px; }
 .kv dt { color: var(--text-3); font-size: 12.5px; }
