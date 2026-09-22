@@ -87,7 +87,7 @@ export function WalletPage() {
           {selfRecord ? (
             <>
               <div className="row wrap" style={{ gap: 10 }}>
-                <Avatar seed={selfRecord.ubid} size={24} />
+                <Avatar seed={selfRecord.ubid} image={selfRecord.image} size={24} />
                 <span style={{ fontSize: 15, fontWeight: 600 }}>{displayName(selfRecord)}</span>
                 <StatusBadge id={selfRecord} />
                 <Badge tone="ok">nothing to fake</Badge>
@@ -124,7 +124,7 @@ export function WalletPage() {
           {myAgent ? (
             <>
               <div className="row wrap" style={{ gap: 10 }}>
-                <Avatar seed={myAgent.ubid} size={24} />
+                <Avatar seed={myAgent.ubid} image={myAgent.image} size={24} />
                 <span style={{ fontSize: 15, fontWeight: 600 }}>{displayName(myAgent)}</span>
                 <span className="t3 small">{controlLine(myAgent)}</span>
                 <StatusBadge id={myAgent} />
@@ -198,7 +198,7 @@ export function WalletPage() {
               {controlled.map((i) => (
                 <div key={i.ubid} className="row spread" style={{ padding: "7px 0" }}>
                   <span className="row wrap" style={{ gap: 8 }}>
-                    <Avatar seed={i.ubid} size={20} />
+                    <Avatar seed={i.ubid} image={i.image} size={20} />
                     <button style={{ fontWeight: 600 }} onClick={() => navigate(`/identity/${i.ubid}`)}>{displayName(i)}</button>
                     <span className="t3 small">{controlLine(i)}</span>
                     <StatusBadge id={i} />

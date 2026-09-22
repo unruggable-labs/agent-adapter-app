@@ -61,7 +61,7 @@ export function AttestationsPage() {
                 <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
                   <td>
                     <span className="row" style={{ gap: 6 }}>
-                      <UbidCell ubid={a.ubid} />
+                      <UbidCell ubid={a.ubid} image={target?.image} />
                       {!target && <Badge tone="warn" tip="No claim or binding matches this UBID yet. The statement is kept and gains meaning if one arrives.">unresolved</Badge>}
                     </span>
                   </td>

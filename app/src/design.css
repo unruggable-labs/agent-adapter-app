@@ -189,6 +189,9 @@ input, textarea, select { font: inherit; color: inherit; }
 .badge-danger { background: var(--danger-bg); color: var(--danger); }
 .badge-outline { background: transparent; border-color: var(--border-strong); }
 
+/* An identity's picture, in the same rounded-square frame as the generated mark. */
+.avatar-img { display: inline-block; flex-shrink: 0; border-radius: 38%; object-fit: cover; background: var(--surface-3); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }
+
 /* An ERC-8004 id that opens on 8004Scan. Inherits the badge's colour so the pill stays one tone. */
 .agent-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
 .agent-link:hover { text-decoration-style: solid; }

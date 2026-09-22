@@ -2,9 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { Identity, TrustBase } from "../lib/api";
 import { controlLine, displayName, scanAgentUrl, shortHex, shortTokenId } from "../lib/chain";
 
-/** Deterministic identity mark derived from the UBID - imagery that means something:
- *  the same identity renders the same face everywhere, forever. */
-export function Avatar({ seed, size = 26 }: { seed: string; size?: number }) {
+/** The identity's picture: its NFT image (or agent card image) when it has one, else a mark
+ *  derived from the UBID - the same identity renders the same face everywhere, forever. An
+ *  image that fails to load falls back to the mark rather than a broken frame. */
+export function Avatar({ seed, image, size = 26 }: { seed: string; image?: string | null; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  if (image && !broken) {
+    return <img className="avatar-img" src={image} alt="" width={size} height={size} style={{ width: size, height: size }} onError={() => setBroken(true)} />;
+  }
   const a = parseInt(seed.slice(2, 8) || "0", 16);
   const b = parseInt(seed.slice(8, 14) || "0", 16);
   const h1 = a % 360;
@@ -97,11 +102,11 @@ export function Addr({ value, n = 10 }: { value: string; n?: number }) {
   );
 }
 
-/** A UBID as a table cell: the identity's mark and its short hash. */
-export function UbidCell({ ubid }: { ubid: string }) {
+/** A UBID as a table cell: the identity's picture and its short hash. */
+export function UbidCell({ ubid, image }: { ubid: string; image?: string | null }) {
   return (
     <span className="row" style={{ gap: 8 }}>
-      <Avatar seed={ubid} size={20} />
+      <Avatar seed={ubid} image={image} size={28} />
       <span className="mono t2">{shortHex(ubid, 10)}</span>
     </span>
   );

@@ -76,7 +76,7 @@ export function LandingPage() {
         )}
         {found && (
           <div className="row wrap" style={{ marginTop: 12, gap: 10 }}>
-            <Avatar seed={found.ubid} size={22} />
+            <Avatar seed={found.ubid} image={found.image} size={22} />
             <button style={{ fontSize: 15, fontWeight: 600 }} onClick={() => navigate(`/identity/${found.ubid}`)}>
               {displayName(found)}
             </button>
@@ -161,7 +161,7 @@ function MiniProfile({ id, onOpen }: { id: Identity; onOpen: () => void }) {
   return (
     <button className="mini-profile fade-in" onClick={onOpen} style={{ textAlign: "left", cursor: "pointer" }}>
       <div className="mp-head">
-        <Avatar seed={id.ubid} size={30} />
+        <Avatar seed={id.ubid} image={id.image} size={30} />
         <span className="mp-name">{displayName(id)}</span>
         {!id.flags.walletUnverified && id.agentWallet && <Badge tone="ok">verified</Badge>}
         {id.agentIds.length > 0 && <Badge tone="accent">registered</Badge>}

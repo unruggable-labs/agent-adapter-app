@@ -48,6 +48,9 @@ export interface Identity {
   agentName: string | null;
   /** The bound contract's name(), when it implements the ERC-721 metadata extension. */
   contractName: string | null;
+  /** A picture: the token's metadata image, else the agent card's. Resolved in the background,
+   *  so it can arrive a poll after the identity does. Optional for older indexers. */
+  image?: string | null;
   boundAddress: Address;
   tokenId: string;
   /** Who holds the controller right now, where control is a single nameable address. null means the

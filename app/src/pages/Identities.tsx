@@ -39,7 +39,7 @@ export function IdentitiesPage() {
           <tbody>
             {visible.map((id) => (
               <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
-                <td><UbidCell ubid={id.ubid} /></td>
+                <td><UbidCell ubid={id.ubid} image={id.image} /></td>
                 <td><StandardBadge id={id} /></td>
                 <td><ControllerCell id={id} /></td>
                 <td><StatusBadge id={id} /></td>
@@ -85,7 +85,7 @@ function SkeletonRows() {
     <>
       {[0, 1, 2, 3].map((i) => (
         <tr key={i} className="skel-row" aria-hidden>
-          <td><span className="row" style={{ gap: 8 }}><Skeleton size={20} /><Skeleton w={80} /></span></td>
+          <td><span className="row" style={{ gap: 8 }}><Skeleton size={28} /><Skeleton w={80} /></span></td>
           <td><Skeleton w={50} /></td>
           <td><Skeleton w={60} /></td>
           <td><Skeleton w={60} /></td>

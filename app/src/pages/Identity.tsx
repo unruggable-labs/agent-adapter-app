@@ -36,19 +36,21 @@ export function IdentityPage({ ubid }: { ubid: string }) {
   return (
     <div className="page fade-in">
       <button className="btn btn-ghost btn-sm" onClick={() => navigate("/identities")}>← Identities</button>
-      <div className="page-head wrap" style={{ marginTop: 10, rowGap: 6, alignItems: "center" }}>
-        <Avatar seed={id.ubid} size={30} />
-        <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
-        <span className="row" style={{ gap: 8 }}>
-          <StatusBadge id={id} />
-          <StandardBadge id={id} />
-          <TrustBadge t={id.trustBase} />
-        </span>
+      <div className="page-head wrap" style={{ marginTop: 10, gap: 16, alignItems: "center", marginBottom: 18 }}>
+        <Avatar seed={id.ubid} image={id.image} size={72} />
+        <div style={{ display: "grid", gap: 6, minWidth: 0, flex: 1 }}>
+          <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+            <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
+            <StatusBadge id={id} />
+            <StandardBadge id={id} />
+            <TrustBadge t={id.trustBase} />
+          </div>
+          <p className="mono t3 small" style={{ margin: 0, overflowWrap: "anywhere" }}>{id.ubid}</p>
+        </div>
         <div className="head-actions">
           <StarButton id={id} />
         </div>
       </div>
-      <p className="mono t3 small" style={{ margin: "0 0 18px", overflowWrap: "anywhere" }}>{id.ubid}</p>
 
       <div className="stack">
         <Flags id={id} />
