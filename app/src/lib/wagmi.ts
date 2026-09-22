@@ -1,6 +1,8 @@
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { foundry, sepolia, type AppKitNetwork } from "@reown/appkit/networks";
 import { createAppKit } from "@reown/appkit/react";
+import { getBalance } from "@wagmi/core";
+import { formatUnits, type Address } from "viem";
 import { createConfig, http, type Config } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { NETWORK, NETWORKS } from "./chain";
@@ -24,7 +26,26 @@ const transports = {
   [foundry.id]: http(NETWORKS.local?.rpcUrl ?? "http://127.0.0.1:8547"),
 };
 
-const adapter = projectId ? new WagmiAdapter({ networks, projectId, transports }) : null;
+/**
+ * AppKit's adapter reads `balance.formatted` from wagmi's getBalance, a field wagmi 3 no longer
+ * returns, so the account modal shows 0.000 ETH for everyone. Same read, formatted here, until
+ * the adapter catches up with wagmi 3.
+ */
+class Adapter extends WagmiAdapter {
+  override async getBalance(params: Parameters<WagmiAdapter["getBalance"]>[0]): ReturnType<WagmiAdapter["getBalance"]> {
+    const address = params.address as Address | undefined;
+    if (!address || !this.wagmiConfig) return { balance: "0.00", symbol: "ETH" };
+    try {
+      const chainId = Number(params.chainId) as (typeof networks)[number]["id"] & number;
+      const b = await getBalance(this.wagmiConfig, { address, chainId });
+      return { balance: formatUnits(b.value, b.decimals), symbol: b.symbol };
+    } catch {
+      return { balance: "0.00", symbol: "ETH" };
+    }
+  }
+}
+
+const adapter = projectId ? new Adapter({ networks, projectId, transports }) : null;
 
 export const wagmiConfig: Config =
   adapter?.wagmiConfig ?? createConfig({ chains: [sepolia, foundry], connectors: [injected()], transports });
