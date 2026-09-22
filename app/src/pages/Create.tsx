@@ -438,11 +438,19 @@ contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1
 }`;
   return (
     <Step n={n} title="Claim inside mint, before the token exists">
-      <p className="t2 small" style={{ margin: "0 0 10px" }}>
-        The adapter lets a token contract act for one of its own tokens while <span className="mono">ownerOf</span> reverts
-        or returns zero. Claim first, mint second, and the identity is waiting for the first owner. After
-        the mint, the holder controls it and the collection does not.
-      </p>
+      <p className="t2 small" style={{ margin: "0 0 10px" }}>Every token gets its identity in the same transaction that mints it.</p>
+      <div className="guide-label">What the adapter allows</div>
+      <ul className="guide-list">
+        <li>A token contract may act for one of its own tokens while <span className="mono">ownerOf(tokenId)</span> reverts or returns zero.</li>
+        <li>That is true before the mint. So the contract claims first, mints second, and the identity is waiting for the first owner.</li>
+        <li>After the mint, only the holder (or their delegate.xyz delegate) controls it. The collection does not.</li>
+      </ul>
+      <div className="guide-label">What you do</div>
+      <ol className="guide-list">
+        <li>Pick the token standard and whether each mint claims or fully registers.</li>
+        <li>Call the adapter inside <span className="mono">mint()</span>, before <span className="mono">_mint</span>, as in the code below.</li>
+        <li>Optionally expose the UBID. It is computable before the token exists, so it can go in the token's metadata.</li>
+      </ol>
       <div className="row wrap" style={{ gap: 10, marginBottom: 10 }}>
         <label className="row" style={{ gap: 8 }}>
           <span className="hint">Token standard</span>
@@ -487,17 +495,22 @@ contract MyThing is Ownable {
 // Or AccessControl: holders of DEFAULT_ADMIN_ROLE control a CONTRACT_ADMIN identity.`;
   return (
     <Step n={n} title="No new code, most likely">
-      <p className="t2 small" style={{ margin: "0 0 10px" }}>
-        A contract bound as CONTRACT_OWNABLE is controlled by whatever <span className="mono">owner()</span> returns;
-        bound as CONTRACT_ADMIN, by holders of AccessControl's <span className="mono">DEFAULT_ADMIN_ROLE</span>. If the
-        contract already has either, there is nothing to add: deploy it, connect as the owner or an admin, and
-        take the "I'll sign a transaction here" path above with the contract's address.
-      </p>
+      <p className="t2 small" style={{ margin: "0 0 10px" }}>The contract is the subject. A person claims for it, from a wallet, on the other path.</p>
+      <div className="guide-label">What the adapter checks</div>
+      <ul className="guide-list">
+        <li><b>CONTRACT_OWNABLE</b> - the caller is whatever <span className="mono">owner()</span> returns, or a delegate.xyz delegate of it.</li>
+        <li><b>CONTRACT_ADMIN</b> - the caller holds AccessControl's <span className="mono">DEFAULT_ADMIN_ROLE</span>.</li>
+      </ul>
+      <div className="guide-label">What you do</div>
+      <ol className="guide-list">
+        <li>Make sure the contract has one of those. OpenZeppelin's Ownable or AccessControl is the whole requirement. If it already does, there is nothing to add.</li>
+        <li>Deploy it.</li>
+        <li>Connect as the owner or an admin, choose "I'll sign a transaction here" above, then "A contract", and paste its address. The claim is one transaction.</li>
+      </ol>
       <p className="hint" style={{ margin: "0 0 8px" }}>If it has neither yet, the smallest version:</p>
       <CodeBlock code={code} />
       <p className="hint" style={{ margin: "10px 0 0" }}>
-        The owner can also grant a delegate.xyz delegation so another wallet manages the identity without
-        holding the contract.
+        The owner can also grant a delegate.xyz delegation so another wallet manages the identity without holding the contract.
       </p>
     </Step>
   );
@@ -554,11 +567,19 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
 
   return (
     <Step n={n} title={title ?? "The contract has to speak for itself"}>
-      <p className="t2 small" style={{ margin: "0 0 12px" }}>
-        Bound as ACCOUNT, an identity is controlled by the address itself: the adapter checks that the
-        caller <i>is</i> the contract. No wallet can do this on its behalf, so this step is what the contract
-        needs to do. {contract ? "Three ways, pick the one that fits." : "Add the code now; once it is deployed, the other two routes work too."}
-      </p>
+      <p className="t2 small" style={{ margin: "0 0 10px" }}>The contract is the agent, so the contract has to make the calls.</p>
+      <div className="guide-label">What the adapter checks</div>
+      <ul className="guide-list">
+        <li>Bound as <b>ACCOUNT</b>, the identity is controlled by the address itself: the caller must <i>be</i> the contract.</li>
+        <li>No wallet can do this on its behalf. The only exception is a delegate.xyz delegation the contract itself has granted.</li>
+        <li>The token id is always 0 for ACCOUNT.</li>
+      </ul>
+      <div className="guide-label">Three ways to make the call</div>
+      <ul className="guide-list">
+        <li><b>Add code to it</b> - a function that calls the adapter, gated like your other admin actions.</li>
+        <li><b>It can execute calls</b> - a Safe, a smart wallet, or any contract with an execute function sends the prebuilt call.{contract ? "" : " Needs the deployed address."}</li>
+        <li><b>Delegate to my wallet</b> - one call from the contract, then you manage the identity from here like any other.</li>
+      </ul>
       <div className="seg" style={{ margin: "0 0 12px" }}>
         <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
         <button className={route === "execute" ? "active" : ""} disabled={!contract} title={contract ? undefined : "Needs the deployed address"} onClick={() => setRoute("execute")}>It can execute calls</button>
@@ -567,11 +588,11 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
 
       {route === "execute" && (
         <>
-          <p className="t2 small" style={{ margin: "0 0 8px" }}>
-            A Safe, a smart wallet, or any contract with an execute function can send this call as itself.
-            Target the adapter, value 0, data as below. Then, optionally, the second call links the
-            contract as its own operating wallet.
-          </p>
+          <ol className="guide-list">
+            <li>Enter the agent URI; it is encoded into the register call.</li>
+            <li>From the contract, send call 1: target the adapter, value 0, data as shown.</li>
+            <li>Optionally send call 2, which names the contract as its own operating wallet.</li>
+          </ol>
           <div className="field" style={{ marginBottom: 4 }}>
             <label>Agent URI <span className="t3">(encoded into the register call below)</span></label>
             <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
@@ -582,20 +603,20 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       )}
       {route === "code" && (
         <>
-          <p className="t2 small" style={{ margin: "0 0 8px" }}>
-            Add a function that calls the adapter, gated the way your contract gates admin actions, then deploy
-            and call it. Standard 5 is ACCOUNT and the token id is always 0 for it.
-          </p>
+          <ol className="guide-list">
+            <li>Add a function that calls the adapter, gated the way your contract gates admin actions.</li>
+            <li>Deploy, then call it once with the agent URI.</li>
+            <li>Optionally call the second function so the contract is its own operating wallet, verified both ways in one call.</li>
+          </ol>
           <CodeBlock code={solidity} />
         </>
       )}
       {route === "delegate" && (
         <>
-          <p className="t2 small" style={{ margin: "0 0 8px" }}>
-            The contract grants your wallet a delegate.xyz delegation for the adapter's rights. That still
-            takes one call from the contract, but afterwards you can claim and manage the identity from this
-            wallet, here, like any other. Use the "It can execute calls" route to send it.
-          </p>
+          <ol className="guide-list">
+            <li>From the contract, call the delegate.xyz registry as below. It grants your wallet the adapter's rights for this contract.</li>
+            <li>Come back with that wallet connected: the claim, and everything after it, is a normal transaction here.</li>
+          </ol>
           <CodeBlock code={delegateNote} />
         </>
       )}
