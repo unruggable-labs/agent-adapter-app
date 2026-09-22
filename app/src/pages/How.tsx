@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge } from "../components/ui";
+import { StandardBadge, TYPE_HUE } from "../components/ui";
 import { useApp } from "../lib/app-state";
 
 type PartKey = "agent" | "profile" | "controller" | "wallet";
@@ -116,10 +116,10 @@ export function HowPage({ part: routePart }: { part?: string }) {
           <table className="table">
             <thead><tr><th>Type</th><th>Holder</th><th>Character</th></tr></thead>
             <tbody>
-              <tr><td><Badge tone="outline">ERC721 / 1155 / 6909</Badge></td><td>whoever owns the token</td><td>transferable - the agent is a sellable asset</td></tr>
-              <tr><td><Badge tone="outline">ACCOUNT</Badge></td><td>the address itself, and nothing else</td><td>permanent - no token, nothing to sell or lose</td></tr>
-              <tr><td><Badge tone="outline">CONTRACT_OWNABLE</Badge></td><td>the contract's current <span className="mono">owner()</span></td><td>follows ownership transfers of the contract</td></tr>
-              <tr><td><Badge tone="outline">CONTRACT_ADMIN</Badge></td><td>holders of the contract's admin role</td><td>for AccessControl contracts with no owner()</td></tr>
+              <tr><td><span className="row wrap" style={{ gap: 4 }}><StandardBadge name="ERC721" /><StandardBadge name="ERC1155" /><StandardBadge name="ERC6909" /></span></td><td>whoever owns the token</td><td>transferable - the agent is a sellable asset</td></tr>
+              <tr><td><StandardBadge name="ACCOUNT" /></td><td>the address itself, and nothing else</td><td>permanent - no token, nothing to sell or lose</td></tr>
+              <tr><td><StandardBadge name="CONTRACT_OWNABLE" /></td><td>the contract's current <span className="mono">owner()</span></td><td>follows ownership transfers of the contract</td></tr>
+              <tr><td><StandardBadge name="CONTRACT_ADMIN" /></td><td>holders of the contract's admin role</td><td>for AccessControl contracts with no owner()</td></tr>
             </tbody>
           </table>
         </Block>
@@ -234,6 +234,7 @@ export function HowPage({ part: routePart }: { part?: string }) {
           <div className="attest-grid">
             <Attest
               label="Star"
+              type="STAR"
               rule="Counted"
               icon={<path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9 6.7 19.6l1-5.8-4.2-4.1 5.9-.9z" />}
             >
@@ -241,6 +242,7 @@ export function HowPage({ part: routePart }: { part?: string }) {
             </Attest>
             <Attest
               label="Rating"
+              type="RATING"
               rule="Averaged per attester"
               icon={<><path d="M4 18a8 8 0 1 1 16 0" /><path d="M12 18l4.5-5" strokeLinecap="round" /></>}
             >
@@ -248,6 +250,7 @@ export function HowPage({ part: routePart }: { part?: string }) {
             </Attest>
             <Attest
               label="Review"
+              type="REVIEW"
               rule="Accumulated"
               icon={<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />}
             >
@@ -255,6 +258,7 @@ export function HowPage({ part: routePart }: { part?: string }) {
             </Attest>
             <Attest
               label="Transaction"
+              type="INTERACTION"
               rule="Accumulated"
               icon={<><path d="M4 8h13M14 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" /><path d="M20 16H7M10 13l-3 3 3 3" strokeLinecap="round" strokeLinejoin="round" /></>}
             >
@@ -318,11 +322,14 @@ function Edge({ label, active, at }: { label: string; active: boolean; at: strin
 /** One kind of attestation, with the rule for how many of them add up to a score. */
 function Attest({
   label,
+  type,
   rule,
   icon,
   children,
 }: {
   label: string;
+  /** The attestation type this card explains; its icon takes the type's hue. */
+  type: string;
   rule: string;
   icon: ReactNode;
   children: ReactNode;
@@ -330,7 +337,7 @@ function Attest({
   return (
     <div className="attest">
       <span className="attest-head">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" style={{ color: `var(--c-${TYPE_HUE[type]})` }}>
           {icon}
         </svg>
         <b>{label}</b>

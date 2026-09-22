@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Address, Hex } from "viem";
 import { isAddress } from "viem";
-import { Addr, Badge, isReassuringSignal, SignalCallout, Spinner, Tip, trustSignal, TrustBadge } from "../components/ui";
+import { Addr, Badge, isReassuringSignal, SignalCallout, Spinner, StandardBadge, Tip, trustSignal, TrustBadge } from "../components/ui";
 import { api, type TrustBase } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, erc721Abi, publicClient, shortHex } from "../lib/chain";
@@ -119,7 +119,7 @@ export function CreatePage() {
             <dl className="kv">
               <dt><Tip tip="The kind of controller this identity binds to. It decides who can update the identity, forever: a token standard means whoever owns the token; ACCOUNT means only this address itself. Detected by probing the subject on-chain.">Standard</Tip></dt>
               <dd className="row">
-                <Badge tone="outline">{probe.standardName}</Badge>
+                <StandardBadge name={probe.standardName} />
                 {probe.tokenName && <span className="t3 small">{probe.tokenName}</span>}
               </dd>
               <dt><Tip tip="The exact check the contract will run when you submit, run here first: do you currently pass this standard's control rule? A call that would fail never reaches your wallet.">Authority</Tip></dt>

@@ -107,13 +107,45 @@ export function UbidCell({ ubid }: { ubid: string }) {
   );
 }
 
-/** The standard pill, with the control relationship as its tooltip. */
-export function StandardBadge({ id }: { id: Identity }) {
-  return (
-    <Tip tip={`This identity is ${controlLine(id)}.`}>
-      <span className="badge badge-outline">{id.standardName}</span>
-    </Tip>
-  );
+/** One hue per controller standard, the same everywhere a standard is named. */
+export const STANDARD_HUE: Record<string, string> = {
+  ERC721: "blue",
+  ERC1155: "pink",
+  ERC6909: "orange",
+  ERC1155F: "rose",
+  ERC6909F: "lime",
+  ACCOUNT: "slate",
+  CONTRACT_OWNABLE: "violet",
+  CONTRACT_ADMIN: "cyan",
+};
+
+/** One hue per attestation type, and the plain word the app uses for it. */
+export const TYPE_HUE: Record<string, string> = {
+  CONFIRM_ACCOUNT: "teal",
+  STAR: "amber",
+  RATING: "indigo",
+  REVIEW: "sky",
+  INTERACTION: "emerald",
+};
+export const TYPE_LABEL: Record<string, string> = {
+  CONFIRM_ACCOUNT: "confirm account",
+  STAR: "star",
+  RATING: "rating",
+  REVIEW: "review",
+  INTERACTION: "transaction",
+};
+
+/** The standard pill. Given an identity it explains the control relationship on hover;
+ *  given just a name it is the bare pill. */
+export function StandardBadge({ id, name }: { id?: Identity; name?: string }) {
+  const standard = id?.standardName ?? name ?? "";
+  const badge = <span className={`badge badge-hue-${STANDARD_HUE[standard] ?? "slate"}`}>{standard}</span>;
+  return id ? <Tip tip={`This identity is ${controlLine(id)}.`}>{badge}</Tip> : badge;
+}
+
+/** The attestation-type pill, in the type's hue. */
+export function TypeBadge({ name }: { name: string }) {
+  return <span className={`badge badge-hue-${TYPE_HUE[name] ?? "slate"}`}>{TYPE_LABEL[name] ?? name}</span>;
 }
 
 /** What controls an identity, as a table cell: the collection or account (its name when it has

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, AgentIds, Avatar, Badge, Callout, Section, SignalCallout, signalsFor, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
+import { Addr, AgentIds, Avatar, Badge, Callout, Section, SignalCallout, signalsFor, Spinner, StandardBadge, Stat, StatusBadge, TrustBadge } from "../components/ui";
 import type { Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
@@ -41,7 +41,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
         <span className="row" style={{ gap: 8 }}>
           <StatusBadge id={id} />
-          <Badge tone="outline">{id.standardName}</Badge>
+          <StandardBadge id={id} />
           <TrustBadge t={id.trustBase} />
         </span>
         <div className="head-actions">

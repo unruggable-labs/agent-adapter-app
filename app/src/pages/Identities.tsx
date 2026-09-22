@@ -12,7 +12,7 @@ export function IdentitiesPage() {
   const visible = identities.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
 
   return (
-    <div className="page fade-in">
+    <div className="page page-wide fade-in">
       <div className="page-head">
         <h1 className="page-title">Identities</h1>
         <div className="head-actions">

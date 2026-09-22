@@ -122,6 +122,8 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .main { flex: 1; overflow-y: auto; }
 .page { max-width: 1040px; margin: 0 auto; padding: 28px 32px 80px; }
+/* Table pages get the room their columns need before falling back to a scroll. */
+.page-wide { max-width: 1360px; }
 .page-narrow { max-width: 660px; }
 
 .page-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
@@ -645,6 +647,39 @@ input, textarea, select { font: inherit; color: inherit; }
   --sig-upgradeable: #a78bfa;     --sig-upgradeable-bg: rgba(167, 139, 250, 0.12);
   --sig-delegated: #22d3ee;       --sig-delegated-bg: rgba(34, 211, 238, 0.12);
 }
+/* ---------------------------------------------------------------- hues
+   A named palette for things that need telling apart at a glance. Each attestation type and
+   each controller standard owns one hue, the same everywhere it appears. */
+:root {
+  --c-rose: #be123c;   --c-orange: #c2410c; --c-amber: #b45309;  --c-lime: #4d7c0f;
+  --c-emerald: #047857; --c-teal: #0f766e;  --c-cyan: #0e7490;   --c-sky: #0369a1;
+  --c-blue: #1d4ed8;   --c-indigo: #4338ca; --c-violet: #6d28d9; --c-fuchsia: #a21caf;
+  --c-pink: #be185d;   --c-slate: #475569;
+}
+[data-theme="dark"] {
+  --c-rose: #fb7185;   --c-orange: #fb923c; --c-amber: #fbbf24;  --c-lime: #a3e635;
+  --c-emerald: #34d399; --c-teal: #2dd4bf;  --c-cyan: #22d3ee;   --c-sky: #38bdf8;
+  --c-blue: #60a5fa;   --c-indigo: #818cf8; --c-violet: #a78bfa; --c-fuchsia: #e879f9;
+  --c-pink: #f472b6;   --c-slate: #94a3b8;
+}
+.badge-hue-rose { --hue: var(--c-rose); }       .badge-hue-orange { --hue: var(--c-orange); }
+.badge-hue-amber { --hue: var(--c-amber); }     .badge-hue-lime { --hue: var(--c-lime); }
+.badge-hue-emerald { --hue: var(--c-emerald); } .badge-hue-teal { --hue: var(--c-teal); }
+.badge-hue-cyan { --hue: var(--c-cyan); }       .badge-hue-sky { --hue: var(--c-sky); }
+.badge-hue-blue { --hue: var(--c-blue); }       .badge-hue-indigo { --hue: var(--c-indigo); }
+.badge-hue-violet { --hue: var(--c-violet); }   .badge-hue-fuchsia { --hue: var(--c-fuchsia); }
+.badge-hue-pink { --hue: var(--c-pink); }       .badge-hue-slate { --hue: var(--c-slate); }
+[class*="badge-hue-"] { color: var(--hue); background: color-mix(in srgb, var(--hue) 11%, transparent); }
+
+/* Filter chips: the badge itself is the control. Off = dimmed, on = full colour with a ring. */
+.filters { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 8px; align-items: center; margin: 12px 0 14px; }
+.filters-label { font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
+.filters-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-chip { border-radius: 20px; opacity: 0.5; transition: opacity 0.12s; }
+.filter-chip:hover { opacity: 0.8; }
+.filter-chip.is-on { opacity: 1; box-shadow: 0 0 0 1.5px currentColor; }
+.filter-chip.is-on .badge { border-color: transparent; }
+
 .badge-ruggable { color: var(--sig-ruggable); background: var(--sig-ruggable-bg); }
 .badge-burnable { color: var(--sig-burnable); background: var(--sig-burnable-bg); }
 .badge-ownerless { color: var(--sig-ownerless); background: var(--sig-ownerless-bg); }
