@@ -1,57 +1,192 @@
-import { useEffect, useState } from "react";
-import type { Address, Hex } from "viem";
-import { isAddress } from "viem";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { encodeFunctionData, isAddress, type Address, type Hex } from "viem";
 import { Addr, Badge, Spinner, StandardBadge, Tip } from "../components/ui";
-import { api, type TrustBase } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
-import { adapterAbi, erc721Abi, publicClient, shortHex } from "../lib/chain";
-import { revertReason, sendTx } from "../lib/tx";
+import { adapterAbi, displayName, publicClient, shortHex } from "../lib/chain";
+import { canSend, revertReason, sendTx } from "../lib/tx";
 
-type SubjectKind = "token" | "eoa" | "contract";
+/**
+ * Create an identity, one question at a time.
+ *
+ *  1. What are you registering? (a token, your own address, a contract) - plain words.
+ *  2. Which one? - the coordinates.
+ *  3. Who controls it? - the standard, as a visible dropdown the probe preselects. The standard is
+ *     part of the UBID, so it is never guessed silently, and never asked as a bare enum either:
+ *     every option is a sentence about who can change the record.
+ *  4. Claim it - or, for a contract that has to speak for itself, the code and calls it needs.
+ *
+ * Authority is decided by simulating the real call, so the preflight and the contract's own
+ * check are the same code path: delegate.xyz delegations pass here exactly when they pass there.
+ */
 
-interface Probe {
-  standard: number | null;
-  standardName: string;
-  owner: Address | null;
-  youAreAuthorized: boolean;
-  detail: string;
-  trust: TrustBase | null;
-  ubid: Hex | null;
-  tokenName: string | null;
+type Kind = "token" | "eoa" | "contract";
+type Mode = "claim" | "register";
+
+interface StandardInfo {
+  standard: number;
+  name: string;
+  /** Who can change the record, in a few words - the dropdown label. */
+  short: string;
+  /** The same, as one full sentence - shown under the dropdown. */
+  rule: string;
 }
 
-/** "What are you registering?" - the wizard derives the standard and the authority story
- *  from the chain instead of asking the user to know the enum. */
+const STANDARDS: StandardInfo[] = [
+  { standard: 0, name: "ERC721", short: "whoever owns the token", rule: "Whoever owns the token (ownerOf). A delegate.xyz delegation from the owner also counts." },
+  { standard: 1, name: "ERC1155", short: "anyone holding a balance of the id", rule: "Anyone holding a balance of this id. Every holder is a controller; delegations don't count." },
+  { standard: 2, name: "ERC6909", short: "anyone holding a balance of the id", rule: "Anyone holding a balance of this id. Every holder is a controller; delegations don't count." },
+  { standard: 3, name: "ERC1155F", short: "the single owner (1155 with ownerOf)", rule: "An ERC-1155 contract that also has ownerOf: the single owner controls it, delegations count." },
+  { standard: 4, name: "ERC6909F", short: "the single owner (6909 with ownerOf)", rule: "An ERC-6909 contract that also has ownerOf: the single owner controls it, delegations count." },
+  { standard: 5, name: "ACCOUNT", short: "the contract itself", rule: "The address itself. A contract bound this way has to make the calls itself." },
+  { standard: 6, name: "CONTRACT_OWNABLE", short: "its owner()", rule: "The contract's current owner(), or a delegate.xyz delegate of the owner." },
+  { standard: 7, name: "CONTRACT_ADMIN", short: "its admins (AccessControl)", rule: "Anyone holding the contract's DEFAULT_ADMIN_ROLE (OpenZeppelin AccessControl)." },
+];
+const BY_STANDARD = Object.fromEntries(STANDARDS.map((s) => [s.standard, s])) as Record<number, StandardInfo>;
+const OFFERED: Record<Kind, number[]> = { token: [0, 1, 2, 3, 4], eoa: [5], contract: [6, 7, 5] };
+
+/** What the chain says about the subject - gathered once, then read for every standard. */
+interface Facts {
+  hasCode: boolean;
+  name: string | null;
+  ownerOf: Address | null; // token standards: ownerOf(tokenId), null when it reverts
+  balance: bigint | null; // token standards: balanceOf(you, tokenId), null when it reverts
+  supports: { erc721: boolean; erc1155: boolean; erc6909: boolean };
+  owner: Address | null; // contract standards: owner()
+  isAdmin: boolean; // contract standards: hasRole(DEFAULT_ADMIN_ROLE, you)
+}
+
+const probeAbi = [
+  { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "ownerOf", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }] },
+  { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "supportsInterface", stateMutability: "view", inputs: [{ type: "bytes4" }], outputs: [{ type: "bool" }] },
+  { type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "hasRole", stateMutability: "view", inputs: [{ type: "bytes32" }, { type: "address" }], outputs: [{ type: "bool" }] },
+] as const;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const ZERO_ROLE = ("0x" + "00".repeat(32)) as Hex;
+
+async function read<T>(address: Address, functionName: string, args: unknown[] = []): Promise<T | null> {
+  return publicClient.readContract({ address, abi: probeAbi, functionName: functionName as never, args: args as never }).then((v) => v as T).catch(() => null);
+}
+
+async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: Address | null): Promise<Facts> {
+  const code = await publicClient.getCode({ address }).catch(() => undefined);
+  const hasCode = !!code && code !== "0x";
+  const me = you ?? ZERO_ADDRESS;
+  const [name, ownerOf, balance, erc721, erc1155, erc6909, owner, isAdmin] = await Promise.all([
+    hasCode ? read<string>(address, "name") : null,
+    kind === "token" ? read<Address>(address, "ownerOf", [tokenId]) : null,
+    kind === "token" ? read<bigint>(address, "balanceOf", [me, tokenId]) : null,
+    kind === "token" ? read<boolean>(address, "supportsInterface", ["0x80ac58cd"]) : null,
+    kind === "token" ? read<boolean>(address, "supportsInterface", ["0xd9b67a26"]) : null,
+    kind === "token" ? read<boolean>(address, "supportsInterface", ["0x0f632fb3"]) : null,
+    kind === "contract" ? read<Address>(address, "owner") : null,
+    kind === "contract" && you ? read<boolean>(address, "hasRole", [ZERO_ROLE, you]) : null,
+  ]);
+  return {
+    hasCode,
+    name: name && name.length <= 64 ? name : null,
+    ownerOf: ownerOf && ownerOf !== ZERO_ADDRESS ? (ownerOf.toLowerCase() as Address) : null,
+    balance,
+    supports: { erc721: !!erc721, erc1155: !!erc1155, erc6909: !!erc6909 },
+    owner: owner && owner !== ZERO_ADDRESS ? (owner.toLowerCase() as Address) : null,
+    isAdmin: !!isAdmin,
+  };
+}
+
+/** The probe's pick, and why, in one line. The user can always override it in the dropdown. */
+function suggest(kind: Kind, f: Facts, you: Address | null): { standard: number; why: string } {
+  if (kind === "eoa") return { standard: 5, why: "Your own address: only it can speak for itself." };
+  if (kind === "contract") {
+    if (f.owner && you && f.owner === you) return { standard: 6, why: "The contract's owner() is your address." };
+    if (f.isAdmin) return { standard: 7, why: "Your address holds the contract's DEFAULT_ADMIN_ROLE." };
+    if (f.owner) return { standard: 6, why: `The contract has an owner() - ${shortHex(f.owner, 10)} - which isn't you.` };
+    return { standard: 5, why: "No owner() and no admin role found, so the contract would have to speak for itself." };
+  }
+  const { erc721, erc1155, erc6909 } = f.supports;
+  if (f.ownerOf && erc1155 && !erc721) return { standard: 3, why: "The contract reports ERC-1155 and also answers ownerOf, so it can bind as a single-owner token." };
+  if (f.ownerOf && erc6909 && !erc721) return { standard: 4, why: "The contract reports ERC-6909 and also answers ownerOf, so it can bind as a single-owner token." };
+  if (f.ownerOf) return { standard: 0, why: `ownerOf answers (${shortHex(f.ownerOf, 10)}), the ERC-721 rule.` };
+  if (erc6909) return { standard: 2, why: "The contract reports ERC-6909 and ownerOf does not answer, so control is by balance." };
+  if (erc1155) return { standard: 1, why: "The contract reports ERC-1155 and ownerOf does not answer, so control is by balance." };
+  return { standard: 0, why: "ownerOf reverts for this id - the token may not exist yet, or be burned. Only the collection contract can claim it right now." };
+}
+
 export function CreatePage() {
-  const { signer, overview, navigate, refresh, toast } = useApp();
-  const [kind, setKind] = useState<SubjectKind | null>(null);
-  const [contract, setContract] = useState("");
-  const [tokenId, setTokenId] = useState("");
-  const [probe, setProbe] = useState<Probe | null>(null);
+  const { signer, overview, identities, navigate, refresh, toast } = useApp();
+  const [kind, setKind] = useState<Kind | null>(null);
+  const [address, setAddress] = useState("");
+  const [tokenIdText, setTokenIdText] = useState("");
+  const [facts, setFacts] = useState<Facts | null>(null);
   const [probing, setProbing] = useState(false);
-  const [mode, setMode] = useState<"claim" | "register">("claim");
+  const [standard, setStandard] = useState<number | null>(null);
+  const [suggested, setSuggested] = useState<{ standard: number; why: string } | null>(null);
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [ubid, setUbid] = useState<Hex | null>(null);
+  const [mode, setMode] = useState<Mode>("claim");
   const [uri, setUri] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Hex | null>(null);
 
   const adapter = overview?.adapter;
+  const bound: Address | null = kind === "eoa" ? (signer?.address ?? null) : isAddress(address) ? (address.toLowerCase() as Address) : null;
+  const tokenId: bigint | null = kind === "token" ? (/^\d+$/.test(tokenIdText) ? BigInt(tokenIdText) : null) : kind ? 0n : null;
+  const coordsReady = !!kind && !!bound && tokenId !== null;
 
-  // ---- probe the subject whenever the coordinates settle -------------------------------
+  // Step 2 settled: gather the facts and let the probe suggest a standard.
   useEffect(() => {
-    setProbe(null);
+    setFacts(null);
+    setStandard(null);
+    setSuggested(null);
+    setAuthorized(null);
+    setUbid(null);
     setDone(null);
-    if (!adapter) return;
-    if (kind === "eoa") {
-      if (signer) probeEoa(adapter, signer.address).then(setProbe);
-      return;
-    }
-    if (kind === "token" && isAddress(contract) && tokenId !== "" && !Number.isNaN(Number(tokenId))) {
-      setProbing(true);
-      probeToken(adapter, contract as Address, BigInt(tokenId ), signer?.address ?? "0x0000000000000000000000000000000000000000")
-        .then(setProbe)
-        .finally(() => setProbing(false));
-    }
-  }, [kind, contract, tokenId, signer?.address, adapter]);
+    if (!coordsReady || !bound || tokenId === null) return;
+    let cancelled = false;
+    setProbing(true);
+    gatherFacts(kind!, bound, tokenId, signer?.address ?? null)
+      .then((f) => {
+        if (cancelled) return;
+        setFacts(f);
+        const s = suggest(kind!, f, signer?.address ?? null);
+        setStandard(s.standard);
+        setSuggested(s);
+      })
+      .finally(() => !cancelled && setProbing(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, bound, tokenId, signer?.address]);
+
+  // Step 3 settled: the UBID for these exact coordinates, and whether you would pass the
+  // contract's own check - by simulating the real call, not by re-implementing the rule.
+  useEffect(() => {
+    setAuthorized(null);
+    setUbid(null);
+    if (!adapter || standard === null || !bound || tokenId === null) return;
+    let cancelled = false;
+    const args = [standard, bound, tokenId] as const;
+    Promise.all([
+      publicClient.readContract({ address: adapter, abi: adapterAbi, functionName: "hashBinding", args: [...args] }).catch(() => null),
+      canSend(signer, adapter, adapterAbi, "counterfactualRegister", [...args, "preflight"]),
+    ]).then(([h, ok]) => {
+      if (cancelled) return;
+      setUbid((h as Hex | null) ?? null);
+      setAuthorized(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, standard, bound, tokenId, signer?.address]);
+
+  // The same coordinates under a different standard are a different identity. Say so before
+  // anyone makes a second one by accident.
+  const siblings = useMemo(
+    () => (bound && tokenId !== null ? identities.filter((i) => i.boundAddress === bound && BigInt(i.tokenId) === tokenId && i.standard !== standard) : []),
+    [identities, bound, tokenId, standard],
+  );
+  const existing = useMemo(() => identities.find((i) => i.ubid === ubid) ?? null, [identities, ubid]);
 
   if (!adapter) return <div className="page"><Spinner /></div>;
 
@@ -66,208 +201,308 @@ export function CreatePage() {
         </div>
         <div className="row" style={{ marginTop: 14 }}>
           <button className="btn btn-primary" onClick={() => navigate(`/identity/${done}`)}>Open profile</button>
-          <button className="btn btn-ghost" onClick={() => { setDone(null); setKind(null); setProbe(null); setUri(""); }}>Create another</button>
+          <button className="btn btn-ghost" onClick={() => { setDone(null); setKind(null); setAddress(""); setTokenIdText(""); setUri(""); }}>Create another</button>
         </div>
       </div>
     );
   }
 
+  const info = standard !== null ? BY_STANDARD[standard] : null;
+  const contractAsItself = kind === "contract" && standard === 5;
+
   return (
     <div className="page page-narrow fade-in">
       <h1 className="page-title">Create an identity</h1>
-      <p className="page-sub">Bind an ERC-8004 agent identity to something you control.</p>
+      <p className="page-sub">Give something you control a profile. The UBID it gets is permanent.</p>
 
-      <div className="section-label">What are you registering?</div>
-      <ChoiceButton
-        selected={kind === "token"}
-        onClick={() => setKind("token")}
-        title="A token I hold"
-        sub="An NFT or token - its identity travels with ownership of the token."
-      />
-      <ChoiceButton
-        selected={kind === "eoa"}
-        onClick={() => setKind("eoa")}
-        title={signer ? `${signer.label}'s own address` : "My own address"}
-        sub={signer ? `Your wallet itself becomes the agent (${shortHex(signer.address, 10)}). One transaction, nothing else needed.` : "Connect a wallet first (bottom of the sidebar)."}
-      />
-      <ChoiceButton
-        disabled
-        selected={false}
-        onClick={() => {}}
-        title="A contract, as itself"
-        sub="Requires the contract to make the call - via a Safe transaction or an integration snippet. Coming in the next phase."
-      />
+      <Step n={1} title="What are you registering?">
+        <Choice selected={kind === "token"} onClick={() => setKind("token")} title="A token I hold" sub="An NFT or a token id. The identity travels with the token." />
+        <Choice
+          selected={kind === "eoa"}
+          onClick={() => setKind("eoa")}
+          disabled={!signer}
+          title={signer ? "My own address" : "My own address (connect a wallet first)"}
+          sub={signer ? `${shortHex(signer.address, 10)} becomes the agent. One transaction, nothing else needed.` : "Your wallet itself becomes the agent."}
+        />
+        <Choice selected={kind === "contract"} onClick={() => setKind("contract")} title="A contract" sub="Controlled by its owner, its admins, or the contract itself." />
+      </Step>
 
-      {kind === "token" && (
-        <div className="card" style={{ marginTop: 16 }}>
+      {kind && kind !== "eoa" && (
+        <Step n={2} title={kind === "token" ? "Which token?" : "Which contract?"}>
           <div className="field">
-            <label>Token contract</label>
-            <input className="input mono" placeholder="0x…" value={contract} onChange={(e) => setContract(e.target.value.trim())} />
+            <label>{kind === "token" ? "Token contract" : "Contract address"}</label>
+            <input className="input mono" placeholder="0x…" value={address} onChange={(e) => setAddress(e.target.value.trim())} />
           </div>
-          <div className="field">
-            <label>Token id</label>
-            <input className="input mono" placeholder="7" value={tokenId} onChange={(e) => setTokenId(e.target.value.trim())} />
-          </div>
-          {probing && <p className="hint" style={{ marginTop: 10 }}><Spinner /> probing the contract…</p>}
-        </div>
-      )}
-
-      {probe && (
-        <div className="fade-in">
-          <div className="card" style={{ marginTop: 16 }}>
-            <div className="section-label">Preflight</div>
-            <dl className="kv">
-              <dt><Tip tip="The kind of controller this identity binds to. It decides who can update the identity, forever: a token standard means whoever owns the token; ACCOUNT means only this address itself. Detected by probing the subject on-chain.">Standard</Tip></dt>
-              <dd className="row">
-                <StandardBadge name={probe.standardName} />
-                {probe.tokenName && <span className="t3 small">{probe.tokenName}</span>}
-              </dd>
-              <dt><Tip tip="The exact check the contract will run when you submit, run here first: do you currently pass this standard's control rule? A call that would fail never reaches your wallet.">Authority</Tip></dt>
-              <dd>
-                {probe.youAreAuthorized
-                  ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{probe.detail}</span></span>
-                  : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{probe.detail}</span></span>}
-              </dd>
-              <dt><Tip tip="The identity's permanent name - a hash the live contract computes from exactly these details. It never changes, and it's the same whether you claim now or register fully later, so anything attached to it carries over.">UBID</Tip></dt>
-              <dd className="mono" style={{ overflowWrap: "anywhere" }}>{probe.ubid ?? "—"}</dd>
-            </dl>
-          </div>
-
-          {probe.youAreAuthorized && (
-            <div className="card" style={{ marginTop: 14 }}>
-              <div className="section-label">How</div>
-              <div className="seg" style={{ marginBottom: 12 }}>
-                <button className={mode === "claim" ? "active" : ""} onClick={() => setMode("claim")}>Claim (counterfactual)</button>
-                <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Register (mint agent)</button>
-              </div>
-              <p className="hint" style={{ marginTop: 0 }}>
-                {mode === "claim"
-                  ? "One cheap transaction; the identity lives in the event log. Reputation earned now carries over if you register later - the UBID is the same."
-                  : "Mints a real ERC-8004 agent NFT bound to this subject. Any counterfactual history under this UBID joins automatically."}
-              </p>
-              <div className="field">
-                <label>Agent URI</label>
-                <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
-                <span className="hint">Where the agent's card/description lives. Can be updated later by whoever holds authority.</span>
-              </div>
-              <div className="row" style={{ marginTop: 14 }}>
-                <button
-                  className="btn btn-primary"
-                  disabled={busy || !uri.trim()}
-                  onClick={async () => {
-                    setBusy(true);
-                    const args = [probe.standard!, (kind === "eoa" ? signer!.address : (contract as Address)), kind === "eoa" ? 0n : BigInt(tokenId), uri.trim()];
-                    const fn = mode === "claim" ? "counterfactualRegister" : "register";
-                    const r = await sendTx(signer, adapter, adapterAbi, fn, args);
-                    toast(r.message);
-                    if (r.ok) {
-                      await settle(refresh);
-                      setDone(probe.ubid);
-                    }
-                    setBusy(false);
-                  }}
-                >
-                  {busy ? <Spinner /> : mode === "claim" ? "Claim" : "Register"}
-                </button>
-                <span className="hint">Simulated first - an unauthorized call fails before anything is sent.</span>
-              </div>
+          {kind === "token" && (
+            <div className="field">
+              <label>Token id</label>
+              <input className="input mono" placeholder="7" value={tokenIdText} onChange={(e) => setTokenIdText(e.target.value.trim())} />
             </div>
           )}
-        </div>
+          {probing && <p className="hint" style={{ margin: "10px 0 0" }}><Spinner /> reading the contract…</p>}
+          {facts && !facts.hasCode && <p className="hint" style={{ margin: "10px 0 0", color: "var(--danger)" }}>No contract at this address on this network.</p>}
+          {facts?.name && <p className="hint" style={{ margin: "10px 0 0" }}>Found <b>{facts.name}</b>.</p>}
+        </Step>
+      )}
+
+      {kind && facts && standard !== null && info && (kind === "eoa" || facts.hasCode) && (
+        <Step n={kind === "eoa" ? 2 : 3} title="Who controls it?">
+          <p className="t2 small" style={{ margin: "0 0 10px" }}>
+            The control rule is part of the identity's name, so it can't change later. Pick the one that
+            describes how this {kind === "token" ? "token" : kind === "eoa" ? "address" : "contract"} is actually held.
+          </p>
+          <div className="row wrap" style={{ gap: 10 }}>
+            <select className="select" style={{ width: "auto", maxWidth: "100%" }} value={standard} disabled={OFFERED[kind].length === 1} onChange={(e) => setStandard(Number(e.target.value))}>
+              {OFFERED[kind].map((s) => (
+                <option key={s} value={s}>{BY_STANDARD[s].name} - {BY_STANDARD[s].short}</option>
+              ))}
+            </select>
+          </div>
+          <p className="hint" style={{ margin: "8px 0 0" }}>
+            <StandardBadge name={info.name} /> <span> </span>{info.rule}{" "}
+            {suggested && suggested.standard === standard
+              ? <span className="t3">Suggested because: {suggested.why}</span>
+              : suggested && <span className="t3">You changed this from the suggested {BY_STANDARD[suggested.standard].name}. <button className="agent-link" onClick={() => setStandard(suggested.standard)}>Use the suggestion</button></span>}
+          </p>
+
+          <dl className="kv" style={{ marginTop: 12 }}>
+            <dt><Tip tip="The contract's own check, run here first: would counterfactualRegister succeed from your address right now? Delegate.xyz delegations are honoured because this is the real call, simulated.">Authority</Tip></dt>
+            <dd>
+              {authorized === null ? <Spinner /> : authorized
+                ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, true)}</span></span>
+                : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, false)}</span></span>}
+            </dd>
+            <dt><Tip tip="The identity's permanent name - a hash the live contract computes from the standard, the address and the token id. Same whether you claim now or register fully later.">UBID</Tip></dt>
+            <dd className="mono" style={{ overflowWrap: "anywhere" }}>{ubid ?? "—"}</dd>
+          </dl>
+
+          {existing && (
+            <p className="callout callout-ok" style={{ marginTop: 12 }}>
+              <b>This identity already exists.</b> {displayName(existing)} is {existing.agentIds.length ? "registered on-chain" : "claimed"} under exactly these
+              coordinates. <button className="agent-link" onClick={() => navigate(`/identity/${existing.ubid}`)}>Open its profile</button> - claiming
+              again restates the record rather than creating a second one.
+            </p>
+          )}
+          {siblings.length > 0 && (
+            <p className="callout callout-warn" style={{ marginTop: 12 }}>
+              <b>Same {kind === "token" ? "token" : "address"}, different rule.</b> An identity already exists for these coordinates as{" "}
+              {siblings.map((s, i) => (
+                <span key={s.ubid}>{i > 0 && ", "}<button className="agent-link" onClick={() => navigate(`/identity/${s.ubid}`)}>{BY_STANDARD[s.standard]?.name ?? s.standardName}</button></span>
+              ))}. A different standard is a different UBID with its own reputation. Continue only if you mean to have two.
+            </p>
+          )}
+        </Step>
+      )}
+
+      {kind && facts && standard !== null && authorized !== null && ubid && (kind === "eoa" || facts.hasCode) && (
+        authorized ? (
+          <Step n={kind === "eoa" ? 3 : 4} title="Claim it">
+            <div className="seg" style={{ marginBottom: 12 }}>
+              <button className={mode === "claim" ? "active" : ""} onClick={() => setMode("claim")}>Claim (counterfactual)</button>
+              <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Register (mint an ERC-8004 agent)</button>
+            </div>
+            <p className="hint" style={{ marginTop: 0 }}>
+              {mode === "claim"
+                ? "One cheap transaction; the identity lives in the event log. Reputation earned now carries over if you register later, because the UBID is the same."
+                : "Mints a real ERC-8004 agent on the shared registry, bound to this subject. Any history under this UBID joins automatically."}
+            </p>
+            <div className="field">
+              <label>Agent URI</label>
+              <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
+              <span className="hint">Where the agent's card lives. Whoever holds authority can change it later.</span>
+            </div>
+            <div className="row" style={{ marginTop: 14 }}>
+              <button
+                className="btn btn-primary"
+                disabled={busy || !uri.trim()}
+                onClick={async () => {
+                  setBusy(true);
+                  const fn = mode === "claim" ? "counterfactualRegister" : "register";
+                  const r = await sendTx(signer, adapter, adapterAbi, fn, [standard, bound, tokenId, uri.trim()]);
+                  toast(r.ok ? r.message : revertReason(r.message));
+                  if (r.ok) {
+                    await settle(refresh);
+                    setDone(ubid);
+                  }
+                  setBusy(false);
+                }}
+              >
+                {busy ? <Spinner /> : mode === "claim" ? "Claim" : "Register"}
+              </button>
+              <span className="hint">Simulated first - a call that would fail never reaches your wallet.</span>
+            </div>
+          </Step>
+        ) : contractAsItself ? (
+          <ContractGuide n={4} adapter={adapter} contract={bound!} ubid={ubid} uri={uri} setUri={setUri} you={signer?.address ?? null} />
+        ) : (
+          <Step n={kind === "eoa" ? 3 : 4} title="Not from this wallet">
+            <p className="t2 small" style={{ margin: 0 }}>
+              {kind === "contract"
+                ? standard === 6
+                  ? <>Connect as the contract's owner{facts.owner ? <> (<Addr value={facts.owner} n={8} />)</> : null}, or have the owner grant your address a delegate.xyz delegation. If the contract has no owner(), pick a different rule above.</>
+                  : <>Connect as an address that holds the contract's DEFAULT_ADMIN_ROLE, or pick a different rule above.</>
+                : facts.ownerOf
+                  ? <>Connect as the token's owner (<Addr value={facts.ownerOf} n={8} />), or have the owner grant your address a delegate.xyz delegation for it.</>
+                  : <>Hold a balance of this id from the connected wallet, or pick a different rule above.</>}
+            </p>
+          </Step>
+        )
       )}
     </div>
   );
 }
 
-function ChoiceButton({ selected, onClick, title, sub, disabled }: { selected: boolean; onClick: () => void; title: string; sub: string; disabled?: boolean }) {
+function authorityDetail(kind: Kind, standard: number, f: Facts, you: Address | null, pass: boolean): string {
+  if (kind === "eoa") return "an ACCOUNT identity authorises exactly its own address, and you are it";
+  if (standard === 6) return f.owner ? `owner() is ${shortHex(f.owner, 10)}${f.owner === you ? ", your address" : ""}` : "the contract does not answer owner()";
+  if (standard === 7) return f.isAdmin ? "your address holds DEFAULT_ADMIN_ROLE" : "your address does not hold DEFAULT_ADMIN_ROLE";
+  if (standard === 5) return pass ? "the contract has delegated to your address" : "only the contract itself (or a delegate.xyz delegate it named) passes";
+  if (standard === 1 || standard === 2) return f.balance !== null ? `your balance of this id is ${f.balance}` : "the contract does not answer balanceOf for this id";
+  return f.ownerOf ? `ownerOf is ${shortHex(f.ownerOf, 10)}${f.ownerOf === you ? ", your address" : pass ? ", and you hold a delegation" : ""}` : "ownerOf reverts for this id";
+}
+
+/**
+ * A contract bound as itself has to make the calls: the adapter checks msg.sender against the
+ * bound address and nothing else. So this step is instructions, not a button - the code to add,
+ * or the exact call to send from a contract that can already execute arbitrary calls.
+ */
+function ContractGuide({ n, adapter, contract, ubid, uri, setUri, you }: { n: number; adapter: Address; contract: Address; ubid: Hex; uri: string; setUri: (v: string) => void; you: Address | null }) {
+  const { navigate } = useApp();
+  const [route, setRoute] = useState<"execute" | "code" | "delegate">("execute");
+  const agentURI = uri.trim() || "ipfs://…/agent.json";
+  const registerData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualRegister", args: [5, contract, 0n, agentURI] });
+  const walletData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualSetAgentWalletAndUBID", args: [5, contract, 0n] });
+
+  const solidity = `interface IAdapter8004 {
+    function counterfactualRegister(uint8 standard, address boundAddress, uint256 tokenId, string calldata agentURI)
+        external returns (bytes32 ubid);
+    function counterfactualSetAgentURI(uint8 standard, address boundAddress, uint256 tokenId, string calldata newURI)
+        external returns (bytes32 ubid);
+    function counterfactualSetAgentWalletAndUBID(uint8 standard, address boundAddress, uint256 tokenId)
+        external returns (bytes32 ubid);
+}
+
+contract MyAgent {
+    IAdapter8004 public constant ADAPTER = IAdapter8004(${adapter});
+    uint8 private constant ACCOUNT = 5; // the contract itself is the controller
+
+    // Gate these the way you gate any admin action on your contract.
+    function registerIdentity(string calldata agentURI) external /* onlyOwner */ {
+        ADAPTER.counterfactualRegister(ACCOUNT, address(this), 0, agentURI);
+    }
+
+    // Optional: name this contract as its own operating wallet - one call, verified both ways.
+    function linkOwnWallet() external /* onlyOwner */ {
+        ADAPTER.counterfactualSetAgentWalletAndUBID(ACCOUNT, address(this), 0);
+    }
+}`;
+
+  const delegateNote = `// From the contract, on the delegate.xyz registry (0x00000000000000447e69651d841bD8D104Bed493):
+delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
+
+  return (
+    <Step n={n} title="The contract has to speak for itself">
+      <p className="t2 small" style={{ margin: "0 0 12px" }}>
+        Bound as ACCOUNT, an identity is controlled by the address itself: the adapter checks that the
+        caller <i>is</i> the contract. No wallet can do this on its behalf, so this step is what the contract
+        needs to do. Three ways, pick the one that fits.
+      </p>
+      <div className="field">
+        <label>Agent URI <span className="t3">(fills the calls below)</span></label>
+        <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
+      </div>
+      <div className="seg" style={{ margin: "12px 0" }}>
+        <button className={route === "execute" ? "active" : ""} onClick={() => setRoute("execute")}>It can execute calls</button>
+        <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
+        <button className={route === "delegate" ? "active" : ""} onClick={() => setRoute("delegate")}>Delegate to my wallet</button>
+      </div>
+
+      {route === "execute" && (
+        <>
+          <p className="t2 small" style={{ margin: "0 0 8px" }}>
+            A Safe, a smart wallet, or any contract with an execute function can send this call as itself.
+            Target the adapter, value 0, data as below. Then, optionally, the second call links the
+            contract as its own operating wallet.
+          </p>
+          <CallBlock label="1. Register" to={adapter} data={registerData} />
+          <CallBlock label="2. Link its wallet (optional)" to={adapter} data={walletData} />
+        </>
+      )}
+      {route === "code" && (
+        <>
+          <p className="t2 small" style={{ margin: "0 0 8px" }}>
+            Add a function that calls the adapter, gated the way your contract gates admin actions, then deploy
+            and call it. Standard 5 is ACCOUNT and the token id is always 0 for it.
+          </p>
+          <CodeBlock code={solidity} />
+        </>
+      )}
+      {route === "delegate" && (
+        <>
+          <p className="t2 small" style={{ margin: "0 0 8px" }}>
+            The contract grants your wallet a delegate.xyz delegation for the adapter's rights. That still
+            takes one call from the contract, but afterwards you can claim and manage the identity from this
+            wallet, here, like any other. Use the "It can execute calls" route to send it.
+          </p>
+          <CodeBlock code={delegateNote} />
+        </>
+      )}
+
+      <div className="callout" style={{ marginTop: 14 }}>
+        <b>Then come back.</b> Once the call lands, the identity appears here under its UBID{" "}
+        <span className="mono small" style={{ overflowWrap: "anywhere" }}>{ubid}</span>.{" "}
+        <button className="agent-link" onClick={() => navigate(`/identity/${ubid}`)}>Its profile page</button> will show it as soon as the indexer sees the event.
+      </div>
+    </Step>
+  );
+}
+
+function CallBlock({ label, to, data }: { label: string; to: Address; data: Hex }) {
+  return (
+    <div className="callblock">
+      <div className="row spread"><span className="section-label" style={{ margin: 0 }}>{label}</span><CopyButton text={data} /></div>
+      <dl className="kv small" style={{ marginTop: 6 }}>
+        <dt>to</dt><dd className="mono">{to}</dd>
+        <dt>value</dt><dd className="mono">0</dd>
+        <dt>data</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{data}</dd>
+      </dl>
+    </div>
+  );
+}
+
+function CodeBlock({ code }: { code: string }) {
+  return (
+    <div className="codeblock">
+      <div className="codeblock-bar"><CopyButton text={code} /></div>
+      <pre>{code}</pre>
+    </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 900); }}>
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+/** One numbered step. Steps appear as the previous one settles, so the page reads top to bottom. */
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <div className="step-block fade-in">
+      <div className="step-head"><span className="step-num">{n}</span><h2 className="h-section" style={{ margin: 0 }}>{title}</h2></div>
+      <div className="card">{children}</div>
+    </div>
+  );
+}
+
+function Choice({ selected, onClick, title, sub, disabled }: { selected: boolean; onClick: () => void; title: string; sub: string; disabled?: boolean }) {
   return (
     <button className={`choice ${selected ? "selected" : ""}`} onClick={onClick} disabled={disabled}>
       <div className="c-title">{title}</div>
       <div className="c-sub">{sub}</div>
     </button>
   );
-}
-
-async function computeUbid(adapter: Address, standard: number, bound: Address, tokenId: bigint): Promise<Hex> {
-  return (await publicClient.readContract({
-    address: adapter,
-    abi: adapterAbi,
-    functionName: "hashBinding",
-    args: [standard, bound, tokenId],
-  })) as Hex;
-}
-
-async function probeEoa(adapter: Address, address: Address): Promise<Probe> {
-  const trust = await api.trustbase(address).catch(() => null);
-  return {
-    standard: 5,
-    standardName: "ACCOUNT",
-    owner: address,
-    youAreAuthorized: true,
-    detail: "an ACCOUNT subject authorizes exactly its own address - you are it",
-    trust,
-    ubid: await computeUbid(adapter, 5, address, 0n),
-    tokenName: null,
-  };
-}
-
-async function probeToken(adapter: Address, contract: Address, tokenId: bigint, you: Address): Promise<Probe> {
-  const trust = await api.trustbase(contract).catch(() => null);
-  const tokenName = await publicClient
-    .readContract({ address: contract, abi: erc721Abi, functionName: "name" })
-    .catch(() => null);
-
-  // ERC-721 first: ownerOf answering settles both the standard and the authority.
-  try {
-    const owner = (await publicClient.readContract({
-      address: contract,
-      abi: erc721Abi,
-      functionName: "ownerOf",
-      args: [tokenId],
-    })) as Address;
-    const yours = owner.toLowerCase() === you.toLowerCase();
-    return {
-      standard: 0,
-      standardName: "ERC721",
-      owner,
-      youAreAuthorized: yours,
-      detail: yours ? `ownerOf(${tokenId}) is your address` : `ownerOf(${tokenId}) is ${shortHex(owner, 10)} - a delegate.xyz delegation would also pass`,
-      trust,
-      ubid: await computeUbid(adapter, 0, contract, tokenId),
-      tokenName: tokenName as string | null,
-    };
-  } catch {
-    // ownerOf reverted: either not ERC-721, an unminted/burned token (the collection window),
-    // or an ERC-1155-style balance token.
-    try {
-      const bal = (await publicClient.readContract({
-        address: contract,
-        abi: erc721Abi,
-        functionName: "balanceOf",
-        args: [you, tokenId],
-      })) as bigint;
-      const yours = bal > 0n;
-      return {
-        standard: 1,
-        standardName: "ERC1155",
-        owner: null,
-        youAreAuthorized: yours,
-        detail: yours ? `your balance of id ${tokenId} is ${bal}` : `your balance of id ${tokenId} is 0 - positive balance is the authority`,
-        trust,
-        ubid: await computeUbid(adapter, 1, contract, tokenId),
-        tokenName: tokenName as string | null,
-      };
-    } catch {
-      return {
-        standard: 0,
-        standardName: "ERC721",
-        owner: null,
-        youAreAuthorized: false,
-        detail: `ownerOf(${tokenId}) reverts - the token doesn't exist (or is burned), so only the collection contract itself may claim right now`,
-        trust,
-        ubid: await computeUbid(adapter, 0, contract, tokenId).catch(() => null as unknown as Hex),
-        tokenName: tokenName as string | null,
-      };
-    }
-  }
 }
