@@ -313,7 +313,7 @@ export class ProjectionStore {
     const id = this.identityFor(standard, boundAddress, tokenId);
     if (!id.agentIds.includes(agentId)) id.agentIds.push(agentId);
     const registeredBy = (ev.args.registeredBy as string).toLowerCase() as Address;
-    this.record(id.ubid, ev, order, registeredBy, `ERC-8004 agent #${agentId} minted on the shared registry for these coordinates. Same UBID, so the history above and below is one record.`);
+    this.record(id.ubid, ev, order, registeredBy, `ERC-8004 agent #${agentId} minted on the shared registry for these coordinates.`);
   }
 
   private withAgent(ev: LogEvent, fn: (a: AgentState) => void, effect?: (a: AgentState) => string): void {

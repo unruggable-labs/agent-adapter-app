@@ -63,13 +63,18 @@ export function SearchBar() {
       out.push(h);
     };
     if (walletHit) add(walletHit);
-    const hex = /^0x[0-9a-f]{6,64}$/.test(query);
+    // Prefixes match from the first character, so results appear while a UBID or id is still
+    // being typed or right after a paste - not only once it is complete.
+    const hex = /^0x[0-9a-f]{1,64}$/.test(query);
     const agentId = /^#?\d+$/.test(query) ? query.replace("#", "") : null;
     for (const id of identities) {
       if (hex && id.ubid.startsWith(query)) add({ id, note: "UBID" });
       else if (asAddress && id.boundAddress === query) add({ id, note: id.standard === 5 ? "this address is the agent" : "bound to this contract" });
       else if (asAddress && id.agentWallet === query) add({ id, note: "operating wallet" });
-      else if (agentId && id.agentIds.includes(agentId)) add({ id, note: `ERC-8004 #${agentId}` });
+      else if (agentId) {
+        const match = id.agentIds.find((a) => a.startsWith(agentId));
+        if (match) add({ id, note: `ERC-8004 #${match}` });
+      }
     }
     if (!hex && !asAddress) {
       for (const id of identities) {
@@ -97,10 +102,10 @@ export function SearchBar() {
     setOpen(false);
   }
 
-  const showMenu = open && query.length > 0;
+  const showMenu = open && query.length > 0 && (hits.length > 0 || query.length >= 3);
   const nothing = asAddress
     ? "No agent here. This address is just a number, and nothing vouches for it."
-    : "Nothing matches. Try a name, an address, a UBID or an ERC-8004 id.";
+    : "Nothing matches. Try a UBID, a name, an address, or an ERC-8004 ID.";
 
   return (
     <div className="search" ref={box}>
@@ -109,7 +114,7 @@ export function SearchBar() {
       </svg>
       <input
         className="search-input"
-        placeholder="Who is this? Search a name, address, UBID or ERC-8004 id"
+        placeholder="Enter a UBID, name, address, or ERC-8004 ID"
         value={q}
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
@@ -142,7 +147,7 @@ export function SearchBar() {
               {h.note && <Badge tone={h.tone ?? "outline"}>{h.note}</Badge>}
             </button>
           ))}
-          {hits.length === 0 && <div className="search-empty t2 small">{nothing}</div>}
+          {hits.length === 0 && query.length >= 3 && <div className="search-empty t2 small">{nothing}</div>}
         </div>
       )}
     </div>

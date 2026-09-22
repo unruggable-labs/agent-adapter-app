@@ -176,8 +176,7 @@ function HistoryPanel({ id }: { id: Identity }) {
   return (
     <Section label={`History · ${plural(rows.length, "event")}`}>
       <p className="t2 small" style={{ margin: "0 0 12px" }}>
-        Every on-chain event that touched this identity, newest first. There is no database
-        behind this page: what you see on the profile is replayed from exactly these.
+        Every on-chain event that touched this identity, newest first.
       </p>
       {rows.length === 0 ? (
         <div className="empty">Nothing has touched this identity yet.</div>

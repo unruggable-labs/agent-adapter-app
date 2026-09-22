@@ -124,7 +124,7 @@ input, textarea, select { font: inherit; color: inherit; }
 /* ------------------------------------------------------------------ header: search + account */
 
 .topbar {
-  display: grid; grid-template-columns: 1fr minmax(0, 560px) 1fr; align-items: center; gap: 16px;
+  display: grid; grid-template-columns: 1fr minmax(0, 760px) 1fr; align-items: center; gap: 16px;
   height: 54px; padding: 0 20px; flex-shrink: 0;
   background: var(--surface-1); border-bottom: 1px solid var(--border);
 }
