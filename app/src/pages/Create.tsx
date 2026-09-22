@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { encodeFunctionData, isAddress, type Address, type Hex } from "viem";
-import { Addr, Badge, Spinner, StandardBadge, Tip } from "../components/ui";
+import { Addr, Badge, Spinner, Tip } from "../components/ui";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, displayName, publicClient, shortHex } from "../lib/chain";
 import { canSend, revertReason, sendTx } from "../lib/tx";
@@ -159,7 +159,6 @@ function WalletFlow() {
   const [facts, setFacts] = useState<Facts | null>(null);
   const [probing, setProbing] = useState(false);
   const [standard, setStandard] = useState<number | null>(null);
-  const [suggested, setSuggested] = useState<{ standard: number; why: string } | null>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [ubid, setUbid] = useState<Hex | null>(null);
   const [mode, setMode] = useState<Mode>("claim");
@@ -176,7 +175,6 @@ function WalletFlow() {
   useEffect(() => {
     setFacts(null);
     setStandard(null);
-    setSuggested(null);
     setAuthorized(null);
     setUbid(null);
     setDone(null);
@@ -188,9 +186,7 @@ function WalletFlow() {
       .then((f) => {
         if (cancelled) return;
         setFacts(f);
-        const s = suggest(kind!, f, signer?.address ?? null);
-        setStandard(s.standard);
-        setSuggested(s);
+        setStandard(suggest(kind!, f, signer?.address ?? null).standard);
       })
       .finally(() => !cancelled && setProbing(false));
     return () => {
@@ -302,17 +298,11 @@ function WalletFlow() {
               ))}
             </select>
           </div>
-          <p className="hint" style={{ margin: "16px 0 0", lineHeight: 1.7 }}>
-            <StandardBadge name={info.name} /> <span> </span>{info.rule}{" "}
-            {suggested && suggested.standard === standard
-              ? <span className="t3">Suggested because: {suggested.why}</span>
-              : suggested && <span className="t3">You changed this from the suggested {BY_STANDARD[suggested.standard].name}. <button className="agent-link" onClick={() => setStandard(suggested.standard)}>Use the suggestion</button></span>}
-          </p>
 
           <dl className="kv" style={{ marginTop: 20 }}>
             <dt><Tip tip="The contract's own check, run here first: would counterfactualRegister succeed from your address right now? Wallets the owner has authorised on delegate.xyz pass here because this is the real call, simulated.">Authority</Tip></dt>
             <dd>
-              {!signer ? <span className="row"><Badge tone="outline">connect a wallet to check</Badge><span className="t2 small">the check runs as the connected wallet</span></span>
+              {!signer ? <span className="row"><Badge tone="outline">connect a wallet to check</Badge></span>
                 : authorized === null ? <Spinner /> : authorized
                 ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, true)}</span></span>
                 : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, false)}</span></span>}
