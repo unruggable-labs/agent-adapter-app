@@ -494,7 +494,7 @@ contract MyThing is Ownable {
 
 // Or AccessControl: holders of DEFAULT_ADMIN_ROLE control a CONTRACT_ADMIN identity.`;
   return (
-    <Step n={n} title="No new code, most likely">
+    <Step n={n} title="No new code">
       <p className="t2 small" style={{ margin: "0 0 10px" }}>The contract is the subject.</p>
       <div className="guide-label">What the adapter checks</div>
       <ul className="guide-list">
@@ -508,7 +508,7 @@ contract MyThing is Ownable {
         <li>Connect as the owner, authorised delegate, or admin,  and choose "I'll sign a transaction here" above.</li>
         <li>Select "A contract", and paste the contract's address.</li>
       </ol>
-      <p className="hint" style={{ margin: "22px 0 8px" }}>If it has neither yet, the smallest version:</p>
+      <p className="hint" style={{ margin: "22px 0 8px" }}>The simplest version looks like this:</p>
       <CodeBlock code={code} />
       <p className="hint" style={{ margin: "10px 0 0" }}>
         The owner can also authorise another wallet to act for them, so a hot wallet manages the identity while a cold wallet or multisig keeps the contract. That is done on delegate.xyz, a public registry the adapter reads.
@@ -531,9 +531,26 @@ function authorityDetail(kind: Kind, standard: number, f: Facts, you: Address | 
  * bound address and nothing else. So this step is instructions, not a button - the code to add,
  * or the exact call to send from a contract that can already execute arbitrary calls.
  */
-function ContractGuide({ n, adapter, contract, ubid, uri, setUri, you, title }: { n: number; adapter: Address; contract: Address | null; ubid: Hex | null; uri: string; setUri: (v: string) => void; you: Address | null; title?: string }) {
+function ContractGuide({ n, adapter, contract: known, ubid: knownUbid, uri, setUri, you, title }: { n: number; adapter: Address; contract: Address | null; ubid: Hex | null; uri: string; setUri: (v: string) => void; you: Address | null; title?: string }) {
   const { navigate } = useApp();
-  const [route, setRoute] = useState<"execute" | "code" | "delegate">(contract ? "execute" : "code");
+  const [route, setRoute] = useState<"execute" | "code" | "delegate">(known ? "execute" : "code");
+  // On the developer path the contract may not be deployed yet; an address typed here unlocks
+  // the exact calldata and the UBID it will get.
+  const [typed, setTyped] = useState("");
+  const [typedUbid, setTypedUbid] = useState<Hex | null>(null);
+  const contract: Address | null = known ?? (isAddress(typed) ? (typed.toLowerCase() as Address) : null);
+  const ubid = knownUbid ?? typedUbid;
+  useEffect(() => {
+    setTypedUbid(null);
+    if (known || !contract) return;
+    let cancelled = false;
+    publicClient.readContract({ address: adapter, abi: adapterAbi, functionName: "hashBinding", args: [5, contract, 0n] })
+      .then((h) => !cancelled && setTypedUbid(h as Hex))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [known, contract, adapter]);
   const agentURI = uri.trim() || "ipfs://…/agent.json";
   const target = contract ?? ZERO_ADDRESS;
   const registerData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualRegister", args: [5, target, 0n, agentURI] });
@@ -578,28 +595,43 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       <div className="guide-label">Three ways to make the call</div>
       <ul className="guide-list">
         <li><b>Add code to it</b> - a function that calls the adapter, gated like your other admin actions.</li>
-        <li><b>It can execute calls</b> - a Safe, a smart wallet, or any contract with an execute function sends the prebuilt call.{contract ? "" : " Needs the deployed address."}</li>
+        <li><b>It can execute calls</b> - a Safe, a smart wallet, or any contract with an execute function sends the prebuilt call.</li>
         <li><b>Delegate to my wallet</b> - the contract authorises your wallet to act for it (one call), then you manage the identity from here like any other.</li>
       </ul>
-      <div className="seg" style={{ margin: "0 0 12px" }}>
-        <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
-        <button className={route === "execute" ? "active" : ""} disabled={!contract} title={contract ? undefined : "Needs the deployed address"} onClick={() => setRoute("execute")}>It can execute calls</button>
-        <button className={route === "delegate" ? "active" : ""} onClick={() => setRoute("delegate")}>Delegate to my wallet</button>
+      <div className="row" style={{ justifyContent: "center", margin: "22px 0 14px" }}>
+        <div className="seg">
+          <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
+          <button className={route === "execute" ? "active" : ""} onClick={() => setRoute("execute")}>It can execute calls</button>
+          <button className={route === "delegate" ? "active" : ""} onClick={() => setRoute("delegate")}>Delegate to my wallet</button>
+        </div>
       </div>
 
       {route === "execute" && (
         <>
           <ol className="guide-list">
-            <li>Enter the agent URI; it is encoded into the register call.</li>
+            <li>Enter the {known ? "" : "contract's address and the "}agent URI; the URI is encoded into the register call.</li>
             <li>From the contract, send call 1: target the adapter, value 0, data as shown.</li>
             <li>Optionally send call 2, which names the contract as its own operating wallet.</li>
           </ol>
+          {!known && (
+            <div className="field" style={{ marginBottom: 10 }}>
+              <label>Contract address <span className="t3">(the calls are built for this address)</span></label>
+              <input className="input mono" placeholder="0x…" value={typed} onChange={(e) => setTyped(e.target.value.trim())} />
+              {typed && !isAddress(typed) && <span className="hint" style={{ color: "var(--danger)" }}>That's not an address.</span>}
+            </div>
+          )}
           <div className="field" style={{ marginBottom: 4 }}>
             <label>Agent URI <span className="t3">(encoded into the register call below)</span></label>
             <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
           </div>
-          <CallBlock label="1. Register" to={adapter} data={registerData} />
-          <CallBlock label="2. Link its wallet (optional)" to={adapter} data={walletData} />
+          {contract ? (
+            <>
+              <CallBlock label="1. Register" to={adapter} data={registerData} />
+              <CallBlock label="2. Link its wallet (optional)" to={adapter} data={walletData} />
+            </>
+          ) : (
+            <p className="hint" style={{ margin: "8px 0 0" }}>Enter the contract's address to see the exact calls.</p>
+          )}
         </>
       )}
       {route === "code" && (
