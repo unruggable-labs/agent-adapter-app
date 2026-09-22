@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Identity, TrustBase } from "../lib/api";
-import { scanAgentUrl, shortHex } from "../lib/chain";
+import { controlLine, displayName, scanAgentUrl, shortHex, shortTokenId } from "../lib/chain";
 
 /** Deterministic identity mark derived from the UBID - imagery that means something:
  *  the same identity renders the same face everywhere, forever. */
@@ -94,6 +94,39 @@ export function Addr({ value, n = 10 }: { value: string; n?: number }) {
     >
       {copied ? "copied" : shortHex(value, n)}
     </button>
+  );
+}
+
+/** A UBID as a table cell: the identity's mark and its short hash. */
+export function UbidCell({ ubid }: { ubid: string }) {
+  return (
+    <span className="row" style={{ gap: 8 }}>
+      <Avatar seed={ubid} size={20} />
+      <span className="mono t2">{shortHex(ubid, 10)}</span>
+    </span>
+  );
+}
+
+/** The standard pill, with the control relationship as its tooltip. */
+export function StandardBadge({ id }: { id: Identity }) {
+  return (
+    <Tip tip={`This identity is ${controlLine(id)}.`}>
+      <span className="badge badge-outline">{id.standardName}</span>
+    </Tip>
+  );
+}
+
+/** What controls an identity, as a table cell: the collection or account (its name when it has
+ *  one, else the address) and the token id for token standards. */
+export function ControllerCell({ id }: { id: Identity }) {
+  const stripped = (id.agentName ?? displayName(id)).replace(/ #\S+$/u, "");
+  return (
+    <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
+      {/^(0x|Account 0x)/.test(stripped)
+        ? <Addr value={id.boundAddress} n={8} />
+        : <span style={{ fontWeight: 600 }}>{stripped}</span>}
+      {id.standard < 5 && <span className="num t3 small">#{shortTokenId(id.tokenId)}</span>}
+    </span>
   );
 }
 

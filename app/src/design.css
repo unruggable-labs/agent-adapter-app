@@ -491,8 +491,8 @@ input, textarea, select { font: inherit; color: inherit; }
   .skel { animation: none; opacity: 0.75; }
 }
 /* placeholder rows are not rows you can open */
-.table.clickable tbody tr.skel-row { cursor: default; }
-.table.clickable tbody tr.skel-row:hover td { background: none; }
+.table.clickable tbody tr.skel-row, .table.clickable tbody tr.is-static { cursor: default; }
+.table.clickable tbody tr.skel-row:hover td, .table.clickable tbody tr.is-static:hover td { background: none; }
 .skel-row td { height: 36px; }
 
 .toast {

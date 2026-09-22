@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../lib/app-state";
-import { controlLine, displayName, shortHex, shortTokenId } from "../lib/chain";
-import { Addr, Avatar, Skeleton, StatusBadge, Tip } from "../components/ui";
+import { Addr, ControllerCell, Skeleton, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
 
 const PAGE_SIZE = 25;
 
@@ -40,24 +39,9 @@ export function IdentitiesPage() {
           <tbody>
             {visible.map((id) => (
               <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
-                <td>
-                  <span className="row" style={{ gap: 8 }}>
-                    <Avatar seed={id.ubid} size={20} />
-                    <span className="mono t2">{shortHex(id.ubid, 10)}</span>
-                  </span>
-                </td>
-                <td><Tip tip={`This identity is ${controlLine(id)}.`}><span className="badge badge-outline">{id.standardName}</span></Tip></td>
-                <td>
-                  <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
-                    {(() => {
-                      const stripped = (id.agentName ?? displayName(id)).replace(/ #\S+$/u, "");
-                      return /^(0x|Account 0x)/.test(stripped)
-                        ? <Addr value={id.boundAddress} n={8} />
-                        : <span style={{ fontWeight: 600 }}>{stripped}</span>;
-                    })()}
-                    {id.standard < 5 && <span className="num t3 small">#{shortTokenId(id.tokenId)}</span>}
-                  </span>
-                </td>
+                <td><UbidCell ubid={id.ubid} /></td>
+                <td><StandardBadge id={id} /></td>
+                <td><ControllerCell id={id} /></td>
                 <td><StatusBadge id={id} /></td>
                 <td className="td-center num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
                 <td className="td-center num">{id.reputation.stars || <span className="t3">0</span>}</td>

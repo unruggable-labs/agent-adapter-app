@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Addr, Badge, Spinner } from "../components/ui";
+import { Addr, Badge, ControllerCell, Spinner, StandardBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
-import { adapterAbi, displayName, shortHex } from "../lib/chain";
+import { adapterAbi, shortHex } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
 export function AttestationsPage() {
@@ -39,51 +39,55 @@ export function AttestationsPage() {
       </p>
 
       <div className="card table-scroll" style={{ padding: "4px 14px" }}>
-        <table className="table">
+        <table className="table clickable">
           <thead>
             <tr>
-              <th>Type</th><th>Target</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
+              <th>UBID</th><th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {shown.map((a) => (
-              <tr key={a.attestationId}>
-                <td><Badge tone="outline">{a.typeName}</Badge></td>
-                <td>
-                  {(() => {
-                    const target = identities.find((i) => i.ubid === a.ubid);
-                    if (target)
-                      return <button style={{ fontWeight: 600 }} onClick={() => navigate(`/identity/${a.ubid}`)}>{displayName(target)}</button>;
-                    return <span className="row" style={{ gap: 6 }}><span className="mono t3">{shortHex(a.ubid, 10)}</span><Badge tone="warn">unresolved</Badge></span>;
-                  })()}
-                </td>
-                <td><Addr value={a.attester} n={8} /></td>
-                <td className="mono t2" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {payloadPreview(a)}
-                </td>
-                <td className="td-right num">{a.order.blockNumber}</td>
-                <td>{a.revoked ? <Badge tone="danger">revoked</Badge> : <Badge tone="ok">live</Badge>}</td>
-                <td className="td-right">
-                  {a.attester === signer?.address && !a.revoked && (
-                    <button
-                      className="btn btn-sm btn-danger"
-                      disabled={busy === a.attestationId}
-                      onClick={async () => {
-                        setBusy(a.attestationId);
-                        const r = await sendTx(signer, overview.adapter, adapterAbi, "revoke", [a.attestationId]);
-                        toast(r.message);
-                        await settle(refresh);
-                        await load();
-                        setBusy(null);
-                      }}
-                    >
-                      {busy === a.attestationId ? <Spinner /> : "Revoke"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {shown.length === 0 && <tr><td colSpan={7}><div className="empty">Nothing here yet.</div></td></tr>}
+            {shown.map((a) => {
+              const target = identities.find((i) => i.ubid === a.ubid);
+              return (
+                <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
+                  <td>
+                    <span className="row" style={{ gap: 6 }}>
+                      <UbidCell ubid={a.ubid} />
+                      {!target && <Badge tone="warn" tip="No claim or binding matches this UBID yet. The statement is kept and gains meaning if one arrives.">unresolved</Badge>}
+                    </span>
+                  </td>
+                  <td><Badge tone="outline">{a.typeName}</Badge></td>
+                  <td>{target ? <StandardBadge id={target} /> : <span className="t3">—</span>}</td>
+                  <td>{target ? <ControllerCell id={target} /> : <span className="t3">—</span>}</td>
+                  <td><Addr value={a.attester} n={8} /></td>
+                  <td className="mono t2" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {payloadPreview(a)}
+                  </td>
+                  <td className="td-right num">{a.order.blockNumber}</td>
+                  <td>{a.revoked ? <Badge tone="danger">revoked</Badge> : <Badge tone="ok">live</Badge>}</td>
+                  <td className="td-right">
+                    {a.attester === signer?.address && !a.revoked && (
+                      <button
+                        className="btn btn-sm btn-danger"
+                        disabled={busy === a.attestationId}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setBusy(a.attestationId);
+                          const r = await sendTx(signer, overview.adapter, adapterAbi, "revoke", [a.attestationId]);
+                          toast(r.message);
+                          await settle(refresh);
+                          await load();
+                          setBusy(null);
+                        }}
+                      >
+                        {busy === a.attestationId ? <Spinner /> : "Revoke"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {shown.length === 0 && <tr><td colSpan={9}><div className="empty">Nothing here yet.</div></td></tr>}
           </tbody>
         </table>
       </div>
