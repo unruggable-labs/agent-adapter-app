@@ -18,8 +18,8 @@ tooltips kept to the fewest sentences that do the job.
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
   API core, also used by the Vercel function in `app/api/`.
 - `app/` — Vite/React UI (Linear/Stripe-register design, tokens in `src/design.css`, light
-  default + dark toggle). Dev-only: local-devnet network + anvil persona writes + a network
-  switch. Production picks Sepolia or Ethereum from the hostname; writes go through the user's
+  default + dark toggle). Dev-only: local-devnet network + anvil persona writes, chosen with
+  VITE_NETWORK=local. Production picks Sepolia or Ethereum from the hostname; writes go through the user's
   connected wallet (wagmi + Reown AppKit, needs VITE_WC_PROJECT_ID). Personas are devnet-only.
 - `contracts/` + `indexer/artifacts/` — vendored demo mock + build artifacts; regeneration
   from the contracts repo is documented in `indexer/src/abi.ts`.

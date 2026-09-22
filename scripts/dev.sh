@@ -2,7 +2,7 @@
 # The full local stack in one command:
 #   anvil devnet + seeded demo + indexer API on :8787
 #   live Sepolia indexer API on :8788
-#   the app on :5173 (Network selector in the sidebar)
+#   the app on :5173 - reads Sepolia unless VITE_NETWORK=local (env or app/.env.local)
 # Ctrl-C stops everything.
 set -euo pipefail
 cd "$(dirname "$0")/.."

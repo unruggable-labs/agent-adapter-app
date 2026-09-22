@@ -58,24 +58,17 @@ export type NetworkId = string;
  * Which network a deployed build serves is decided by its hostname: adapterscan.com is
  * Ethereum, testnet.adapterscan.com (and the older hostnames) is Sepolia. One static build
  * behind two hostnames, with Caddy routing /api to the matching indexer. In dev there is no
- * hostname to go by, so the sidebar's switch (persisted) picks.
+ * hostname to go by, so VITE_NETWORK picks (local | sepolia | mainnet), Sepolia by default.
  */
 const HOST_NETWORK: Record<string, NetworkId> = {
   "adapterscan.com": "mainnet",
   "www.adapterscan.com": "mainnet",
 };
-const stored = localStorage.getItem("aa-network");
+const devChoice = import.meta.env.VITE_NETWORK as string | undefined;
 export const networkId: NetworkId = import.meta.env.DEV
-  ? stored && NETWORKS[stored] ? stored : Object.keys(NETWORKS)[0]
+  ? devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
   : (HOST_NETWORK[location.hostname] ?? "sepolia");
 export const NETWORK = NETWORKS[networkId];
-
-/** Dev only: switch which backend the app reads. Clients are module-level, so a reload rebuilds
- *  everything consistently. Deployed builds take the network from the hostname instead. */
-export function switchNetwork(id: NetworkId) {
-  localStorage.setItem("aa-network", id);
-  location.reload();
-}
 
 export const RPC_URL = NETWORK.rpcUrl;
 

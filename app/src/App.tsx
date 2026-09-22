@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { SearchBar } from "./components/search";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, NETWORK, NETWORKS, networkId, shortHex, switchNetwork, type NetworkId } from "./lib/chain";
+import { ACTORS, NETWORK } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
@@ -92,7 +92,7 @@ function AppKitTheme({ theme }: { theme: string }) {
 }
 
 function Shell() {
-  const { route, overview, signer } = useApp();
+  const { route, overview } = useApp();
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -130,24 +130,6 @@ function Shell() {
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
-          {/* Which backend the app reads. Dev only: a deployed build takes its network from the
-              hostname (adapterscan.com vs testnet.adapterscan.com). The wallet's own network
-              menu is a different thing - it moves the wallet, not the indexer. */}
-          {import.meta.env.DEV && (
-            <>
-              <div className="nav-label" style={{ padding: "0 0 4px" }}>Network</div>
-              <select className="select" value={networkId} onChange={(e) => switchNetwork(e.target.value as NetworkId)}>
-                {Object.entries(NETWORKS).map(([id, n]) => (
-                  <option key={id} value={id}>{n.label}</option>
-                ))}
-              </select>
-            </>
-          )}
-          <div className="sidebar-meta" style={{ marginTop: 8 }}>
-            {NETWORK.personaWrites && <div className="mono t3">{shortHex(signer?.address ?? "", 12)}</div>}
-            <div style={{ marginTop: 4 }}>chain {overview?.chainId ?? "…"} · <span className="mono">{shortHex(overview?.adapter ?? "", 6)}</span></div>
-            {NETWORK.personaWrites && <div className="t3">local demo · anvil personas</div>}
-          </div>
         </div>
       </aside>
       <main className="main">
