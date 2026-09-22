@@ -115,7 +115,8 @@ function suggest(kind: Kind, f: Facts, you: Address | null): { standard: number;
   if (f.ownerOf) return { standard: 0, why: `ownerOf answers (${shortHex(f.ownerOf, 10)}), the ERC-721 rule.` };
   if (erc6909) return { standard: 2, why: "The contract reports ERC-6909 and ownerOf does not answer, so control is by balance." };
   if (erc1155) return { standard: 1, why: "The contract reports ERC-1155 and ownerOf does not answer, so control is by balance." };
-  return { standard: 0, why: "ownerOf reverts for this id - the token may not exist yet, or be burned. Only the collection contract can claim it right now." };
+  if (f.balance !== null && f.balance > 0n) return { standard: 1, why: "ownerOf does not answer but you hold a balance of this id, so this looks like a balance token." };
+  return { standard: 0, why: "ownerOf reverts for this id. Either the token doesn't exist yet (or is burned), in which case only the collection contract can claim it right now, or this is a balance token that doesn't advertise its interface - pick that rule if so." };
 }
 
 type Path = "wallet" | "developer";
@@ -133,7 +134,7 @@ export function CreatePage() {
           selected={path === "wallet"}
           onClick={() => setPath("wallet")}
           title="I'll sign a transaction here"
-          sub="For a token I hold, my own address, or a contract I already control."
+          sub="For a token I hold, my own address, or a contract I already control - including a Safe or smart wallet."
         />
         <Choice
           selected={path === "developer"}
@@ -247,10 +248,18 @@ function WalletFlow() {
 
   const info = standard !== null ? BY_STANDARD[standard] : null;
   const contractAsItself = kind === "contract" && standard === 5;
+  // An agent already minted for these coordinates: a second register would mint another.
+  const alreadyMinted = !!existing && existing.agentIds.length > 0;
+  const effectiveMode: Mode = alreadyMinted ? "claim" : mode;
 
   return (
     <>
       <Step n={2} title="What are you registering?">
+        {!signer && (
+          <p className="callout callout-warn" style={{ marginBottom: 12 }}>
+            <b>No wallet connected.</b> You can look things up, but the authority check and the claim need the wallet that will sign. Connect one at the top right.
+          </p>
+        )}
         <Choice selected={kind === "token"} onClick={() => setKind("token")} title="A token I hold" sub="An NFT or a token ID. The identity travels with the token." />
         <Choice
           selected={kind === "eoa"}
@@ -289,7 +298,7 @@ function WalletFlow() {
           <div className="row wrap" style={{ gap: 10 }}>
             <select className="select" style={{ width: "auto", maxWidth: "100%" }} value={standard} disabled={OFFERED[kind].length === 1} onChange={(e) => setStandard(Number(e.target.value))}>
               {OFFERED[kind].map((s) => (
-                <option key={s} value={s}>{BY_STANDARD[s].name} - {BY_STANDARD[s].short}</option>
+                <option key={s} value={s}>{BY_STANDARD[s].name} - {kind === "eoa" && s === 5 ? "the address itself" : BY_STANDARD[s].short}</option>
               ))}
             </select>
           </div>
@@ -303,7 +312,8 @@ function WalletFlow() {
           <dl className="kv" style={{ marginTop: 12 }}>
             <dt><Tip tip="The contract's own check, run here first: would counterfactualRegister succeed from your address right now? Wallets the owner has authorised on delegate.xyz pass here because this is the real call, simulated.">Authority</Tip></dt>
             <dd>
-              {authorized === null ? <Spinner /> : authorized
+              {!signer ? <span className="row"><Badge tone="outline">connect a wallet to check</Badge><span className="t2 small">the check runs as the connected wallet</span></span>
+                : authorized === null ? <Spinner /> : authorized
                 ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, true)}</span></span>
                 : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, false)}</span></span>}
             </dd>
@@ -314,8 +324,10 @@ function WalletFlow() {
           {existing && (
             <p className="callout callout-ok" style={{ marginTop: 12 }}>
               <b>This identity already exists.</b> {displayName(existing)} is {existing.agentIds.length ? "registered on-chain" : "claimed"} under exactly these
-              coordinates. <button className="agent-link" onClick={() => navigate(`/identity/${existing.ubid}`)}>Open its profile</button> - claiming
-              again restates the record rather than creating a second one.
+              coordinates. <button className="agent-link" onClick={() => navigate(`/identity/${existing.ubid}`)}>Open its profile</button>.{" "}
+              {existing.agentIds.length
+                ? "Claiming again restates the record. Registering again would mint a second ERC-8004 agent under the same UBID, so only claiming is offered below."
+                : "Claiming again restates the record; registering now mints the ERC-8004 agent under the same UBID and keeps everything already attached."}
             </p>
           )}
           {siblings.length > 0 && (
@@ -329,30 +341,30 @@ function WalletFlow() {
         </Step>
       )}
 
-      {kind && facts && standard !== null && authorized !== null && ubid && (kind === "eoa" || facts.hasCode) && (
+      {signer && kind && facts && standard !== null && authorized !== null && ubid && (kind === "eoa" || facts.hasCode) && (
         authorized ? (
           <Step n={kind === "eoa" ? 4 : 5} title="Claim it">
             <div className="seg" style={{ marginBottom: 12 }}>
-              <button className={mode === "claim" ? "active" : ""} onClick={() => setMode("claim")}>Claim (counterfactual)</button>
-              <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Register (mint an ERC-8004 agent)</button>
+              <button className={effectiveMode === "claim" ? "active" : ""} onClick={() => setMode("claim")}>Claim (counterfactual)</button>
+              <button className={effectiveMode === "register" ? "active" : ""} disabled={alreadyMinted} title={alreadyMinted ? "Already registered - a second register would mint another agent" : undefined} onClick={() => setMode("register")}>Register (mint an ERC-8004 agent)</button>
             </div>
             <p className="hint" style={{ marginTop: 0 }}>
-              {mode === "claim"
+              {effectiveMode === "claim"
                 ? "One cheap transaction; the identity lives in the event log. Reputation earned now carries over if you register later, because the UBID is the same."
                 : "Mints a real ERC-8004 agent on the shared registry, bound to this subject. Any history under this UBID joins automatically."}
             </p>
             <div className="field">
-              <label>Agent URI</label>
+              <label>Agent URI <span className="t3">(optional)</span></label>
               <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
-              <span className="hint">Where the agent's card lives. Whoever holds authority can change it later.</span>
+              <span className="hint">Where the agent's card lives. Leave it empty if you don't have one yet; whoever holds authority can set it later.</span>
             </div>
             <div className="row" style={{ marginTop: 14 }}>
               <button
                 className="btn btn-primary"
-                disabled={busy || !uri.trim()}
+                disabled={busy}
                 onClick={async () => {
                   setBusy(true);
-                  const fn = mode === "claim" ? "counterfactualRegister" : "register";
+                  const fn = effectiveMode === "claim" ? "counterfactualRegister" : "register";
                   const r = await sendTx(signer, adapter, adapterAbi, fn, [standard, bound, tokenId, uri.trim()]);
                   toast(r.ok ? r.message : revertReason(r.message));
                   if (r.ok) {
@@ -362,7 +374,7 @@ function WalletFlow() {
                   setBusy(false);
                 }}
               >
-                {busy ? <Spinner /> : mode === "claim" ? "Claim" : "Register"}
+                {busy ? <Spinner /> : effectiveMode === "claim" ? "Claim" : "Register"}
               </button>
               <span className="hint">Simulated first - a call that would fail never reaches your wallet.</span>
             </div>
@@ -378,7 +390,9 @@ function WalletFlow() {
                   : <>Connect as an address that holds the contract's DEFAULT_ADMIN_ROLE, or pick a different rule above.</>
                 : facts.ownerOf
                   ? <>Connect as the token's owner (<Addr value={facts.ownerOf} n={8} />), or have the owner authorise your address to act for them on delegate.xyz.</>
-                  : <>Hold a balance of this id from the connected wallet, or pick a different rule above.</>}
+                  : standard === 1 || standard === 2
+                    ? <>Hold a balance of this id from the connected wallet, or pick a different rule above.</>
+                    : <>This token has no owner right now - it doesn't exist yet, or it was burned. While that's true only the collection contract can claim it. If you're writing that contract, the "I'm writing a contract" path above shows how. If this is really a balance token, pick that rule above.</>}
             </p>
           </Step>
         )
@@ -500,7 +514,7 @@ contract MyThing is Ownable {
       <ol className="guide-list">
         <li>Make sure the contract implements OpenZeppelin's Ownable or AccessControl module.</li>
         <li>Deploy your contract.</li>
-        <li>Connect as the owner, authorised delegate, or admin,  and choose "I'll sign a transaction here" above.</li>
+        <li>Connect as the owner, authorised delegate, or admin, and choose "I'll sign a transaction here" above.</li>
         <li>Select "A contract", and paste the contract's address.</li>
       </ol>
       <p className="hint" style={{ margin: "22px 0 8px" }}>The simplest version looks like this:</p>
@@ -634,7 +648,7 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
           <ol className="guide-list">
             <li>Add a function that calls the adapter, gated the way your contract gates admin actions.</li>
             <li>Deploy, then call it once specifying your agent URI.</li>
-            <li>Optionally call the second function so the contract is set as its own operating wallet,.</li>
+            <li>Optionally call the second function so the contract is set as its own operating wallet.</li>
           </ol>
           <CodeBlock code={solidity} />
         </>
@@ -693,7 +707,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-function Choice({ selected, onClick, title, sub, disabled }: { selected: boolean; onClick: () => void; title: string; sub: string; disabled?: boolean }) {
+function Choice({ selected, onClick, title, sub, disabled }: { selected: boolean; onClick: () => void; title: string; sub: ReactNode; disabled?: boolean }) {
   return (
     <button className={`choice ${selected ? "selected" : ""}`} onClick={onClick} disabled={disabled}>
       <div className="c-title">{title}</div>
