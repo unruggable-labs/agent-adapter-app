@@ -10,15 +10,14 @@ import { CreatePage } from "./pages/Create";
 import { HowPage } from "./pages/How";
 import { IdentitiesPage } from "./pages/Identities";
 import { IdentityPage } from "./pages/Identity";
-import { LandingPage } from "./pages/Landing";
-import { WalletPage } from "./pages/Wallet";
 
 function NavItem({ to, label, count }: { to: string; label: string; count?: number }) {
   const { route, navigate } = useApp();
+  // Identities is home: "/" and every profile page light it up.
   const active =
     route === to ||
-    (to === "/identities" && route.startsWith("/identity")) ||
-    (to !== "/" && to !== "/identities" && route.startsWith(to));
+    (to === "/identities" && (route === "/" || route.startsWith("/identity"))) ||
+    (to !== "/identities" && route.startsWith(to));
   return (
     <button className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(to)}>
       {label}
@@ -100,12 +99,10 @@ function Shell() {
     localStorage.setItem("aa-theme", theme);
   }, [theme]);
 
-  let page = <LandingPage />;
+  let page = <IdentitiesPage />;
   if (route.startsWith("/identity/")) page = <IdentityPage ubid={route.split("/")[2]} />;
-  else if (route.startsWith("/identities")) page = <IdentitiesPage />;
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/create")) page = <CreatePage />;
-  else if (route.startsWith("/wallet")) page = <WalletPage />;
   // /how/<part> keeps the selected component in the URL, so a reload or a shared link lands
   // on the same explanation.
   else if (route.startsWith("/how")) page = <HowPage part={route.split("/")[2]} />;
@@ -123,12 +120,8 @@ function Shell() {
         </button>
 
         <div className="nav-label">Registry</div>
-        <NavItem to="/" label="Start here" />
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
-
-        <div className="nav-label">You</div>
-        <NavItem to="/wallet" label="My wallet" />
 
         <div className="nav-label">Learn</div>
         <NavItem to="/how" label="Agent identity" />

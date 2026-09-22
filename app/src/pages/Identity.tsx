@@ -55,6 +55,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
       <div className="stack">
         <Flags id={id} />
         <ConfirmBanner id={id} />
+        <WalletLinkBanner id={id} />
 
         <Section label="Reputation">
           <div className="stat-row" style={{ marginBottom: 14 }}>
@@ -179,6 +180,47 @@ function ConfirmBanner({ id }: { id: Identity }) {
         }}
       >
         {busy ? <Spinner /> : "Confirm"}
+      </button>
+    </Callout>
+  );
+}
+
+/**
+ * Shown to the wallet this agent names as its operating wallet. The agent's side of the link
+ * is a claim that needed no permission from the wallet; this is where the wallet answers.
+ * Confirming makes the link verified both ways. Unlinking withdraws the wallet's half.
+ */
+function WalletLinkBanner({ id }: { id: Identity }) {
+  const { signer, overview, refresh, toast } = useApp();
+  const [busy, setBusy] = useState(false);
+  if (!signer || !overview || !id.agentWallet || id.agentWallet !== signer.address) return null;
+
+  async function run(fn: string, args: unknown[]) {
+    setBusy(true);
+    const r = await sendTx(signer, overview!.adapter, adapterAbi, fn, args);
+    toast(r.message);
+    if (r.ok) await settle(refresh);
+    setBusy(false);
+  }
+
+  if (id.flags.walletUnverified)
+    return (
+      <Callout tone="warn" title="This agent names your address as its operating wallet.">
+        <span> </span>That's a claim by whoever controls the agent, and it proves nothing by itself. If this
+        really is your agent, confirm it and the link becomes verified both ways. Confirming moves
+        no assets and grants no authority; ignoring a false claim is always safe.
+        <span> </span>
+        <button className="btn btn-sm" disabled={busy} onClick={() => run("setWalletUBID", [id.standard, id.boundAddress, BigInt(id.tokenId)])}>
+          {busy ? <Spinner /> : "Confirm it's mine"}
+        </button>
+      </Callout>
+    );
+  return (
+    <Callout tone="ok" title="Your wallet is this agent's operating wallet, verified both ways.">
+      <span> </span>Anyone who checks your address will see it belongs to {displayName(id)}. Your wallet carries its reputation.
+      <span> </span>
+      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run("clearWalletUBID", [])}>
+        {busy ? <Spinner /> : "Unlink"}
       </button>
     </Callout>
   );
@@ -513,8 +555,8 @@ function ManageForm({
           </div>
         )}
         <p className="hint" style={{ marginTop: 12, marginBottom: 0 }}>
-          To use a different address, that address has to speak for itself - open{" "}
-          <b>My wallet</b> while connected as it and confirm this agent's claim.
+          To use a different address, that address has to speak for itself: connect as it, open
+          this profile, and confirm the claim in the banner at the top.
         </p>
       </Section>
 
