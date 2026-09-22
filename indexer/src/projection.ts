@@ -411,7 +411,7 @@ export class ProjectionStore {
     // Stream classes accumulate all live statements, each individually valid or not at read.
     const reviews = [...this.attestations.values()]
       .filter((a) => !a.revoked && a.ubid === ubid && a.attestationType === AttestationType.REVIEW && a.data !== "0x")
-      .map((a) => ({ attester: a.attester, text: hexToUtf8(a.data), order: a.order, attestationId: a.attestationId }));
+      .map((a) => ({ attester: a.attester, text: hexToUtf8(a.data), order: a.order, attestationId: a.attestationId, reference: a.variant }));
 
     const interactions = [...this.attestations.values()]
       .filter((a) => !a.revoked && a.ubid === ubid && a.attestationType === AttestationType.INTERACTION)

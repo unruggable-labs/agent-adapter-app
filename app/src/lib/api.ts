@@ -26,7 +26,9 @@ export interface Reputation {
   starredBy?: Address[];
   ratingAverage: number | null;
   ratings: { attester: Address; value: number }[];
-  reviews: { attester: Address; text: string; attestationId: Hex; order: Order }[];
+  /** `reference` is the statement's variant slot - the transaction it is about, or zero. Optional:
+   *  an indexer that predates this field simply omits it. */
+  reviews: { attester: Address; text: string; attestationId: Hex; order: Order; reference?: Hex }[];
   interactions: { attester: Address; attestationId: Hex; score: number; reference: Hex; text: string; order: Order }[];
   confirmedAccounts: { attester: Address; verified: boolean }[];
 }

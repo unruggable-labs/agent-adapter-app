@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, AgentIds, Avatar, Badge, Callout, Modal, Section, SignalCallout, signalsFor, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
+import { Addr, AgentIds, Avatar, Badge, Callout, Section, SignalCallout, signalsFor, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
 import type { Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
@@ -67,7 +67,10 @@ export function IdentityPage({ ubid }: { ubid: string }) {
           {id.reputation.reviews.map((r) => (
             <div key={r.attestationId} className="review-item">
               <div>"{r.text}"</div>
-              <div className="t3 small">— <span className="mono">{shortHex(r.attester, 8)}</span> · block {r.order.blockNumber}</div>
+              <div className="t3 small">
+                — <span className="mono">{shortHex(r.attester, 8)}</span> · block {r.order.blockNumber}
+                {r.reference && r.reference !== ZERO32 && <> · ref <span className="mono">{shortHex(r.reference, 10)}</span></>}
+              </div>
             </div>
           ))}
           {id.reputation.interactions.map((x) => (
@@ -179,15 +182,17 @@ function ConfirmBanner({ id }: { id: Identity }) {
   );
 }
 
-/** One attest() call. Shared by the star toggle, the feedback form and the transaction modal. */
+/** One attest() call. Shared by the star toggle and the feedback form. `reference` fills the
+ *  contract's caller-interpreted `variant` slot - here, the hash of the transaction the
+ *  statement is about, or zero when there isn't one. */
 function useAttest(id: Identity) {
   const { signer, overview, refresh, toast } = useApp();
   const [busy, setBusy] = useState(false);
 
-  async function attest(type: number, data: Hex) {
+  async function attest(type: number, data: Hex, reference: Hex = ZERO32) {
     if (!overview) return false;
     setBusy(true);
-    const r = await sendTx(signer, overview.adapter, adapterAbi, "attest", [type, id.ubid, ZERO32, data]);
+    const r = await sendTx(signer, overview.adapter, adapterAbi, "attest", [type, id.ubid, reference, data]);
     toast(r.ok ? `Attested - ${r.message}` : r.message);
     if (r.ok) await settle(refresh);
     setBusy(false);
@@ -246,35 +251,41 @@ export function StarButton({ id }: { id: Identity }) {
   );
 }
 
+const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+const COUNT_WORDS = ["", "One", "Two", "Three"];
+
 /**
- * Rating and review in one form. They are separate attestation types and `attest` takes one type
- * per call, so writing a review means two transactions - said up front rather than discovered
- * when the second wallet prompt appears.
+ * Rating, review and transaction in one form. They are separate attestation types and `attest`
+ * takes one type per call, so each part is its own wallet prompt - said up front rather than
+ * discovered when the second one appears. A transaction hash, when given, goes into the
+ * reference slot of every statement sent, and additionally produces the scored transaction
+ * record that points at it.
  */
 function AttestPanel({ id }: { id: Identity }) {
   const { attest, busy, signer, ready } = useAttest(id);
   const [rating, setRating] = useState(80);
   const [text, setText] = useState("");
-  const [showInteraction, setShowInteraction] = useState(false);
+  const [reference, setReference] = useState("");
 
   if (!ready) return null;
   const review = text.trim();
+  const ref = reference.trim();
+  const refValid = ref === "" || TX_HASH.test(ref);
+  const txHash = (refValid && ref ? ref.toLowerCase() : ZERO32) as Hex;
+  const hasTx = txHash !== ZERO32;
+
+  const parts = ["the rating", ...(review ? ["the review"] : []), ...(hasTx ? ["the transaction record"] : [])];
 
   async function submit() {
-    if (!(await attest(ATTESTATION_TYPES.RATING, toByteHex(rating)))) return;
-    if (!review) return;
-    if (await attest(ATTESTATION_TYPES.REVIEW, utf8ToHex(review))) setText("");
+    if (!(await attest(ATTESTATION_TYPES.RATING, toByteHex(rating), txHash))) return;
+    if (review && !(await attest(ATTESTATION_TYPES.REVIEW, utf8ToHex(review), txHash))) return;
+    if (hasTx && !(await attest(ATTESTATION_TYPES.INTERACTION, (toByteHex(rating) + txHash.slice(2)) as Hex, txHash))) return;
+    setText("");
+    setReference("");
   }
 
   return (
-    <Section
-      label={signer ? `Leave feedback as ${signer.label}` : "Leave feedback (connect a wallet)"}
-      actions={
-        <button className="btn btn-sm" disabled={!signer} onClick={() => setShowInteraction(true)}>
-          Record transaction
-        </button>
-      }
-    >
+    <Section label={signer ? `Leave feedback as ${signer.label}` : "Leave feedback (connect a wallet)"}>
       <div className="field">
         <label>Rating</label>
         <div className="row">
@@ -294,51 +305,8 @@ function AttestPanel({ id }: { id: Identity }) {
         />
       </div>
 
-      <div className="row" style={{ marginTop: 8 }}>
-        <button className="btn btn-primary" disabled={busy || !signer} onClick={submit}>
-          {busy ? <Spinner /> : review ? "Submit rating and review" : "Submit rating"}
-        </button>
-        <span className="hint">
-          {review
-            ? "Two transactions: the rating, then the review. They are separate records on-chain."
-            : "One transaction. Write something above to publish a review alongside it."}
-        </span>
-      </div>
-
-      {showInteraction && <InteractionModal id={id} onClose={() => setShowInteraction(false)} />}
-    </Section>
-  );
-}
-
-/** Recording a transaction is evidence, not opinion: it carries the tx hash that proves it
- *  happened, which is the only thing separating it from a review. Its own dialog, so the field
- *  that matters is not buried in a tab. */
-function InteractionModal({ id, onClose }: { id: Identity; onClose: () => void }) {
-  const { attest, busy } = useAttest(id);
-  const [score, setScore] = useState(90);
-  const [reference, setReference] = useState("");
-  const [note, setNote] = useState("");
-
-  const ref = reference.trim();
-  const refValid = ref === "" || /^0x[0-9a-fA-F]{64}$/.test(ref);
-  const refWord = (refValid && ref ? ref : ZERO32).slice(2).toLowerCase();
-
-  return (
-    <Modal title="Record a transaction" onClose={onClose}>
-      <p className="t2 small" style={{ margin: "0 0 14px" }}>
-        A record of a transaction you had with this agent.
-      </p>
-
       <div className="field">
-        <label>Rating</label>
-        <div className="row">
-          <input type="range" min={0} max={100} value={score} onChange={(e) => setScore(Number(e.target.value))} style={{ width: 180 }} />
-          <span className="num" style={{ width: 34, fontWeight: 600 }}>{score}</span>
-        </div>
-      </div>
-
-      <div className="field">
-        <label>Transaction hash</label>
+        <label>Transaction hash <span className="t3">(optional)</span></label>
         <input
           className="input mono"
           placeholder="0x…"
@@ -348,34 +316,23 @@ function InteractionModal({ id, onClose }: { id: Identity; onClose: () => void }
         <span className="hint" style={!refValid ? { color: "var(--danger)" } : undefined}>
           {!refValid
             ? "A transaction hash is 0x followed by 64 hex characters."
-            : ref
-              ? "Anyone reading this record can check the hash against the chain."
-              : "Optional, but recommended."}
+            : hasTx
+              ? "Attached to everything you submit here. Anyone reading it can check the hash against the chain."
+              : "The transaction you had with this agent, if there was one. It turns an opinion into a record."}
         </span>
       </div>
 
-      <div className="field">
-        <label>Note</label>
-        <input className="input" placeholder="Optional note about this transaction" value={note} onChange={(e) => setNote(e.target.value)} />
-      </div>
-
-      <div className="row" style={{ marginTop: 14 }}>
-        <button
-          className="btn btn-primary"
-          disabled={busy || !refValid}
-          onClick={async () => {
-            const ok = await attest(
-              ATTESTATION_TYPES.INTERACTION,
-              (toByteHex(score) + refWord + utf8ToHex(note).slice(2)) as Hex,
-            );
-            if (ok) onClose();
-          }}
-        >
-          {busy ? <Spinner /> : "Record transaction"}
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="btn btn-primary" disabled={busy || !signer || !refValid} onClick={submit}>
+          {busy ? <Spinner /> : parts.length > 1 ? "Submit feedback" : "Submit rating"}
         </button>
-        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <span className="hint">
+          {parts.length === 1
+            ? "One transaction. Add a review or a hash above to publish more alongside it."
+            : `${COUNT_WORDS[parts.length]} transactions: ${parts.join(", then ")}. They are separate records on-chain.`}
+        </span>
       </div>
-    </Modal>
+    </Section>
   );
 }
 
