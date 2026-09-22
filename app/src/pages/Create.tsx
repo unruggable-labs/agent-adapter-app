@@ -457,27 +457,25 @@ contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1
         <li>Call the adapter inside <span className="mono">mint()</span>, before <span className="mono">_mint</span>, as in the code below.</li>
         <li>Optionally expose the UBID. It is computable before the token exists, so it can go in the token's metadata.</li>
       </ol>
-      <div className="row wrap" style={{ gap: 10, marginBottom: 10 }}>
-        <label className="row" style={{ gap: 8 }}>
-          <span className="hint">Token standard</span>
-          <select className="select" style={{ width: "auto" }} value={standard} onChange={(e) => setStandard(Number(e.target.value) as 0 | 3 | 4)}>
+      <div className="field-grid">
+        <div className="field">
+          <label>Token standard</label>
+          <select className="select" value={standard} onChange={(e) => setStandard(Number(e.target.value) as 0 | 3 | 4)}>
             <option value={0}>ERC721</option>
             <option value={3}>ERC1155F - ERC-1155 with ownerOf</option>
             <option value={4}>ERC6909F - ERC-6909 with ownerOf</option>
           </select>
-        </label>
-        <label className="row" style={{ gap: 8 }}>
-          <span className="hint">Per token</span>
-          <select className="select" style={{ width: "auto" }} value={full ? "register" : "claim"} onChange={(e) => setFull(e.target.value === "register")}>
-            <option value="claim">claim (event only, cheap)</option>
-            <option value="register">register (mints an ERC-8004 agent)</option>
+          <span className="hint">Only the single-owner standards have the window: plain ERC-1155 and ERC-6909 control by balance, so there is no ownerless moment.</span>
+        </div>
+        <div className="field">
+          <label>Per token</label>
+          <select className="select" value={full ? "register" : "claim"} onChange={(e) => setFull(e.target.value === "register")}>
+            <option value="claim">Claim (event only, cheap)</option>
+            <option value="register">Register (mints an ERC-8004 agent)</option>
           </select>
-        </label>
+          <span className="hint">{full ? "Registering at mint costs an ERC-8004 mint per token. The UBID is the same either way." : "A claim is one event per mint. Anyone can register fully later under the same UBID."}</span>
+        </div>
       </div>
-      <p className="hint" style={{ margin: "0 0 8px" }}>
-        Only the single-owner standards have this window: plain ERC-1155 and ERC-6909 control by balance, so
-        there is no ownerless moment. {full ? "Registering at mint costs an ERC-8004 mint per token; the UBID is the same either way." : "A claim is one event per mint. Anyone can register fully later under the same UBID."}
-      </p>
       <CodeBlock code={code} />
       <div className="callout callout-warn" style={{ marginTop: 14 }}>
         <b>The window reopens after a burn.</b> A collection that burns a token and re-claims its identity is
@@ -653,9 +651,8 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       {route === "delegate" && (
         <>
           <ol className="guide-list">
-            <li>From the contract, call the delegate.xyz registry as below. It records that your wallet may act for the contract where the adapter is concerned, and nothing else.</li>
+            <li>From the contract, call the delegate.xyz registry as below. It records that your wallet may act on behalf of your contract.</li>
             <li>Come back here with that wallet connected and choose <b>I'll sign a transaction here</b>, then <b>A contract</b>, and paste the contract's address.</li>
-            <li>The wizard will see the delegation, preselect <b>ACCOUNT</b> (the contract itself) and show "you pass". From there the claim, and everything after it, is a normal transaction.</li>
           </ol>
           <CodeBlock code={delegateNote} />
         </>

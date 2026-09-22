@@ -251,6 +251,11 @@ input, textarea, select { font: inherit; color: inherit; }
 .guide-list + .field, .guide-list + .codeblock, .guide-list + .callblock, .guide-list + .callout,
 .guide-list + p, .guide-list + .row, .guide-list + .seg { margin-top: 18px; }
 .guide-label + .guide-list { margin-top: 0; }
+/* Two fields side by side, each with its label above and its hint below; stacks when narrow. */
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; align-items: start; margin-top: 18px; }
+.field-grid > .field + .field { margin-top: 0; } /* the stacked-field rule doesn't apply across columns */
+.field-grid + .codeblock { margin-top: 18px; }
+@media (max-width: 720px) { .field-grid { grid-template-columns: 1fr; } }
 .field + .codeblock, .field + .callblock, .field + p.hint { margin-top: 14px; }
 .callblock + .callblock { margin-top: 12px; }
 .codeblock { position: relative; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
