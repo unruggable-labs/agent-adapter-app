@@ -104,6 +104,15 @@ export const ATTESTATION_TYPES = { CONFIRM_ACCOUNT: 1, STAR: 2, RATING: 3, REVIE
 
 export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 
+/** 8004Scan's chain slugs. A chain it doesn't index (the local devnet) gets no link. */
+const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia" };
+
+/** The 8004Scan page for an ERC-8004 agent id on the current network, or null when there isn't one. */
+export function scanAgentUrl(agentId: string): string | null {
+  const slug = SCAN_SLUGS[NETWORK.chain.id];
+  return slug ? `https://8004scan.io/agents/${slug}/${agentId}` : null;
+}
+
 /** Persona name for a known demo address — how the local demo stands in for ENS/profiles. */
 export function personaName(address: string): string | null {
   return ACTORS.find((a) => a.address === address.toLowerCase())?.name ?? null;

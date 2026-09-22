@@ -186,6 +186,10 @@ input, textarea, select { font: inherit; color: inherit; }
 .badge-danger { background: var(--danger-bg); color: var(--danger); }
 .badge-outline { background: transparent; border-color: var(--border-strong); }
 
+/* An ERC-8004 id that opens on 8004Scan. Inherits the badge's colour so the pill stays one tone. */
+.agent-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+.agent-link:hover { text-decoration-style: solid; }
+
 /* ------------------------------------------------------------------ stats */
 
 .stat-row { display: flex; gap: 32px; flex-wrap: wrap; }

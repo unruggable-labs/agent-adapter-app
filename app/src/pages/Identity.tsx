@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, Avatar, Badge, Callout, Modal, Section, SignalCallout, signalsFor, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
+import { Addr, AgentIds, Avatar, Badge, Callout, Modal, Section, SignalCallout, signalsFor, Spinner, Stat, StatusBadge, TrustBadge } from "../components/ui";
 import type { Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
@@ -107,7 +107,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
               ) : <span className="t3">not set</span>}
             </dd>
             <dt>ERC-8004 agent</dt>
-            <dd>{id.agentIds.length ? `#${id.agentIds.join(", #")}` : <span className="t3">not registered</span>}</dd>
+            <dd>{id.agentIds.length ? <AgentIds ids={id.agentIds} /> : <span className="t3">not registered</span>}</dd>
             <dt>Last event</dt>
             <dd className="small t2">
               {id.lastEvent

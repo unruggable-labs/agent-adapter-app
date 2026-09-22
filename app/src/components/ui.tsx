@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Identity, TrustBase } from "../lib/api";
-import { shortHex } from "../lib/chain";
+import { scanAgentUrl, shortHex } from "../lib/chain";
 
 /** Deterministic identity mark derived from the UBID - imagery that means something:
  *  the same identity renders the same face everywhere, forever. */
@@ -118,11 +118,36 @@ export function Section({ label, children, actions }: { label: string; children:
   );
 }
 
+/** An identity's ERC-8004 agent ids, each linking out to its 8004Scan page in a new tab. Plain
+ *  text on a network 8004Scan doesn't index. Clicks stop at the link so a clickable table row
+ *  underneath doesn't also navigate. */
+export function AgentIds({ ids }: { ids: string[] }) {
+  return (
+    <>
+      {ids.map((agentId, i) => {
+        const url = scanAgentUrl(agentId);
+        return (
+          <span key={agentId}>
+            {i > 0 && ", "}
+            {url ? (
+              <a className="agent-link" href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                #{agentId}
+              </a>
+            ) : (
+              <>#{agentId}</>
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 export function StatusBadge({ id }: { id: Identity }) {
   if (id.agentIds.length)
     return (
-      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with id #${id.agentIds.join(", #")}.`}>
-        <span className="dot" /> ERC-8004 #{id.agentIds.join(",")}
+      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with id #${id.agentIds.join(", #")}. Click the id to open it on 8004Scan.`}>
+        <span className="dot" /> ERC-8004 <AgentIds ids={id.agentIds} />
       </Badge>
     );
   if (id.claimed)
