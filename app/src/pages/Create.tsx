@@ -53,6 +53,8 @@ interface Facts {
   supports: { erc721: boolean; erc1155: boolean; erc6909: boolean };
   owner: Address | null; // contract standards: owner()
   isAdmin: boolean; // contract standards: hasRole(DEFAULT_ADMIN_ROLE, you)
+  /** contract: the connected wallet passes the ACCOUNT rule - it has been authorised via delegate.xyz. */
+  isAccountDelegate: boolean;
 }
 
 const probeAbi = [
@@ -70,11 +72,11 @@ async function read<T>(address: Address, functionName: string, args: unknown[] =
   return publicClient.readContract({ address, abi: probeAbi, functionName: functionName as never, args: args as never }).then((v) => v as T).catch(() => null);
 }
 
-async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: Address | null): Promise<Facts> {
+async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: Address | null, accountDelegate: () => Promise<boolean>): Promise<Facts> {
   const code = await publicClient.getCode({ address }).catch(() => undefined);
   const hasCode = !!code && code !== "0x";
   const me = you ?? ZERO_ADDRESS;
-  const [name, ownerOf, balance, erc721, erc1155, erc6909, owner, isAdmin] = await Promise.all([
+  const [name, ownerOf, balance, erc721, erc1155, erc6909, owner, isAdmin, isAccountDelegate] = await Promise.all([
     hasCode ? read<string>(address, "name") : null,
     kind === "token" ? read<Address>(address, "ownerOf", [tokenId]) : null,
     kind === "token" ? read<bigint>(address, "balanceOf", [me, tokenId]) : null,
@@ -83,6 +85,7 @@ async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: A
     kind === "token" ? read<boolean>(address, "supportsInterface", ["0x0f632fb3"]) : null,
     kind === "contract" ? read<Address>(address, "owner") : null,
     kind === "contract" && you ? read<boolean>(address, "hasRole", [ZERO_ROLE, you]) : null,
+    kind === "contract" && you && hasCode ? accountDelegate().catch(() => false) : false,
   ]);
   return {
     hasCode,
@@ -92,6 +95,7 @@ async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: A
     supports: { erc721: !!erc721, erc1155: !!erc1155, erc6909: !!erc6909 },
     owner: owner && owner !== ZERO_ADDRESS ? (owner.toLowerCase() as Address) : null,
     isAdmin: !!isAdmin,
+    isAccountDelegate: !!isAccountDelegate,
   };
 }
 
@@ -99,6 +103,7 @@ async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: A
 function suggest(kind: Kind, f: Facts, you: Address | null): { standard: number; why: string } {
   if (kind === "eoa") return { standard: 5, why: "Your own address: only it can speak for itself." };
   if (kind === "contract") {
+    if (f.isAccountDelegate) return { standard: 5, why: "The contract has authorised your wallet to act for it on delegate.xyz, so you can speak as the contract itself." };
     if (f.owner && you && f.owner === you) return { standard: 6, why: "The contract's owner() is your address." };
     if (f.isAdmin) return { standard: 7, why: "Your address holds the contract's DEFAULT_ADMIN_ROLE." };
     if (f.owner) return { standard: 6, why: `The contract has an owner() - ${shortHex(f.owner, 10)} - which isn't you.` };
@@ -177,7 +182,8 @@ function WalletFlow() {
     if (!coordsReady || !bound || tokenId === null) return;
     let cancelled = false;
     setProbing(true);
-    gatherFacts(kind!, bound, tokenId, signer?.address ?? null)
+    gatherFacts(kind!, bound, tokenId, signer?.address ?? null, () =>
+      adapter ? canSend(signer, adapter, adapterAbi, "counterfactualRegister", [5, bound, 0n, "preflight"]) : Promise.resolve(false))
       .then((f) => {
         if (cancelled) return;
         setFacts(f);
@@ -189,7 +195,7 @@ function WalletFlow() {
     return () => {
       cancelled = true;
     };
-  }, [kind, bound, tokenId, signer?.address]);
+  }, [kind, bound, tokenId, signer?.address, adapter]);
 
   // Step 3 settled: the UBID for these exact coordinates, and whether you would pass the
   // contract's own check - by simulating the real call, not by re-implementing the rule.
@@ -521,7 +527,7 @@ function authorityDetail(kind: Kind, standard: number, f: Facts, you: Address | 
   if (kind === "eoa") return "an ACCOUNT identity authorises exactly its own address, and you are it";
   if (standard === 6) return f.owner ? `owner() is ${shortHex(f.owner, 10)}${f.owner === you ? ", your address" : ""}` : "the contract does not answer owner()";
   if (standard === 7) return f.isAdmin ? "your address holds DEFAULT_ADMIN_ROLE" : "your address does not hold DEFAULT_ADMIN_ROLE";
-  if (standard === 5) return pass ? "the contract has delegated to your address" : "only the contract itself passes, or a wallet the contract has authorised on delegate.xyz";
+  if (standard === 5) return pass ? "the contract has authorised your wallet on delegate.xyz" : "only the contract itself passes, or a wallet the contract has authorised on delegate.xyz";
   if (standard === 1 || standard === 2) return f.balance !== null ? `your balance of this id is ${f.balance}` : "the contract does not answer balanceOf for this id";
   return f.ownerOf ? `ownerOf is ${shortHex(f.ownerOf, 10)}${f.ownerOf === you ? ", your address" : pass ? ", who has authorised your wallet on delegate.xyz" : ""}` : "ownerOf reverts for this id";
 }
@@ -590,17 +596,17 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       <ul className="guide-list">
         <li>Bound as <b>ACCOUNT</b>, the identity is controlled by the address itself: the caller must <i>be</i> the contract.</li>
         <li>No wallet can do this on its behalf, unless the contract has first authorised that wallet to act for it on delegate.xyz, a public registry the adapter reads.</li>
-        <li>The token id is always 0 for ACCOUNT.</li>
+        <li>The token ID is always 0 for ACCOUNT.</li>
       </ul>
       <div className="guide-label">Three ways to make the call</div>
       <ul className="guide-list">
-        <li><b>Add code to it</b> - a function that calls the adapter, gated like your other admin actions.</li>
+        <li><b>Add code to your contract</b> - a function that calls the adapter, gated like your other admin actions.</li>
         <li><b>It can execute calls</b> - a Safe, a smart wallet, or any contract with an execute function sends the prebuilt call.</li>
-        <li><b>Delegate to my wallet</b> - the contract authorises your wallet to act for it (one call), then you manage the identity from here like any other.</li>
+        <li><b>Delegate to my wallet</b> - the contract authorises your wallet to act on its behalf.</li>
       </ul>
       <div className="row" style={{ justifyContent: "center", margin: "22px 0 14px" }}>
         <div className="seg">
-          <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
+          <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code</button>
           <button className={route === "execute" ? "active" : ""} onClick={() => setRoute("execute")}>It can execute calls</button>
           <button className={route === "delegate" ? "active" : ""} onClick={() => setRoute("delegate")}>Delegate to my wallet</button>
         </div>
@@ -610,8 +616,8 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
         <>
           <ol className="guide-list">
             <li>Enter the {known ? "" : "contract's address and the "}agent URI; the URI is encoded into the register call.</li>
-            <li>From the contract, send call 1: target the adapter, value 0, data as shown.</li>
-            <li>Optionally send call 2, which names the contract as its own operating wallet.</li>
+            <li>From your contract call the adapter, with value 0, and data as shown.</li>
+            <li>Optionally execute the second transaction, which names the contract as its own operating wallet.</li>
           </ol>
           {!known && (
             <div className="field">
@@ -638,8 +644,8 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
         <>
           <ol className="guide-list">
             <li>Add a function that calls the adapter, gated the way your contract gates admin actions.</li>
-            <li>Deploy, then call it once with the agent URI.</li>
-            <li>Optionally call the second function so the contract is its own operating wallet, verified both ways in one call.</li>
+            <li>Deploy, then call it once specifying your agent URI.</li>
+            <li>Optionally call the second function so the contract is set as its own operating wallet,.</li>
           </ol>
           <CodeBlock code={solidity} />
         </>
@@ -648,22 +654,12 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
         <>
           <ol className="guide-list">
             <li>From the contract, call the delegate.xyz registry as below. It records that your wallet may act for the contract where the adapter is concerned, and nothing else.</li>
-            <li>Come back with that wallet connected: the claim, and everything after it, is a normal transaction here.</li>
+            <li>Come back here with that wallet connected and choose <b>I'll sign a transaction here</b>, then <b>A contract</b>, and paste the contract's address.</li>
+            <li>The wizard will see the delegation, preselect <b>ACCOUNT</b> (the contract itself) and show "you pass". From there the claim, and everything after it, is a normal transaction.</li>
           </ol>
           <CodeBlock code={delegateNote} />
         </>
       )}
-
-      <div className="callout" style={{ marginTop: 14 }}>
-        <b>Then come back.</b>{" "}
-        {ubid ? (
-          <>Once the call lands, the identity appears here under its UBID{" "}
-            <span className="mono small" style={{ overflowWrap: "anywhere" }}>{ubid}</span>.{" "}
-            <button className="agent-link" onClick={() => navigate(`/identity/${ubid}`)}>Its profile page</button> will show it as soon as the indexer sees the event.</>
-        ) : (
-          <>Once the contract is deployed and has made the call, search its address here: the identity appears under a UBID computed from the contract address, and nothing else.</>
-        )}
-      </div>
     </Step>
   );
 }
