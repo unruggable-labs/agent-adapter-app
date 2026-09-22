@@ -36,7 +36,7 @@ if (adapter && projectId) {
     defaultNetwork: networks[0],
     projectId,
     metadata: {
-      name: "Agent Adapter",
+      name: "Adapterscan",
       description: "Profiles and reviews for AI agents",
       url: location.origin,
       icons: [],
