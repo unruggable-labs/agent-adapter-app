@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Address, Hex } from "viem";
 import { isAddress } from "viem";
-import { Addr, Badge, isReassuringSignal, SignalCallout, Spinner, StandardBadge, Tip, trustSignal, TrustBadge } from "../components/ui";
+import { Addr, Badge, Spinner, StandardBadge, Tip } from "../components/ui";
 import { api, type TrustBase } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, erc721Abi, publicClient, shortHex } from "../lib/chain";
@@ -128,23 +128,10 @@ export function CreatePage() {
                   ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{probe.detail}</span></span>
                   : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{probe.detail}</span></span>}
               </dd>
-              {probe.trust && !probe.trust.isEoa && (
-                <>
-                  <dt><Tip tip="What the subject contract's code allows that could affect this identity later - burnable tokens, upgradeability, arbitrary calls. Binding adopts the contract's rules, so read this before you sign.">Trust base</Tip></dt>
-                  <dd><TrustBadge t={probe.trust} /></dd>
-                </>
-              )}
               <dt><Tip tip="The identity's permanent name - a hash the live contract computes from exactly these details. It never changes, and it's the same whether you claim now or register fully later, so anything attached to it carries over.">UBID</Tip></dt>
               <dd className="mono" style={{ overflowWrap: "anywhere" }}>{probe.ubid ?? "—"}</dd>
             </dl>
           </div>
-
-          {/* Binding adopts the controller's rules, so disclose them in the same words the
-              profile and the table will use once this identity exists. */}
-          {(() => {
-            const k = trustSignal(probe.trust);
-            return k && !isReassuringSignal(k) ? <SignalCallout k={k} /> : null;
-          })()}
 
           {probe.youAreAuthorized && (
             <div className="card" style={{ marginTop: 14 }}>

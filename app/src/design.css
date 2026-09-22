@@ -618,29 +618,12 @@ input, textarea, select { font: inherit; color: inherit; }
   border-radius: var(--r-md); padding: 8px 11px;
   font-size: 11.5px; line-height: 1.45; font-weight: 400;
   font-family: var(--font); letter-spacing: 0; text-transform: none;
-  /* pre-line so a signal's caveat can sit in its own paragraph after a blank line */
+  /* pre-line so a tooltip can hold more than one paragraph */
   white-space: pre-line; text-align: left;
   box-shadow: 0 6px 20px rgba(10, 12, 18, 0.25);
   pointer-events: none;
 }
 
-/* ---------------------------------------------------------------- signal colors
-   Each trust signal has its own hue, consistent everywhere it appears:
-   post-owner claim keeps --danger red (gravest); the rest get distinct tokens. */
-:root {
-  --sig-ruggable: #a21caf;        --sig-ruggable-bg: rgba(162, 28, 175, 0.09);
-  --sig-burnable: #c2410c;        --sig-burnable-bg: rgba(234, 88, 12, 0.1);
-  --sig-ownerless: #a16207;       --sig-ownerless-bg: rgba(202, 138, 4, 0.12);
-  --sig-upgradeable: #7c3aed;     --sig-upgradeable-bg: rgba(124, 58, 237, 0.09);
-  --sig-delegated: #0e7490;       --sig-delegated-bg: rgba(14, 116, 144, 0.1);
-}
-[data-theme="dark"] {
-  --sig-ruggable: #e879f9;        --sig-ruggable-bg: rgba(232, 121, 249, 0.12);
-  --sig-burnable: #fb923c;        --sig-burnable-bg: rgba(251, 146, 60, 0.12);
-  --sig-ownerless: #eab308;       --sig-ownerless-bg: rgba(234, 179, 8, 0.12);
-  --sig-upgradeable: #a78bfa;     --sig-upgradeable-bg: rgba(167, 139, 250, 0.12);
-  --sig-delegated: #22d3ee;       --sig-delegated-bg: rgba(34, 211, 238, 0.12);
-}
 /* ---------------------------------------------------------------- hues
    A named palette for things that need telling apart at a glance. Each attestation type and
    each controller standard owns one hue, the same everywhere it appears. */
@@ -675,8 +658,3 @@ input, textarea, select { font: inherit; color: inherit; }
 .ms-option:hover { background: var(--surface-2); }
 .ms-option input { margin: 0; accent-color: var(--accent); }
 
-.badge-ruggable { color: var(--sig-ruggable); background: var(--sig-ruggable-bg); }
-.badge-burnable { color: var(--sig-burnable); background: var(--sig-burnable-bg); }
-.badge-ownerless { color: var(--sig-ownerless); background: var(--sig-ownerless-bg); }
-.badge-upgradeable { color: var(--sig-upgradeable); background: var(--sig-upgradeable-bg); }
-.badge-delegated { color: var(--sig-delegated); background: var(--sig-delegated-bg); }

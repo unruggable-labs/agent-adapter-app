@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, AgentIds, Avatar, Badge, Callout, Section, SignalCallout, signalsFor, Spinner, StandardBadge, Stat, StatusBadge, TrustBadge } from "../components/ui";
+import { Addr, AgentIds, Avatar, Badge, Callout, Section, Spinner, StandardBadge, Stat, StatusBadge } from "../components/ui";
 import type { Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
@@ -43,7 +43,6 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
             <StatusBadge id={id} />
             <StandardBadge id={id} />
-            <TrustBadge t={id.trustBase} />
           </div>
           <p className="mono t3 small" style={{ margin: 0, overflowWrap: "anywhere" }}>{id.ubid}</p>
         </div>
@@ -53,7 +52,6 @@ export function IdentityPage({ ubid }: { ubid: string }) {
       </div>
 
       <div className="stack">
-        <Flags id={id} />
         <ConfirmBanner id={id} />
         <WalletLinkBanner id={id} />
 
@@ -137,18 +135,6 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         <ManagePanel id={id} />
       </div>
     </div>
-  );
-}
-
-/** Every applicable signal as a banner, worded exactly as the pills word it.
- *  Reassuring signals are pills elsewhere on the page; a banner is for what needs attention. */
-function Flags({ id }: { id: Identity }) {
-  return (
-    <>
-      {signalsFor(id, { compact: true }).map((k) => (
-        <SignalCallout key={k} k={k} />
-      ))}
-    </>
   );
 }
 
