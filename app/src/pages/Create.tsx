@@ -126,20 +126,20 @@ export function CreatePage() {
   return (
     <div className="page fade-in">
       <h1 className="page-title">Create an identity</h1>
-      <p className="page-sub">Give something you control a profile. The UBID it gets is permanent.</p>
+      <p className="page-sub">Give your agent an identity.</p>
 
       <Step n={1} title="How will this identity come to exist?">
         <Choice
           selected={path === "wallet"}
           onClick={() => setPath("wallet")}
           title="I'll sign a transaction here"
-          sub="For a token I hold, my own address, or a contract I already control. Ends in a button."
+          sub="For a token I hold, my own address, or a contract I already control."
         />
         <Choice
           selected={path === "developer"}
           onClick={() => setPath("developer")}
           title="I'm writing a contract"
-          sub="It will claim identities itself - for the tokens it mints, or for itself. Ends in code."
+          sub="It will claim identities itself - for the tokens it mints, or for itself."
         />
       </Step>
 
@@ -251,13 +251,13 @@ function WalletFlow() {
   return (
     <>
       <Step n={2} title="What are you registering?">
-        <Choice selected={kind === "token"} onClick={() => setKind("token")} title="A token I hold" sub="An NFT or a token id. The identity travels with the token." />
+        <Choice selected={kind === "token"} onClick={() => setKind("token")} title="A token I hold" sub="An NFT or a token ID. The identity travels with the token." />
         <Choice
           selected={kind === "eoa"}
           onClick={() => setKind("eoa")}
           disabled={!signer}
           title={signer ? "My own address" : "My own address (connect a wallet first)"}
-          sub={signer ? `${shortHex(signer.address, 10)} becomes the agent. One transaction, nothing else needed.` : "Your wallet itself becomes the agent."}
+          sub={signer ? (<>Your connected wallet, <b>{signer.address}</b> becomes the agent.</>) : "Your wallet itself becomes the agent."}
         />
         <Choice selected={kind === "contract"} onClick={() => setKind("contract")} title="A contract" sub="Controlled by its owner, its admins, or the contract itself." />
       </Step>
@@ -448,14 +448,12 @@ contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1
       <div className="guide-label">What the adapter allows</div>
       <ul className="guide-list">
         <li>A token contract may act for one of its own tokens while <span className="mono">ownerOf(tokenId)</span> reverts or returns zero.</li>
-        <li>That is true before the mint. So the contract claims first, mints second, and the identity is waiting for the first owner.</li>
         <li>After the mint, only the holder controls it, or a wallet the holder has authorised via delegate.xyz. The collection does not.</li>
       </ul>
       <div className="guide-label">What you do</div>
       <ol className="guide-list">
         <li>Pick the token standard and whether each mint claims or fully registers.</li>
         <li>Call the adapter inside <span className="mono">mint()</span>, before <span className="mono">_mint</span>, as in the code below.</li>
-        <li>Optionally expose the UBID. It is computable before the token exists, so it can go in the token's metadata.</li>
       </ol>
       <div className="field-grid">
         <div className="field">
@@ -465,23 +463,16 @@ contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1
             <option value={3}>ERC1155F - ERC-1155 with ownerOf</option>
             <option value={4}>ERC6909F - ERC-6909 with ownerOf</option>
           </select>
-          <span className="hint">Only the single-owner standards have the window: plain ERC-1155 and ERC-6909 control by balance, so there is no ownerless moment.</span>
         </div>
         <div className="field">
           <label>Per token</label>
           <select className="select" value={full ? "register" : "claim"} onChange={(e) => setFull(e.target.value === "register")}>
-            <option value="claim">Claim (event only, cheap)</option>
+            <option value="claim">Counterfactual claim (event only, cheap)</option>
             <option value="register">Register (mints an ERC-8004 agent)</option>
           </select>
-          <span className="hint">{full ? "Registering at mint costs an ERC-8004 mint per token. The UBID is the same either way." : "A claim is one event per mint. Anyone can register fully later under the same UBID."}</span>
         </div>
       </div>
       <CodeBlock code={code} />
-      <div className="callout callout-warn" style={{ marginTop: 14 }}>
-        <b>The window reopens after a burn.</b> A collection that burns a token and re-claims its identity is
-        allowed to, and Adapterscan says so: the profile's history shows a collection-authored claim after
-        an owner existed. Worth knowing before you promise holders anything.
-      </div>
     </Step>
   );
 }
