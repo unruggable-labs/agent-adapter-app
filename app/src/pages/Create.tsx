@@ -495,7 +495,7 @@ contract MyThing is Ownable {
 // Or AccessControl: holders of DEFAULT_ADMIN_ROLE control a CONTRACT_ADMIN identity.`;
   return (
     <Step n={n} title="No new code, most likely">
-      <p className="t2 small" style={{ margin: "0 0 10px" }}>The contract is the subject. A person claims for it, from a wallet, on the other path.</p>
+      <p className="t2 small" style={{ margin: "0 0 10px" }}>The contract is the subject.</p>
       <div className="guide-label">What the adapter checks</div>
       <ul className="guide-list">
         <li><b>CONTRACT_OWNABLE</b> - the caller is whatever <span className="mono">owner()</span> returns, or a wallet that owner has authorised to act for them.</li>
@@ -503,11 +503,12 @@ contract MyThing is Ownable {
       </ul>
       <div className="guide-label">What you do</div>
       <ol className="guide-list">
-        <li>Make sure the contract has one of those. OpenZeppelin's Ownable or AccessControl is the whole requirement. If it already does, there is nothing to add.</li>
-        <li>Deploy it.</li>
-        <li>Connect as the owner or an admin, choose "I'll sign a transaction here" above, then "A contract", and paste its address. The claim is one transaction.</li>
+        <li>Make sure the contract implements OpenZeppelin's Ownable or AccessControl module.</li>
+        <li>Deploy your contract.</li>
+        <li>Connect as the owner, authorised delegate, or admin,  and choose "I'll sign a transaction here" above.</li>
+        <li>Select "A contract", and paste the contract's address.</li>
       </ol>
-      <p className="hint" style={{ margin: "0 0 8px" }}>If it has neither yet, the smallest version:</p>
+      <p className="hint" style={{ margin: "22px 0 8px" }}>If it has neither yet, the smallest version:</p>
       <CodeBlock code={code} />
       <p className="hint" style={{ margin: "10px 0 0" }}>
         The owner can also authorise another wallet to act for them, so a hot wallet manages the identity while a cold wallet or multisig keeps the contract. That is done on delegate.xyz, a public registry the adapter reads.
