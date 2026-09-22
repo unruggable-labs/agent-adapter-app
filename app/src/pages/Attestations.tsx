@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Addr, Badge, ControllerCell, Spinner, StandardBadge, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
+import { useEffect, useState } from "react";
+import { Addr, Badge, ControllerCell, Modal, MultiSelect, Spinner, StandardBadge, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, shortHex, STANDARD_NAMES } from "../lib/chain";
@@ -10,8 +10,9 @@ export function AttestationsPage() {
   const [rows, setRows] = useState<AttestationRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [mineOnly, setMineOnly] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
-  const [standardFilter, setStandardFilter] = useState<string | null>(null);
+  const [types, setTypes] = useState<string[]>([]);
+  const [standards, setStandards] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
 
   const load = () => api.attestations().then(setRows).catch(() => {});
   useEffect(() => {
@@ -24,16 +25,19 @@ export function AttestationsPage() {
   const standardOf = (ubid: string) => identities.find((i) => i.ubid === ubid)?.standardName ?? null;
   const shown = rows
     .filter((r) => !mineOnly || r.attester === signer?.address)
-    .filter((r) => !typeFilter || r.typeName === typeFilter)
-    .filter((r) => !standardFilter || standardOf(r.ubid) === standardFilter)
+    .filter((r) => types.length === 0 || types.includes(r.typeName))
+    .filter((r) => standards.length === 0 || standards.includes(standardOf(r.ubid) ?? ""))
     .sort((a, b) => Number(b.order.blockNumber) - Number(a.order.blockNumber) || b.order.logIndex - a.order.logIndex);
-  const filtered = typeFilter !== null || standardFilter !== null;
+  const active = types.length + standards.length;
 
   return (
     <div className="page page-wide fade-in">
       <div className="page-head">
         <h1 className="page-title">Attestations</h1>
         <div className="head-actions">
+          <button className={`btn btn-sm${active ? " is-active" : ""}`} onClick={() => setShowFilters(true)}>
+            Filter{active > 0 && <span className="num"> · {active}</span>}
+          </button>
           <div className="seg">
             <button className={!mineOnly ? "active" : ""} onClick={() => setMineOnly(false)}>All</button>
             <button className={mineOnly ? "active" : ""} onClick={() => setMineOnly(true)}>{signer ? `${signer.label}'s` : "Mine"}</button>
@@ -43,23 +47,6 @@ export function AttestationsPage() {
       <p className="page-sub">
         Public statements about agents.
       </p>
-
-      <div className="filters">
-        <span className="filters-label">Type</span>
-        <span className="filters-row">
-          <FilterChip on={typeFilter === null} onClick={() => setTypeFilter(null)}><Badge tone="outline">all</Badge></FilterChip>
-          {Object.keys(TYPE_HUE).map((t) => (
-            <FilterChip key={t} on={typeFilter === t} onClick={() => setTypeFilter(typeFilter === t ? null : t)}><TypeBadge name={t} /></FilterChip>
-          ))}
-        </span>
-        <span className="filters-label">Standard</span>
-        <span className="filters-row">
-          <FilterChip on={standardFilter === null} onClick={() => setStandardFilter(null)}><Badge tone="outline">all</Badge></FilterChip>
-          {STANDARD_NAMES.map((n) => (
-            <FilterChip key={n} on={standardFilter === n} onClick={() => setStandardFilter(standardFilter === n ? null : n)}><StandardBadge name={n} /></FilterChip>
-          ))}
-        </span>
-      </div>
 
       <div className="card table-scroll" style={{ padding: "4px 14px" }}>
         <table className="table clickable">
@@ -111,21 +98,42 @@ export function AttestationsPage() {
               );
             })}
             {shown.length === 0 && (
-              <tr><td colSpan={9}><div className="empty">{filtered ? "Nothing matches these filters." : "Nothing here yet."}</div></td></tr>
+              <tr><td colSpan={9}><div className="empty">{active ? "Nothing matches these filters." : "Nothing here yet."}</div></td></tr>
             )}
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
 
-/** A badge as a toggle. The badge supplies the colour; this supplies the on/off state. */
-function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" className={`filter-chip${on ? " is-on" : ""}`} aria-pressed={on} onClick={onClick}>
-      {children}
-    </button>
+      {showFilters && (
+        <Modal title="Filter attestations" onClose={() => setShowFilters(false)}>
+          <div className="field">
+            <label>Type</label>
+            <MultiSelect
+              options={Object.keys(TYPE_HUE)}
+              values={types}
+              onChange={setTypes}
+              placeholder="Any type"
+              render={(t) => <TypeBadge name={t} />}
+            />
+          </div>
+          <div className="field">
+            <label>Standard</label>
+            <MultiSelect
+              options={STANDARD_NAMES}
+              values={standards}
+              onChange={setStandards}
+              placeholder="Any standard"
+              render={(n) => <StandardBadge name={n} />}
+            />
+            <span className="hint">A standard filter hides statements about UBIDs nothing has claimed yet.</span>
+          </div>
+          <div className="row spread" style={{ marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" disabled={!active} onClick={() => { setTypes([]); setStandards([]); }}>Clear</button>
+            <button className="btn btn-primary" onClick={() => setShowFilters(false)}>Done</button>
+          </div>
+        </Modal>
+      )}
+    </div>
   );
 }
 

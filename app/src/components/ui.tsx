@@ -403,6 +403,53 @@ export function TrustBadge({ t, compact = false }: { t: TrustBase | null; compac
   return <Signal k={k} />;
 }
 
+/**
+ * A multi-select dropdown. The trigger reads as a select and summarises the choice; opening it
+ * unfolds a checklist in flow, so it works inside a scrolling dialog without being clipped.
+ * An empty selection means "no filter" and the caller words that via `placeholder`.
+ */
+export function MultiSelect<T extends string>({
+  options,
+  values,
+  onChange,
+  placeholder,
+  render,
+}: {
+  options: T[];
+  values: T[];
+  onChange: (next: T[]) => void;
+  placeholder: string;
+  /** How one option looks, in the list and in the summary. Defaults to the plain value. */
+  render?: (v: T) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const show = render ?? ((v: T) => v);
+  const toggle = (v: T) => onChange(values.includes(v) ? values.filter((x) => x !== v) : options.filter((o) => o === v || values.includes(o)));
+  return (
+    <div className={`ms${open ? " is-open" : ""}`}>
+      <button type="button" className="select ms-trigger" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="row wrap" style={{ gap: 4, minWidth: 0 }}>
+          {values.length === 0 ? <span className="t3">{placeholder}</span> : values.map((v) => <span key={v}>{show(v)}</span>)}
+        </span>
+        <span className="ms-caret" aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div className="ms-list" role="listbox" aria-multiselectable>
+          {options.map((o) => {
+            const on = values.includes(o);
+            return (
+              <label key={o} className={`ms-option${on ? " is-on" : ""}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(o)} />
+                {show(o)}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A centred dialog for a task that would crowd the page it belongs to. Escape and a backdrop
  *  click both close it; the caller owns the open state. */
 export function Modal({
