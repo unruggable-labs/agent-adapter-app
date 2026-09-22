@@ -15,7 +15,10 @@ import { NETWORK, NETWORKS } from "./chain";
 const projectId = import.meta.env.VITE_WC_PROJECT_ID as string | undefined;
 export const appKitEnabled = Boolean(projectId);
 
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [sepolia, foundry];
+// Only the chain this build's indexer follows. Offering the other in the wallet menu would let
+// someone switch to a chain the app can't read, and the sidebar's network switch (dev only) is
+// what actually changes which backend the app talks to.
+const networks: [AppKitNetwork, ...AppKitNetwork[]] = [NETWORK.chain.id === foundry.id ? foundry : sepolia];
 const transports = {
   [sepolia.id]: http(NETWORKS.sepolia?.rpcUrl),
   [foundry.id]: http(NETWORKS.local?.rpcUrl ?? "http://127.0.0.1:8547"),
@@ -30,7 +33,7 @@ if (adapter && projectId) {
   createAppKit({
     adapters: [adapter],
     networks,
-    defaultNetwork: NETWORK.chain.id === foundry.id ? foundry : sepolia,
+    defaultNetwork: networks[0],
     projectId,
     metadata: {
       name: "Agent Adapter",
@@ -38,8 +41,9 @@ if (adapter && projectId) {
       url: location.origin,
       icons: [],
     },
-    // Wallet connection only. None of the wallet-as-a-service extras belong in a registry UI.
-    features: { analytics: false, email: false, socials: false, swaps: false, onramp: false },
+    // Wallet connection only: account, network, disconnect. None of the wallet-as-a-service
+    // extras (funding, sending, swaps, activity) belong in a registry UI.
+    features: { analytics: false, email: false, socials: false, swaps: false, onramp: false, receive: false, send: false, history: false, pay: false },
     themeMode: localStorage.getItem("aa-theme") === "dark" ? "dark" : "light",
     themeVariables: {
       "--w3m-accent": "#4f46e5",

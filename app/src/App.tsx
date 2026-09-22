@@ -137,12 +137,19 @@ function Shell() {
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
-          <div className="nav-label" style={{ padding: "0 0 4px" }}>Network</div>
-          <select className="select" value={networkId} onChange={(e) => switchNetwork(e.target.value as NetworkId)}>
-            {Object.entries(NETWORKS).map(([id, n]) => (
-              <option key={id} value={id}>{n.label}</option>
-            ))}
-          </select>
+          {/* Which backend the app reads - the local devnet or Sepolia. A dev-build choice: the
+              production build knows one network, and the wallet's own network menu is a
+              different thing (it moves the wallet, not the indexer). */}
+          {Object.keys(NETWORKS).length > 1 && (
+            <>
+              <div className="nav-label" style={{ padding: "0 0 4px" }}>Network</div>
+              <select className="select" value={networkId} onChange={(e) => switchNetwork(e.target.value as NetworkId)}>
+                {Object.entries(NETWORKS).map(([id, n]) => (
+                  <option key={id} value={id}>{n.label}</option>
+                ))}
+              </select>
+            </>
+          )}
           <div className="sidebar-meta" style={{ marginTop: 8 }}>
             {NETWORK.personaWrites && <div className="mono t3">{shortHex(signer?.address ?? "", 12)}</div>}
             <div style={{ marginTop: 4 }}>chain {overview?.chainId ?? "…"} · <span className="mono">{shortHex(overview?.adapter ?? "", 6)}</span></div>
