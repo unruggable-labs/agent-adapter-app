@@ -119,7 +119,7 @@ type Path = "wallet" | "developer";
 export function CreatePage() {
   const [path, setPath] = useState<Path | null>(null);
   return (
-    <div className="page page-narrow fade-in">
+    <div className="page fade-in">
       <h1 className="page-title">Create an identity</h1>
       <p className="page-sub">Give something you control a profile. The UBID it gets is permanent.</p>
 
@@ -559,11 +559,7 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
         caller <i>is</i> the contract. No wallet can do this on its behalf, so this step is what the contract
         needs to do. {contract ? "Three ways, pick the one that fits." : "Add the code now; once it is deployed, the other two routes work too."}
       </p>
-      <div className="field">
-        <label>Agent URI <span className="t3">(fills the calls below)</span></label>
-        <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
-      </div>
-      <div className="seg" style={{ margin: "12px 0" }}>
+      <div className="seg" style={{ margin: "0 0 12px" }}>
         <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
         <button className={route === "execute" ? "active" : ""} disabled={!contract} title={contract ? undefined : "Needs the deployed address"} onClick={() => setRoute("execute")}>It can execute calls</button>
         <button className={route === "delegate" ? "active" : ""} onClick={() => setRoute("delegate")}>Delegate to my wallet</button>
@@ -576,6 +572,10 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
             Target the adapter, value 0, data as below. Then, optionally, the second call links the
             contract as its own operating wallet.
           </p>
+          <div className="field" style={{ marginBottom: 4 }}>
+            <label>Agent URI <span className="t3">(encoded into the register call below)</span></label>
+            <input className="input" placeholder="ipfs://… or https://…/agent.json" value={uri} onChange={(e) => setUri(e.target.value)} />
+          </div>
           <CallBlock label="1. Register" to={adapter} data={registerData} />
           <CallBlock label="2. Link its wallet (optional)" to={adapter} data={walletData} />
         </>
