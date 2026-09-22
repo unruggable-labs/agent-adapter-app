@@ -60,6 +60,8 @@ export interface IdentityState {
   lastEventCollectionAuthored: boolean;
   /** ERC-8004 agent ids whose stored binding derives this same UBID (the registration join). */
   agentIds: bigint[];
+  /** The first event that brought this identity into being - what "newest" means in a list. */
+  created: OrderKey;
 }
 
 export interface AgentState {
@@ -193,11 +195,12 @@ export class ProjectionStore {
 
   // ---------------------------------------------------------------- counterfactual fold
 
-  private identityFor(standard: Standard, boundAddress: Address, tokenId: bigint): IdentityState {
+  private identityFor(standard: Standard, boundAddress: Address, tokenId: bigint, order: OrderKey): IdentityState {
     const ubid = computeUbid(this.chainId, this.adapter, standard, boundAddress, tokenId);
     let id = this.identities.get(ubid);
     if (!id) {
       id = {
+        created: order,
         ubid,
         standard,
         boundAddress,
@@ -233,7 +236,7 @@ export class ProjectionStore {
       return;
     }
 
-    const id = this.identityFor(standard, boundAddress, tokenId);
+    const id = this.identityFor(standard, boundAddress, tokenId, order);
 
     // Emitter-class bookkeeping (token standards only): collection-authored means the token
     // contract emitted for its own token. Used for trust flags, never for suppression —
@@ -310,7 +313,7 @@ export class ProjectionStore {
 
     // The join is by construction: the stored binding derives the same UBID as the
     // counterfactual claims for these coordinates. No link assertion exists or is needed.
-    const id = this.identityFor(standard, boundAddress, tokenId);
+    const id = this.identityFor(standard, boundAddress, tokenId, order);
     if (!id.agentIds.includes(agentId)) id.agentIds.push(agentId);
     const registeredBy = (ev.args.registeredBy as string).toLowerCase() as Address;
     this.record(id.ubid, ev, order, registeredBy, `ERC-8004 agent #${agentId} minted on the shared registry for these coordinates.`);

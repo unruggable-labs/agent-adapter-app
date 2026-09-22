@@ -7,9 +7,15 @@ const PAGE_SIZE = 25;
 export function IdentitiesPage() {
   const { identities, overview, status, navigate } = useApp();
   const [page, setPage] = useState(0);
-  const pages = Math.max(1, Math.ceil(identities.length / PAGE_SIZE));
+  // Newest first: the identity created most recently sits at the top.
+  const ordered = [...identities].sort((a, b) => {
+    const ab = BigInt(a.created?.blockNumber ?? 0), bb = BigInt(b.created?.blockNumber ?? 0);
+    if (ab !== bb) return ab > bb ? -1 : 1;
+    return (b.created?.logIndex ?? 0) - (a.created?.logIndex ?? 0);
+  });
+  const pages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
   const current = Math.min(page, pages - 1);
-  const visible = identities.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
+  const visible = ordered.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
 
   return (
     <div className="page page-wide fade-in">

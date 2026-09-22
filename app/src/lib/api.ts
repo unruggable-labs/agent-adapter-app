@@ -62,6 +62,8 @@ export interface Identity {
   metadata: Record<string, Hex>;
   agentWallet: Address | null;
   lastEvent: (Order & { emitter: Address; eventName: string }) | null;
+  /** The first event that created the identity. Optional for indexers that predate it. */
+  created?: Order;
   collectionAuthoredAfterOwner: boolean;
   lastEventCollectionAuthored: boolean;
   agentIds: string[];

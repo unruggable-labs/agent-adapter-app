@@ -255,7 +255,7 @@ export function StatusBadge({ id }: { id: Identity }) {
     );
   if (id.claimed)
     return (
-      <Badge tone="accent" tip="Claimed counterfactually: the identity lives in the event log only - one cheap transaction, nothing minted. Registering fully later keeps the same UBID and history.">
+      <Badge tone="accent" tip="Counterfactual claim: the identity lives in the event log only.">
         <span className="dot" /> claim only
       </Badge>
     );

@@ -229,7 +229,7 @@ function WalletFlow() {
     return (
       <div className="step-block fade-in">
         <h2 className="h-section">Identity {mode === "claim" ? "claimed" : "registered"}</h2>
-        <p className="page-sub">This UBID is the identity's permanent name on this chain.</p>
+        <p className="page-sub">This UBID is the agents's permanent identifier.</p>
         <div className="card">
           <div className="section-label">UBID</div>
           <div className="mono" style={{ overflowWrap: "anywhere" }}>{done}</div>
@@ -340,8 +340,8 @@ function WalletFlow() {
             </div>
             <p className="hint" style={{ marginTop: 0 }}>
               {effectiveMode === "claim"
-                ? "One cheap transaction; the identity lives in the event log. Reputation earned now carries over if you register later, because the UBID is the same."
-                : "Mints a real ERC-8004 agent on the shared registry, bound to this subject. Any history under this UBID joins automatically."}
+                ? "One cheap transaction; the identity lives in the event log."
+                : "Mints a real ERC-8004 agent on the shared registry, bound to this agent."}
             </p>
             <div className="field">
               <label>Agent URI <span className="t3">(optional)</span></label>
