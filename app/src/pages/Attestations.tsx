@@ -28,7 +28,7 @@ export function AttestationsPage() {
     .filter((r) => types.length === 0 || types.includes(r.typeName))
     .filter((r) => standards.length === 0 || standards.includes(standardOf(r.ubid) ?? ""))
     .sort((a, b) => Number(b.order.blockNumber) - Number(a.order.blockNumber) || b.order.logIndex - a.order.logIndex);
-  const active = types.length + standards.length;
+  const active = types.length + standards.length + (mineOnly ? 1 : 0);
 
   return (
     <div className="page page-wide fade-in">
@@ -36,12 +36,11 @@ export function AttestationsPage() {
         <h1 className="page-title">Attestations</h1>
         <div className="head-actions">
           <button className={`btn btn-sm${active ? " is-active" : ""}`} onClick={() => setShowFilters(true)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" />
+            </svg>
             Filter{active > 0 && <span className="num"> · {active}</span>}
           </button>
-          <div className="seg">
-            <button className={!mineOnly ? "active" : ""} onClick={() => setMineOnly(false)}>All</button>
-            <button className={mineOnly ? "active" : ""} onClick={() => setMineOnly(true)}>{signer ? `${signer.label}'s` : "Mine"}</button>
-          </div>
         </div>
       </div>
       <p className="page-sub">
@@ -127,8 +126,16 @@ export function AttestationsPage() {
             />
             <span className="hint">A standard filter hides statements about UBIDs nothing has claimed yet.</span>
           </div>
+          {signer && (
+            <div className="field">
+              <label className="ms-option" style={{ padding: 0, fontSize: 12.5 }}>
+                <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
+                Only statements made by {signer.label}
+              </label>
+            </div>
+          )}
           <div className="row spread" style={{ marginTop: 16 }}>
-            <button className="btn btn-ghost btn-sm" disabled={!active} onClick={() => { setTypes([]); setStandards([]); }}>Clear</button>
+            <button className="btn btn-ghost btn-sm" disabled={!active} onClick={() => { setTypes([]); setStandards([]); setMineOnly(false); }}>Clear</button>
             <button className="btn btn-primary" onClick={() => setShowFilters(false)}>Done</button>
           </div>
         </Modal>
