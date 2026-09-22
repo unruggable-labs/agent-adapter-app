@@ -164,9 +164,9 @@ export function StatusBadge({ id }: { id: Identity }) {
 }
 
 /**
- * Every pill the app can put in a "Signals" column, defined once. The identities table, the
- * identity page and the legend on /how all render from this list, so a signal can never look or
- * read one way in the table and another way where it's explained.
+ * Every trust signal the app can show, defined once. The identity page's header pill and
+ * banners and the create wizard's callout all render from this list, so a signal can never
+ * look or read one way in one place and another way elsewhere.
  */
 export type SignalKey =
   | "ownerless"
@@ -200,7 +200,7 @@ export interface SignalSpec {
   key: SignalKey;
   label: string;
   tone: string;
-  /** The pill's tooltip, and its entry in the legend. One source, so the two can't drift. */
+  /** The pill's tooltip, and the banner's body. One source, so the two can't drift. */
   meaning: string;
   /** How it was established. Rendered next to the signal wherever it is explained. */
   detection: Detection;
@@ -282,7 +282,7 @@ const SEVERITY: Record<SignalKey, string> = {
 };
 
 /** The one way to render a signal pill, anywhere in the app. A heuristic signal always carries
- *  its caveat in the tooltip - the pill can appear far from the legend that explains it. */
+ *  its caveat in the tooltip - the pill can appear far from anything that explains it. */
 export function Signal({ k }: { k: SignalKey }) {
   const s = BY_KEY[k];
   return <Badge tone={s.tone} tip={signalTip(k)}>{s.label}</Badge>;
@@ -321,9 +321,8 @@ export function trustSignal(t: TrustBase | null): SignalKey | null {
 
 /**
  * Every signal that applies to one identity, in severity order. The single place that decides
- * what applies - the table, the profile page and the legend all read from this, so a signal
- * cannot appear on one surface and be missing from another.
- * `compact` drops the reassuring ones, for dense rows where only warnings earn space.
+ * what applies, so a signal cannot appear on one surface and be missing from another.
+ * `compact` drops the reassuring ones, for places where only warnings earn space.
  */
 export function signalsFor(id: Identity, { compact = false }: { compact?: boolean } = {}): SignalKey[] {
   const keys: SignalKey[] = [];

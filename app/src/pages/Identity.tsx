@@ -137,7 +137,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
   );
 }
 
-/** Every applicable signal as a banner, worded exactly as the pills and the /how legend word it.
+/** Every applicable signal as a banner, worded exactly as the pills word it.
  *  Reassuring signals are pills elsewhere on the page; a banner is for what needs attention. */
 function Flags({ id }: { id: Identity }) {
   return (

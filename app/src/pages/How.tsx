@@ -1,13 +1,6 @@
 import type { ReactNode } from "react";
-import { Badge, DETECTION_NOTE, Signal, SIGNALS, type Detection } from "../components/ui";
+import { Badge } from "../components/ui";
 import { useApp } from "../lib/app-state";
-
-/** Short badge shown after each legend entry; the full wording is in DETECTION_NOTE. */
-const DETECTION_LABEL: Record<Detection, string> = {
-  log: "from the event log",
-  chain: "read from chain",
-  heuristic: "heuristic - may be wrong",
-};
 
 type PartKey = "agent" | "profile" | "controller" | "wallet";
 
@@ -269,14 +262,6 @@ export function HowPage({ part: routePart }: { part?: string }) {
             </Attest>
           </div>
         </Block>
-
-        <Block title="Signals you'll see on a profile" show={sel === "controller"}>
-          <div className="section-label legend-head">The good ones</div>
-          <SignalLegend reassuring />
-
-          <div className="section-label legend-head">The less good ones</div>
-          <SignalLegend />
-        </Block>
       </div>
     </div>
   );
@@ -327,26 +312,6 @@ function Edge({ label, active, at }: { label: string; active: boolean; at: strin
         <path d="M1 4h36M34 1l3 3-3 3" />
       </svg>
     </span>
-  );
-}
-
-/** The signal legend, split by whether a signal is reassuring. Each entry renders the real
- *  `Signal` pill plus how it was established, so the page can't drift from the table. */
-function SignalLegend({ reassuring = false }: { reassuring?: boolean }) {
-  return (
-    <dl className="legend">
-      {SIGNALS.filter((s) => Boolean(s.reassuring) === reassuring).map((s) => (
-        <div key={s.key} className="legend-row">
-          <dt><Signal k={s.key} /></dt>
-          <dd>
-            {s.meaning}{" "}
-            <span className={`how-known how-known-${s.detection}`} title={DETECTION_NOTE[s.detection]}>
-              {DETECTION_LABEL[s.detection]}
-            </span>
-          </dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 

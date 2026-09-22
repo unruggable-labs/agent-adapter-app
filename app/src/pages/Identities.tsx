@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../lib/app-state";
 import { controlLine, displayName, shortHex, shortTokenId } from "../lib/chain";
-import { Addr, Avatar, Signal, signalsFor, Skeleton, StatusBadge, Tip } from "../components/ui";
+import { Addr, Avatar, Skeleton, StatusBadge, Tip } from "../components/ui";
 
 const PAGE_SIZE = 25;
 
@@ -35,7 +35,6 @@ export function IdentitiesPage() {
               <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-right"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
               <th className="td-right">Stars</th>
-              <th><Tip tip="Trust disclosures: warnings derived from the event history (e.g. a collection re-claimed a burned token's identity) and from probing the controller contract's code (burnable, upgradeable, ruggable). Disclosed, never censored.">Signals</Tip></th>
             </tr>
           </thead>
           <tbody>
@@ -62,19 +61,14 @@ export function IdentitiesPage() {
                 <td><StatusBadge id={id} /></td>
                 <td className="td-right num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
                 <td className="td-right num">{id.reputation.stars || <span className="t3">0</span>}</td>
-                <td>
-                  <span className="row wrap" style={{ gap: 4 }}>
-                    {signalsFor(id, { compact: true }).map((k) => <Signal key={k} k={k} />)}
-                  </span>
-                </td>
               </tr>
             ))}
             {identities.length === 0 && status === "loading" && <SkeletonRows />}
             {identities.length === 0 && status === "error" && (
-              <tr><td colSpan={7}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
+              <tr><td colSpan={6}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
             )}
             {identities.length === 0 && status === "ready" && (
-              <tr><td colSpan={7}><div className="empty">No identities yet - run the demo scenario or create one.</div></td></tr>
+              <tr><td colSpan={6}><div className="empty">No identities yet - run the demo scenario or create one.</div></td></tr>
             )}
           </tbody>
         </table>
@@ -113,7 +107,6 @@ function SkeletonRows() {
           <td><Skeleton w={60} /></td>
           <td className="td-right"><Skeleton w={30} /></td>
           <td className="td-right"><Skeleton w={30} /></td>
-          <td><Skeleton w={70} /></td>
         </tr>
       ))}
     </>

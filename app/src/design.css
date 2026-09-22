@@ -386,32 +386,6 @@ input, textarea, select { font: inherit; color: inherit; }
   .edge-arrow { width: 22px; transform: rotate(90deg); }
 }
 
-/* ---- pill legend: the badge itself is the label, so the page and the table match --- */
-/* Entries wrap to two lines, so the gap between them has to beat the line-height or the rows
-   read as one block. */
-.legend { margin: 0; display: grid; row-gap: 15px; }
-.legend-row {
-  display: grid; grid-template-columns: 170px 1fr; column-gap: 16px; align-items: baseline;
-}
-/* Group heading ("The good ones"). Generous above, close to the list it introduces. */
-.legend-head { margin: 30px 0 14px; }
-.legend-head:first-of-type { margin-top: 24px; }
-.legend-foot { margin-top: 26px; }
-.legend-row dt { justify-self: start; }
-.legend-row dd { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
-
-/* How a signal was established. The heuristic case is the one that must not be missed. */
-.how-known {
-  display: inline-block; white-space: nowrap; cursor: help;
-  border-radius: var(--r-sm); padding: 1px 6px; margin-left: 2px;
-  font-size: 10.5px; letter-spacing: 0.02em;
-  background: var(--surface-3); color: var(--text-3);
-}
-.how-known-heuristic { background: var(--warn-bg); color: var(--warn); font-weight: 500; }
-@media (max-width: 620px) {
-  .legend-row { grid-template-columns: 1fr; row-gap: 3px; }
-}
-
 /* ---- claim vs register: the counterfactual column is the one that's unusual ---- */
 .compare th[scope="row"] {
   text-align: left; font-size: 11px; font-weight: 500; letter-spacing: 0.04em;
