@@ -1,9 +1,9 @@
-import { AppKitButton, useAppKitTheme } from "@reown/appkit/react";
+import { useAppKit, useAppKitAccount, useAppKitTheme } from "@reown/appkit/react";
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { SearchBar } from "./components/search";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, NETWORK } from "./lib/chain";
+import { ACTORS, NETWORK, shortHex } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
@@ -53,8 +53,8 @@ function WalletControl() {
       </label>
     );
 
-  // The standard modal: wallet list, QR for mobile, account and network pills once connected.
-  if (appKitEnabled) return <AppKitButton balance="hide" size="sm" />;
+  // The standard modal, behind our own button so the header stays in one register.
+  if (appKitEnabled) return <AppKitControl wrongChain={wrongChain} chainName={chain?.name} />;
 
   // No project id configured: plain injected-wallet buttons, so a checkout still works.
   if (signer)
@@ -80,6 +80,28 @@ function WalletControl() {
       ))}
       {connectors.length === 0 && <span className="hint">No wallet extension found</span>}
     </div>
+  );
+}
+
+/** The account pill for AppKit: our button, their modal. Connected shows the address with the
+ *  chain state; clicking opens the account view. Off-chain opens straight to the network list. */
+function AppKitControl({ wrongChain, chainName }: { wrongChain: boolean; chainName?: string }) {
+  const { open } = useAppKit();
+  const { address, isConnected } = useAppKitAccount();
+  if (!isConnected || !address)
+    return <button className="btn btn-sm" onClick={() => open({ view: "Connect" })}>Connect wallet</button>;
+  return (
+    <span className="row" style={{ gap: 8 }}>
+      {wrongChain && (
+        <button className="btn btn-sm" style={{ color: "var(--warn)" }} onClick={() => open({ view: "Networks" })}>
+          Switch to {NETWORK.chain.name}
+        </button>
+      )}
+      <button className="btn btn-sm btn-account" title={`${address}${chainName ? ` · on ${chainName}` : ""}`} onClick={() => open({ view: "Account" })}>
+        <span className={`account-dot${wrongChain ? " is-off" : ""}`} />
+        <span className="mono">{shortHex(address, 8)}</span>
+      </button>
+    </span>
   );
 }
 

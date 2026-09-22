@@ -129,7 +129,11 @@ input, textarea, select { font: inherit; color: inherit; }
   background: var(--surface-1); border-bottom: 1px solid var(--border);
 }
 .topbar-right { justify-self: end; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.account-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
+.account-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); flex-shrink: 0; }
+.account-dot.is-off { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
+/* The connected-account pill: the address in mono with the chain dot, in the button's own padding. */
+.btn-account { border-radius: 20px; padding: 0 12px 0 10px; gap: 8px; }
+.btn-account .mono { font-size: 12px; }
 
 .search { position: relative; width: 100%; }
 .search-icon { position: absolute; left: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
