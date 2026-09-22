@@ -292,8 +292,8 @@ function WalletFlow() {
       {kind && facts && standard !== null && info && (kind === "eoa" || facts.hasCode) && (
         <Step n={kind === "eoa" ? 3 : 4} title="Who controls it?">
           <p className="t2 small" style={{ margin: "0 0 10px" }}>
-            The control rule is part of the identity's name, so it can't change later. Pick the one that
-            describes how this {kind === "token" ? "token" : kind === "eoa" ? "address" : "contract"} is actually held.
+            The token standard is part of the Universal Binding Identifier. Pick the one that
+            describes this {kind === "token" ? "token" : kind === "eoa" ? "address" : "contract"}.
           </p>
           <div className="row wrap" style={{ gap: 10 }}>
             <select className="select" style={{ width: "auto", maxWidth: "100%" }} value={standard} disabled={OFFERED[kind].length === 1} onChange={(e) => setStandard(Number(e.target.value))}>
@@ -302,14 +302,14 @@ function WalletFlow() {
               ))}
             </select>
           </div>
-          <p className="hint" style={{ margin: "8px 0 0" }}>
+          <p className="hint" style={{ margin: "16px 0 0", lineHeight: 1.7 }}>
             <StandardBadge name={info.name} /> <span> </span>{info.rule}{" "}
             {suggested && suggested.standard === standard
               ? <span className="t3">Suggested because: {suggested.why}</span>
               : suggested && <span className="t3">You changed this from the suggested {BY_STANDARD[suggested.standard].name}. <button className="agent-link" onClick={() => setStandard(suggested.standard)}>Use the suggestion</button></span>}
           </p>
 
-          <dl className="kv" style={{ marginTop: 12 }}>
+          <dl className="kv" style={{ marginTop: 20 }}>
             <dt><Tip tip="The contract's own check, run here first: would counterfactualRegister succeed from your address right now? Wallets the owner has authorised on delegate.xyz pass here because this is the real call, simulated.">Authority</Tip></dt>
             <dd>
               {!signer ? <span className="row"><Badge tone="outline">connect a wallet to check</Badge><span className="t2 small">the check runs as the connected wallet</span></span>
