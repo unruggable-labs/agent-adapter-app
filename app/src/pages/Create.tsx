@@ -32,13 +32,13 @@ interface StandardInfo {
 }
 
 const STANDARDS: StandardInfo[] = [
-  { standard: 0, name: "ERC721", short: "whoever owns the token", rule: "Whoever owns the token (ownerOf). A delegate.xyz delegation from the owner also counts." },
-  { standard: 1, name: "ERC1155", short: "anyone holding a balance of the id", rule: "Anyone holding a balance of this id. Every holder is a controller; delegations don't count." },
-  { standard: 2, name: "ERC6909", short: "anyone holding a balance of the id", rule: "Anyone holding a balance of this id. Every holder is a controller; delegations don't count." },
-  { standard: 3, name: "ERC1155F", short: "the single owner (1155 with ownerOf)", rule: "An ERC-1155 contract that also has ownerOf: the single owner controls it, delegations count." },
-  { standard: 4, name: "ERC6909F", short: "the single owner (6909 with ownerOf)", rule: "An ERC-6909 contract that also has ownerOf: the single owner controls it, delegations count." },
+  { standard: 0, name: "ERC721", short: "whoever owns the token", rule: "Whoever owns the token (ownerOf), or a wallet the owner has authorised to act for them via delegate.xyz." },
+  { standard: 1, name: "ERC1155", short: "anyone holding a balance of the id", rule: "Anyone holding a balance of this id. Every holder is a controller. No authorising other wallets." },
+  { standard: 2, name: "ERC6909", short: "anyone holding a balance of the id", rule: "Anyone holding a balance of this id. Every holder is a controller. No authorising other wallets." },
+  { standard: 3, name: "ERC1155F", short: "the single owner (1155 with ownerOf)", rule: "An ERC-1155 contract that also has ownerOf: the single owner controls it, or a wallet they authorised via delegate.xyz." },
+  { standard: 4, name: "ERC6909F", short: "the single owner (6909 with ownerOf)", rule: "An ERC-6909 contract that also has ownerOf: the single owner controls it, or a wallet they authorised via delegate.xyz." },
   { standard: 5, name: "ACCOUNT", short: "the contract itself", rule: "The address itself. A contract bound this way has to make the calls itself." },
-  { standard: 6, name: "CONTRACT_OWNABLE", short: "its owner()", rule: "The contract's current owner(), or a delegate.xyz delegate of the owner." },
+  { standard: 6, name: "CONTRACT_OWNABLE", short: "its owner()", rule: "The contract's current owner(), or a wallet the owner has authorised to act for them via delegate.xyz." },
   { standard: 7, name: "CONTRACT_ADMIN", short: "its admins (AccessControl)", rule: "Anyone holding the contract's DEFAULT_ADMIN_ROLE (OpenZeppelin AccessControl)." },
 ];
 const BY_STANDARD = Object.fromEntries(STANDARDS.map((s) => [s.standard, s])) as Record<number, StandardInfo>;
@@ -295,7 +295,7 @@ function WalletFlow() {
           </p>
 
           <dl className="kv" style={{ marginTop: 12 }}>
-            <dt><Tip tip="The contract's own check, run here first: would counterfactualRegister succeed from your address right now? Delegate.xyz delegations are honoured because this is the real call, simulated.">Authority</Tip></dt>
+            <dt><Tip tip="The contract's own check, run here first: would counterfactualRegister succeed from your address right now? Wallets the owner has authorised on delegate.xyz pass here because this is the real call, simulated.">Authority</Tip></dt>
             <dd>
               {authorized === null ? <Spinner /> : authorized
                 ? <span className="row"><Badge tone="ok">you pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, true)}</span></span>
@@ -368,10 +368,10 @@ function WalletFlow() {
             <p className="t2 small" style={{ margin: 0 }}>
               {kind === "contract"
                 ? standard === 6
-                  ? <>Connect as the contract's owner{facts.owner ? <> (<Addr value={facts.owner} n={8} />)</> : null}, or have the owner grant your address a delegate.xyz delegation. If the contract has no owner(), pick a different rule above.</>
+                  ? <>Connect as the contract's owner{facts.owner ? <> (<Addr value={facts.owner} n={8} />)</> : null}, or have the owner authorise your address to act for them on delegate.xyz. If the contract has no owner(), pick a different rule above.</>
                   : <>Connect as an address that holds the contract's DEFAULT_ADMIN_ROLE, or pick a different rule above.</>
                 : facts.ownerOf
-                  ? <>Connect as the token's owner (<Addr value={facts.ownerOf} n={8} />), or have the owner grant your address a delegate.xyz delegation for it.</>
+                  ? <>Connect as the token's owner (<Addr value={facts.ownerOf} n={8} />), or have the owner authorise your address to act for them on delegate.xyz.</>
                   : <>Hold a balance of this id from the connected wallet, or pick a different rule above.</>}
             </p>
           </Step>
@@ -428,7 +428,7 @@ contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1
         // ownerOf(tokenId) still reverts here, so this contract may speak for the token.
         ADAPTER.${call}(STANDARD, address(this), tokenId, agentURI);
         _${standard === 0 ? "safeMint(to, tokenId)" : "mint(to, tokenId, 1, \"\")"};
-        // From here on, only the holder (or their delegate.xyz delegate) controls the identity.
+        // From here on, only the holder (or a wallet they authorised via delegate.xyz) controls the identity.
     }
 
     // The UBID is known before the token exists - put it in the token's metadata if you like.
@@ -443,7 +443,7 @@ contract AgentCollection is ${standard === 0 ? "ERC721" : standard === 3 ? "ERC1
       <ul className="guide-list">
         <li>A token contract may act for one of its own tokens while <span className="mono">ownerOf(tokenId)</span> reverts or returns zero.</li>
         <li>That is true before the mint. So the contract claims first, mints second, and the identity is waiting for the first owner.</li>
-        <li>After the mint, only the holder (or their delegate.xyz delegate) controls it. The collection does not.</li>
+        <li>After the mint, only the holder controls it, or a wallet the holder has authorised via delegate.xyz. The collection does not.</li>
       </ul>
       <div className="guide-label">What you do</div>
       <ol className="guide-list">
@@ -498,7 +498,7 @@ contract MyThing is Ownable {
       <p className="t2 small" style={{ margin: "0 0 10px" }}>The contract is the subject. A person claims for it, from a wallet, on the other path.</p>
       <div className="guide-label">What the adapter checks</div>
       <ul className="guide-list">
-        <li><b>CONTRACT_OWNABLE</b> - the caller is whatever <span className="mono">owner()</span> returns, or a delegate.xyz delegate of it.</li>
+        <li><b>CONTRACT_OWNABLE</b> - the caller is whatever <span className="mono">owner()</span> returns, or a wallet that owner has authorised to act for them.</li>
         <li><b>CONTRACT_ADMIN</b> - the caller holds AccessControl's <span className="mono">DEFAULT_ADMIN_ROLE</span>.</li>
       </ul>
       <div className="guide-label">What you do</div>
@@ -510,7 +510,7 @@ contract MyThing is Ownable {
       <p className="hint" style={{ margin: "0 0 8px" }}>If it has neither yet, the smallest version:</p>
       <CodeBlock code={code} />
       <p className="hint" style={{ margin: "10px 0 0" }}>
-        The owner can also grant a delegate.xyz delegation so another wallet manages the identity without holding the contract.
+        The owner can also authorise another wallet to act for them, so a hot wallet manages the identity while a cold wallet or multisig keeps the contract. That is done on delegate.xyz, a public registry the adapter reads.
       </p>
     </Step>
   );
@@ -520,9 +520,9 @@ function authorityDetail(kind: Kind, standard: number, f: Facts, you: Address | 
   if (kind === "eoa") return "an ACCOUNT identity authorises exactly its own address, and you are it";
   if (standard === 6) return f.owner ? `owner() is ${shortHex(f.owner, 10)}${f.owner === you ? ", your address" : ""}` : "the contract does not answer owner()";
   if (standard === 7) return f.isAdmin ? "your address holds DEFAULT_ADMIN_ROLE" : "your address does not hold DEFAULT_ADMIN_ROLE";
-  if (standard === 5) return pass ? "the contract has delegated to your address" : "only the contract itself (or a delegate.xyz delegate it named) passes";
+  if (standard === 5) return pass ? "the contract has delegated to your address" : "only the contract itself passes, or a wallet the contract has authorised on delegate.xyz";
   if (standard === 1 || standard === 2) return f.balance !== null ? `your balance of this id is ${f.balance}` : "the contract does not answer balanceOf for this id";
-  return f.ownerOf ? `ownerOf is ${shortHex(f.ownerOf, 10)}${f.ownerOf === you ? ", your address" : pass ? ", and you hold a delegation" : ""}` : "ownerOf reverts for this id";
+  return f.ownerOf ? `ownerOf is ${shortHex(f.ownerOf, 10)}${f.ownerOf === you ? ", your address" : pass ? ", who has authorised your wallet on delegate.xyz" : ""}` : "ownerOf reverts for this id";
 }
 
 /**
@@ -571,14 +571,14 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       <div className="guide-label">What the adapter checks</div>
       <ul className="guide-list">
         <li>Bound as <b>ACCOUNT</b>, the identity is controlled by the address itself: the caller must <i>be</i> the contract.</li>
-        <li>No wallet can do this on its behalf. The only exception is a delegate.xyz delegation the contract itself has granted.</li>
+        <li>No wallet can do this on its behalf, unless the contract has first authorised that wallet to act for it on delegate.xyz, a public registry the adapter reads.</li>
         <li>The token id is always 0 for ACCOUNT.</li>
       </ul>
       <div className="guide-label">Three ways to make the call</div>
       <ul className="guide-list">
         <li><b>Add code to it</b> - a function that calls the adapter, gated like your other admin actions.</li>
         <li><b>It can execute calls</b> - a Safe, a smart wallet, or any contract with an execute function sends the prebuilt call.{contract ? "" : " Needs the deployed address."}</li>
-        <li><b>Delegate to my wallet</b> - one call from the contract, then you manage the identity from here like any other.</li>
+        <li><b>Delegate to my wallet</b> - the contract authorises your wallet to act for it (one call), then you manage the identity from here like any other.</li>
       </ul>
       <div className="seg" style={{ margin: "0 0 12px" }}>
         <button className={route === "code" ? "active" : ""} onClick={() => setRoute("code")}>Add code to it</button>
@@ -614,7 +614,7 @@ delegateAll(${you ?? "<your wallet>"}, keccak256("adapter8004.manage"), true)`;
       {route === "delegate" && (
         <>
           <ol className="guide-list">
-            <li>From the contract, call the delegate.xyz registry as below. It grants your wallet the adapter's rights for this contract.</li>
+            <li>From the contract, call the delegate.xyz registry as below. It records that your wallet may act for the contract where the adapter is concerned, and nothing else.</li>
             <li>Come back with that wallet connected: the claim, and everything after it, is a normal transaction here.</li>
           </ol>
           <CodeBlock code={delegateNote} />
