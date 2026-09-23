@@ -51,6 +51,9 @@ export interface Identity {
   /** A picture: the token's metadata image, else the agent card's. Resolved in the background,
    *  so it can arrive a poll after the identity does. Optional for older indexers. */
   image?: string | null;
+  /** The token's metadata card (name, description, image), or the agent card's where the token
+   *  has none. Resolved in the background like the image. */
+  card?: { image: string | null; name: string | null; description: string | null; source: "token" | "agent" } | null;
   boundAddress: Address;
   tokenId: string;
   /** Who holds the controller right now, where control is a single nameable address. null means the

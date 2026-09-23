@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PublicClient } from "viem";
-import { imageFor } from "../src/images.js";
+import { cardFor, imageFor } from "../src/images.js";
 import type { IdentityState } from "../src/projection.js";
 import { Standard } from "../src/ubid.js";
 
@@ -69,5 +69,18 @@ describe("identity images", () => {
     const c = client({ tokenURI: () => (reads++, json({ image: "https://x/y.png" })) });
     expect(await resolved(c, identity({ standard: Standard.ACCOUNT }))).toBeNull();
     expect(reads).toBe(0);
+  });
+
+  it("keeps the token's name and description, and lets the agent card fill what the token left blank", async () => {
+    const c = client({ tokenURI: () => json({ name: "Punk #7", image: "ipfs://bafy/7.png" }) });
+    const id = identity({ agentURI: json({ name: "PunkBot", description: "Trades punks, politely." }) });
+    expect(cardFor(c, id)).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(cardFor(c, id)).toEqual({
+      image: "https://ipfs.io/ipfs/bafy/7.png",
+      name: "Punk #7",
+      description: "Trades punks, politely.",
+      source: "token",
+    });
   });
 });

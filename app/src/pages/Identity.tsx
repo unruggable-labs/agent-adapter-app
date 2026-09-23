@@ -50,6 +50,9 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <StandardBadge id={id} />
           </div>
           <p className="mono t3 small" style={{ margin: 0, overflowWrap: "anywhere" }}>{id.ubid}</p>
+          {id.card?.name && id.card.name !== displayName(id) && (
+            <p className="t2 small" style={{ margin: 0 }}>{id.card.name}<span className="t3"> · from the {id.card.source === "token" ? "token's" : "agent card's"} metadata</span></p>
+          )}
         </div>
         <div className="head-actions">
           <StarButton id={id} />
@@ -64,6 +67,12 @@ export function IdentityPage({ ubid }: { ubid: string }) {
       {tab === "history" && <HistoryPanel id={id} />}
 
       <div className="stack" hidden={tab !== "profile"}>
+        {id.card?.description && (
+          <Section label={id.card.source === "token" ? "About this token" : "About this agent"}>
+            <p className="t2" style={{ margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{id.card.description}</p>
+            <p className="hint" style={{ margin: "8px 0 0" }}>From the {id.card.source === "token" ? "token's own metadata" : "agent card at the agent URI"}, as published by whoever controls it. Adapterscan repeats it, it doesn't vouch for it.</p>
+          </Section>
+        )}
         <ConfirmBanner id={id} />
         <WalletLinkBanner id={id} />
 

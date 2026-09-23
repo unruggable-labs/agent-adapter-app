@@ -1,5 +1,5 @@
 import type { Address, PublicClient } from "viem";
-import { imageFor } from "./images.js";
+import { cardFor } from "./images.js";
 import { labelsFor } from "./names.js";
 import { ProjectionStore, type IdentityState } from "./projection.js";
 import { probeTrustBase } from "./trustbase.js";
@@ -60,7 +60,8 @@ async function identityView(store: ProjectionStore, client: PublicClient, id: Id
   return {
     ...id,
     ...labels,
-    image: imageFor(client, id),
+    image: cardFor(client, id)?.image ?? null,
+    card: cardFor(client, id),
     standardName: STANDARD_NAMES[id.standard],
     currentControllerHolder,
     reputation,

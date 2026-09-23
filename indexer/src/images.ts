@@ -18,13 +18,26 @@ const MISS_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 6_000;
 const MAX_JSON_BYTES = 1_000_000;
 
-const cache = new Map<string, { value: string | null; at: number }>();
+/** What a metadata document says about the thing: the token's card, or failing that the agent's. */
+export interface Card {
+  image: string | null;
+  name: string | null;
+  description: string | null;
+  /** Which document it came from. */
+  source: "token" | "agent";
+}
+
+const cache = new Map<string, { value: Card | null; at: number }>();
 const inFlight = new Set<string>();
 
 const TOKEN_URI_ABI = [{ type: "function", name: "tokenURI", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
 const URI_ABI = [{ type: "function", name: "uri", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
 
 export function imageFor(client: PublicClient, id: IdentityState): string | null {
+  return cardFor(client, id)?.image ?? null;
+}
+
+export function cardFor(client: PublicClient, id: IdentityState): Card | null {
   const key = `${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
   const hit = cache.get(key);
   const fresh = hit && Date.now() - hit.at < (hit.value ? HIT_TTL_MS : MISS_TTL_MS);
@@ -41,11 +54,18 @@ export function imageFor(client: PublicClient, id: IdentityState): string | null
   return hit?.value ?? null;
 }
 
-async function resolve(client: PublicClient, id: IdentityState): Promise<string | null> {
+async function resolve(client: PublicClient, id: IdentityState): Promise<Card | null> {
   const tokenUri = await tokenMetadataUri(client, id).catch(() => null);
-  const fromToken = tokenUri ? await imageInMetadata(tokenUri).catch(() => null) : null;
-  if (fromToken) return fromToken;
-  return id.agentURI ? await imageInMetadata(id.agentURI).catch(() => null) : null;
+  const token = tokenUri ? await cardIn(tokenUri, "token").catch(() => null) : null;
+  const agent = id.agentURI ? await cardIn(id.agentURI, "agent").catch(() => null) : null;
+  if (!token && !agent) return null;
+  // The token's card leads; the agent card fills anything it left blank.
+  return {
+    image: token?.image ?? agent?.image ?? null,
+    name: token?.name ?? agent?.name ?? null,
+    description: token?.description ?? agent?.description ?? null,
+    source: token ? "token" : "agent",
+  };
 }
 
 /** Where a token's metadata lives, per standard. ERC-1155 URIs may carry a `{id}` slot that takes
@@ -67,13 +87,21 @@ async function tokenMetadataUri(client: PublicClient, id: IdentityState): Promis
   }
 }
 
-/** Fetch a metadata document and return its image as something a browser can load. */
-async function imageInMetadata(uri: string): Promise<string | null> {
+/** Fetch a metadata document and read its card: image as something a browser can load, name
+ *  and description as plain text, cut to sane lengths. Null when it holds none of the three. */
+async function cardIn(uri: string, source: Card["source"]): Promise<Card | null> {
   const json = await readJson(uri);
   if (!json || typeof json !== "object") return null;
   const doc = json as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, max) : null);
   const candidate = [doc.image, doc.image_url, doc.imageUrl].find((v) => typeof v === "string" && v.length > 0) as string | undefined;
-  return candidate ? toBrowserUrl(candidate) : null;
+  const card: Card = {
+    image: candidate ? toBrowserUrl(candidate) : null,
+    name: str(doc.name, 80),
+    description: str(doc.description, 600),
+    source,
+  };
+  return card.image || card.name || card.description ? card : null;
 }
 
 async function readJson(uri: string): Promise<unknown> {
