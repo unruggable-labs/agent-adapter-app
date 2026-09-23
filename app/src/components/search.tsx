@@ -17,7 +17,8 @@ const MAX = 8;
 /**
  * The one search box, in the header of every page. It answers the product's question - who is
  * this? - for whatever gets pasted: a wallet address (the mutual-pointing lookup), a UBID or a
- * prefix of one, an ERC-8004 id, or part of a name. Results are the identities themselves;
+ * prefix of one, an ERC-8004 id, or part of a name. An address also finds what it holds or
+ * controls: the NFTs it owns, the contracts it is owner of. Results are the identities themselves;
  * picking one opens its profile.
  */
 export function SearchBar() {
@@ -71,6 +72,7 @@ export function SearchBar() {
       if (hex && id.ubid.startsWith(query)) add({ id, note: "UBID" });
       else if (asAddress && id.boundAddress === query) add({ id, note: id.standard === 5 ? "this address is the agent" : "bound to this contract" });
       else if (asAddress && id.agentWallet === query) add({ id, note: "operating wallet" });
+      else if (asAddress && id.currentControllerHolder === query) add({ id, note: id.standard <= 4 ? "holds the token" : "controls it" });
       else if (agentId) {
         const match = id.agentIds.find((a) => a.startsWith(agentId));
         if (match) add({ id, note: `ERC-8004 #${match}` });
