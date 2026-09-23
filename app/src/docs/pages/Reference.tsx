@@ -15,7 +15,7 @@ export function Reference() {
 bindingOf(uint256 agentId) view returns (Binding)            // the coordinates a registered agent is bound to
 bindingHashOf(uint256 agentId) view returns (bytes32 ubid)   // its UBID; reverts UnknownAgent
 isController(uint256 agentId, address account) view returns (bool)
-identityRegistry() view returns (address)                    // immutable; cannot be repointed`}</Code>
+identityRegistry() view returns (address)                    // an immutable; there is no setter`}</Code>
 
       <H2 id="claim">Counterfactual writes</H2>
       <p>Authority-checked, emit-only. See <a href="#/counterfactual">Counterfactual registration</a> for the list and the indexing rules.</p>
@@ -37,9 +37,8 @@ unsetAgentWallet(uint256 agentId)`}</Code>
 
       <H2 id="wallet">Wallet designation</H2>
       <Code lang="solidity">{`setWalletUBID(uint8 standard, address boundAddress, uint256 tokenId) returns (bytes32)   // "I work for this identity"
-setWalletUBIDFor(address account, uint8 standard, address boundAddress, uint256 tokenId)     // the same, by a delegate
-clearWalletUBID()
-clearWalletUBIDFor(address account)`}</Code>
+clearWalletUBID()                                                                           // withdraw it`}</Code>
+      <p>The caller is always the wallet itself. There is no acting-for path here: a wallet's half of the link has to come from that wallet.</p>
 
       <H2 id="attest">Attestations</H2>
       <Code lang="solidity">{`attest(uint8 attestationType, bytes32 ubid, bytes32 variant, bytes data)
@@ -60,7 +59,9 @@ Attested, AttestationRevoked`}</Code>
       <H2 id="admin">Admin</H2>
       <p>
         <span className="mono">upgradeToAndCall</span>, owner-only (a Safe). There is no <span className="mono">setIdentityRegistry</span>:
-        the registry is an immutable and an upgrade to an implementation with a different one is refused.
+        the registry is an immutable baked into the implementation. An upgrade could still ship an
+        implementation with a different one; the code does not guard against that, so it is an operator
+        rule. See <a href="#/trust">Trust and security</a>.
       </p>
     </>
   );

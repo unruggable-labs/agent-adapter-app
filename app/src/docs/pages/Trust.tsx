@@ -4,7 +4,7 @@ export function Trust() {
   const qa: { q: string; a: React.ReactNode }[] = [
     {
       q: "Who controls the adapter, and what can they do?",
-      a: <>The adapter is a UUPS-upgradeable proxy owned by a Safe. Its owner can upgrade the implementation. An upgrade is arbitrary code, so in principle it could rewrite bindings or bypass controller checks - that is true of every upgradeable contract and we'd rather say it than have you find out. What it cannot do any more is repoint the identity registry: that address is baked into the implementation and a later upgrade that differs is refused.</>,
+      a: <>The adapter is a UUPS-upgradeable proxy owned by a Safe. Its owner can upgrade the implementation. An upgrade is arbitrary code, so in principle it could rewrite bindings, bypass controller checks, or point at a different identity registry - that is true of every upgradeable contract and we'd rather say it than have you find out. There is no function to repoint the registry: it is an immutable in the implementation, and keeping it unchanged across upgrades is an operator rule the audit flagged rather than something the code enforces. So the honest summary is: trust the adapter as much as you trust its Safe.</>,
     },
     {
       q: "What if the token contract lies?",
