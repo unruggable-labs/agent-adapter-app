@@ -267,9 +267,6 @@ input, textarea, select { font: inherit; color: inherit; }
 /* Address page: a mark that says "this is an address, not an agent", and identity rows. */
 .addr-mark { width: 44px; height: 44px; border-radius: 38%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-3); color: var(--text-3); font-size: 20px; font-weight: 600; }
 .search-item-addr { width: 24px; height: 24px; border-radius: 38%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-3); color: var(--text-3); font-size: 13px; font-weight: 600; }
-.id-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 8px 6px; border-radius: var(--r-md); border-bottom: 1px solid var(--border); }
-.id-row:last-child { border-bottom: none; }
-.id-row:hover { background: var(--surface-2); }
 
 /* An identity's picture, in the same rounded-square frame as the generated mark. */
 .avatar-img { display: inline-block; flex-shrink: 0; border-radius: 38%; object-fit: cover; background: var(--surface-3); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }

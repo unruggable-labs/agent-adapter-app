@@ -51,8 +51,8 @@ export function AddressPage({ address }: { address: string }) {
       </div>
 
       <div className="stat-row" style={{ marginBottom: 18 }}>
-        <Stat n={self ? "yes" : "no"} label="is an agent itself" />
-        <Stat n={operates ? (wallet?.verified ? "verified" : "claimed") : "-"} label="operates an agent" />
+        <Stat n={self ? "Yes" : "No"} label="is an agent itself" />
+        <Stat n={operates ? (wallet?.verified ? "Yes" : "Claimed") : "No"} label="operates an agent" />
         <Stat n={holds.length} label={(holds.length === 1 ? "identity" : "identities") + " held or controlled"} />
         <Stat n={rows ? rows.length : "…"} label={pluralise(rows?.length ?? 0, "statement") + " made"} />
       </div>
@@ -60,7 +60,7 @@ export function AddressPage({ address }: { address: string }) {
       <div className="stack">
         <Section label="As an agent">
           {loading ? <Spinner /> : self ? (
-            <IdentityRow id={self} note="this address is the agent" tone="ok" onOpen={() => navigate(`/identity/${self.ubid}`)} />
+            <IdentityTable rows={[{ id: self, note: "this address is the agent", tone: "ok" }]} />
           ) : (
             <p className="t2 small" style={{ margin: 0 }}>Not an agent itself. Nothing has claimed this address as an ACCOUNT identity.</p>
           )}
@@ -68,21 +68,14 @@ export function AddressPage({ address }: { address: string }) {
 
         <Section label="Operates">
           {wallet === undefined ? <Spinner /> : operates ? (
-            <IdentityRow
-              id={operates}
-              note={wallet?.verified ? "verified both ways" : "this wallet says so; the agent doesn't say it back"}
-              tone={wallet?.verified ? "ok" : "warn"}
-              onOpen={() => navigate(`/identity/${operates.ubid}`)}
-            />
+            <IdentityTable rows={[{ id: operates, note: wallet?.verified ? "verified both ways" : "this wallet says so; the agent doesn't say it back", tone: wallet?.verified ? "ok" : "warn" }]} />
           ) : (
             <p className="t2 small" style={{ margin: 0 }}>This address doesn't point at any agent as its operating wallet.</p>
           )}
           {namedBy.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div className="section-label">Named as operating wallet by</div>
-              {namedBy.map((i) => (
-                <IdentityRow key={i.ubid} id={i} note="one-directional claim" tone="warn" onOpen={() => navigate(`/identity/${i.ubid}`)} />
-              ))}
+              <IdentityTable rows={namedBy.map((id) => ({ id, note: "one-directional claim", tone: "warn" }))} />
               <p className="hint" style={{ marginTop: 8 }}>These agents name this wallet, but the wallet has not pointed back. Either half alone is easy to fake.</p>
             </div>
           )}
@@ -92,14 +85,14 @@ export function AddressPage({ address }: { address: string }) {
           {loading ? <Spinner /> : holds.length === 0 ? (
             <p className="t2 small" style={{ margin: 0 }}>No tokens or contracts this address currently controls have identities.</p>
           ) : (
-            holds.map((i) => <IdentityRow key={i.ubid} id={i} note={i.standard <= 4 ? "holds the token" : "owner"} onOpen={() => navigate(`/identity/${i.ubid}`)} />)
+            <IdentityTable rows={holds.map((id) => ({ id, note: id.standard <= 4 ? "holds the token" : "owner" }))} />
           )}
         </Section>
 
         {boundHere.length > 0 && (
           <Section label={`Bound to this address · ${boundHere.length} ${boundHere.length === 1 ? "identity" : "identities"}`}>
             <p className="t2 small" style={{ margin: "0 0 8px" }}>This address is a contract that identities are bound to - a collection, or a contract controlled by its owner or admins.</p>
-            {boundHere.slice(0, 25).map((i) => <IdentityRow key={i.ubid} id={i} onOpen={() => navigate(`/identity/${i.ubid}`)} />)}
+            <IdentityTable rows={boundHere.slice(0, 25).map((id) => ({ id }))} />
             {boundHere.length > 25 && <p className="hint">and {boundHere.length - 25} more</p>}
           </Section>
         )}
@@ -134,15 +127,28 @@ export function AddressPage({ address }: { address: string }) {
   );
 }
 
-/** One identity as a row: picture, UBID, standard, controller, registration, and why it's listed. */
-function IdentityRow({ id, note, tone, onOpen }: { id: Identity; note?: string; tone?: string; onOpen: () => void }) {
+/** Identities as a table, in the identities page's columns, plus why each one is listed here. */
+function IdentityTable({ rows }: { rows: { id: Identity; note?: string; tone?: string }[] }) {
+  const { navigate } = useApp();
+  const withNotes = rows.some((r) => r.note);
   return (
-    <button type="button" className="id-row" onClick={onOpen}>
-      <UbidCell ubid={id.ubid} image={id.image} registration={registrationOf(id)} />
-      <StandardBadge id={id} />
-      <ControllerCell id={id} />
-      <StatusBadge id={id} />
-      {note && <Badge tone={tone ?? "outline"}>{note}</Badge>}
-    </button>
+    <div className="table-scroll">
+      <table className="table clickable">
+        <thead>
+          <tr><th>UBID</th><th>Standard</th><th>Controller</th><th>Registration</th>{withNotes && <th>Why it's here</th>}</tr>
+        </thead>
+        <tbody>
+          {rows.map(({ id, note, tone }) => (
+            <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
+              <td><UbidCell ubid={id.ubid} image={id.image} registration={registrationOf(id)} /></td>
+              <td><StandardBadge id={id} /></td>
+              <td><ControllerCell id={id} /></td>
+              <td><StatusBadge id={id} /></td>
+              {withNotes && <td>{note && <Badge tone={tone ?? "outline"}>{note}</Badge>}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

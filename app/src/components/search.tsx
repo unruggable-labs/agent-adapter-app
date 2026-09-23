@@ -70,12 +70,18 @@ export function SearchBar() {
       seen.add(h.id.ubid);
       out.push({ kind: "identity", ...h });
     };
-    // A complete address leads with its own page; everything below it is a preview.
+    const hex = /^0x[0-9a-f]{1,64}$/.test(query);
+    // A complete address leads with its own page. A prefix leads with the pages of the addresses
+    // the indexer knows that start with it - bound addresses, holders, operating wallets.
     if (asAddress) out.push({ kind: "address", address: query as Address });
+    else if (hex && query.length >= 4) {
+      const known = new Set<string>();
+      for (const id of identities) for (const a of [id.boundAddress, id.currentControllerHolder, id.agentWallet]) if (a && a.startsWith(query)) known.add(a);
+      for (const a of [...known].slice(0, 3)) out.push({ kind: "address", address: a as Address });
+    }
     if (walletHit) add(walletHit);
     // Prefixes match from the first character, so results appear while a UBID or address is
     // still being typed or right after a paste - not only once it is complete.
-    const hex = /^0x[0-9a-f]{1,64}$/.test(query);
     const agentId = /^#?\d+$/.test(query) ? query.replace("#", "") : null;
     for (const id of identities) {
       if (hex && id.ubid.startsWith(query)) add({ id, note: "UBID" });
@@ -93,7 +99,7 @@ export function SearchBar() {
         if (hay.includes(query)) add({ id });
       }
     }
-    return out.slice(0, MAX + 1);
+    return out.slice(0, MAX + 3);
   }, [query, identities, walletHit, asAddress]);
 
   useEffect(() => setCursor(0), [query]);
@@ -141,7 +147,7 @@ export function SearchBar() {
           {hits.map((h, i) =>
             h.kind === "address" ? (
               <button
-                key="address"
+                key={`address-${h.address}`}
                 type="button"
                 role="option"
                 aria-selected={i === cursor}
