@@ -261,6 +261,13 @@ input, textarea, select { font: inherit; color: inherit; }
 .codeblock { position: relative; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
 .codeblock-bar { position: absolute; top: 4px; right: 4px; }
 .codeblock pre { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; color: var(--text-1); }
+/* Syntax colours from the app's own palette, so code sits in both themes. */
+.tk-comment { color: var(--text-3); font-style: italic; }
+.tk-string { color: var(--c-emerald); }
+.tk-number { color: var(--c-orange); }
+.tk-keyword { color: var(--c-violet); }
+.tk-type { color: var(--c-sky); }
+.tk-fn { color: var(--c-blue); }
 .callblock { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
 .callblock .kv { font-size: 12px; }
 

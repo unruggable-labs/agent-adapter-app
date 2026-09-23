@@ -11,7 +11,6 @@ export function Deployments() {
   return (
     <>
       <h1 className="page-title">Deployments</h1>
-      <p className="page-sub">Use the proxy addresses. Implementations change behind them; the proxies don't.</p>
 
       <H2 id="proxies">Adapter proxies</H2>
       <div className="table-scroll">
@@ -19,16 +18,11 @@ export function Deployments() {
           <thead><tr><th>Chain</th><th>Chain id</th><th>Adapter proxy</th><th>Implementation</th><th>Adapterscan</th></tr></thead>
           <tbody>
             <tr><td>Sepolia</td><td className="num">11155111</td><td><A chain="sepolia" address="0x7621630cB63a73a194f45A3E6801B8C6A7eC2f92" /></td><td>v0.0.17, since block <a href="https://sepolia.etherscan.io/block/11661779" target="_blank" rel="noopener noreferrer" className="num">11661779</a></td><td><a href="https://testnet.adapterscan.com">testnet.adapterscan.com</a></td></tr>
-            <tr><td>Ethereum</td><td className="num">1</td><td><A chain="ethereum" address="0xde152AfB7db5373F34876E1499fbD893A82dD336" /></td><td>pre-v0.0.17</td><td>after the upgrade</td></tr>
-            <tr><td>Base</td><td className="num">8453</td><td><A chain="base" address="0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" /></td><td>pre-v0.0.17</td><td>not yet</td></tr>
+            <tr><td>Ethereum</td><td className="num">1</td><td><A chain="ethereum" address="0xde152AfB7db5373F34876E1499fbD893A82dD336" /></td><td>pre-v0.0.17</td><td>-</td></tr>
+            <tr><td>Base</td><td className="num">8453</td><td><A chain="base" address="0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" /></td><td>pre-v0.0.17</td><td>-</td></tr>
           </tbody>
         </table>
       </div>
-      <Note tone="warn">
-        v0.0.17 changed every counterfactual identifier and event, and the attestation surface is new in it.
-        The Ethereum and Base proxies have not been upgraded yet, so integrate against Sepolia until they are.
-        Adapterscan indexes a chain only from its v0.0.17 cutover block - older events belong to an older scheme.
-      </Note>
 
       <H2 id="registries">ERC-8004 identity registries</H2>
       <table className="table">

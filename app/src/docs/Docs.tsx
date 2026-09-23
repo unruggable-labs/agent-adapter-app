@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { CodeBlock } from "../components/code";
 import { EXPLORER_URL } from "../lib/chain";
 import { Counterfactual } from "./pages/Counterfactual";
 import { Deployments } from "./pages/Deployments";
@@ -118,12 +119,8 @@ export function H2({ id, children }: { id: string; children: ReactNode }) {
   return <h2 className="h-section docs-h2" id={id}><a href={`#${location.hash.slice(1).split("#")[0]}`} style={{ color: "inherit", textDecoration: "none" }}>{children}</a></h2>;
 }
 
-export function Code({ children, lang }: { children: string; lang?: string }) {
-  return (
-    <div className="codeblock" data-lang={lang}>
-      <pre>{children}</pre>
-    </div>
-  );
+export function Code({ children }: { children: string; lang?: string }) {
+  return <CodeBlock code={children} />;
 }
 
 export function Note({ children, tone = "" }: { children: ReactNode; tone?: string }) {

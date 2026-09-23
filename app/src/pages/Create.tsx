@@ -4,6 +4,7 @@ import { Addr, Badge, Spinner, Tip } from "../components/ui";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, displayName, publicClient, shortHex } from "../lib/chain";
 import { canSend, revertReason, sendTx } from "../lib/tx";
+import { CodeBlock, CopyButton } from "../components/code";
 
 /**
  * Create an identity, one question at a time.
@@ -666,24 +667,6 @@ function CallBlock({ label, to, data }: { label: string; to: Address; data: Hex 
         <dt>data</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{data}</dd>
       </dl>
     </div>
-  );
-}
-
-function CodeBlock({ code }: { code: string }) {
-  return (
-    <div className="codeblock">
-      <div className="codeblock-bar"><CopyButton text={code} /></div>
-      <pre>{code}</pre>
-    </div>
-  );
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 900); }}>
-      {copied ? "Copied" : "Copy"}
-    </button>
   );
 }
 
