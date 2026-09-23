@@ -256,7 +256,7 @@ export function StatusBadge({ id }: { id: Identity }) {
   if (id.claimed)
     return (
       <Badge tone="accent" tip="Counterfactual claim: the identity lives in the event log only.">
-        <span className="dot" /> claim only
+        <span className="dot" /> counterfactual
       </Badge>
     );
   return (

@@ -30,6 +30,8 @@ export function IdentitiesPage() {
         {overview && overview.dropped > 0 && <span className="t3"> · {overview.dropped} events dropped at verification</span>}
       </p>
 
+      <StatPanels />
+
       <div className="card table-scroll" style={{ padding: "4px 14px" }}>
         <table className="table clickable">
           <thead>
@@ -37,7 +39,7 @@ export function IdentitiesPage() {
               <th><Tip tip="The Universal Binding Identifier - the permanent hash naming this identity. Everything (reputation, wallet links, registration) attaches to this. The mark beside it: a chain link means an ERC-8004 agent is minted, a dashed ring means a counterfactual claim only.">UBID</Tip></th>
               <th><Tip tip="What kind of controller controls the identity: a token standard means whoever owns the token controls it; ACCOUNT means the address itself; CONTRACT_OWNABLE/ADMIN mean the contract's owner or admins.">Standard</Tip></th>
               <th><Tip tip="The thing that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Controller</Tip></th>
-              <th><Tip tip="How the identity exists: 'ERC-8004 #id' means a real agent was minted on the shared registry with that id; 'claim only' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
+              <th><Tip tip="How the identity exists: 'ERC-8004 #ID' means a real agent was minted on the shared registry with that id; 'counterfactual' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-center"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
               <th className="td-center">Stars</th>
             </tr>
@@ -80,6 +82,39 @@ export function IdentitiesPage() {
             <button className="btn btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The registry at a glance, above the table. A project is a distinct collection or contract that
+ * identities are bound to - one collection with a hundred agents is one project. Counts come from
+ * the same list the table shows, so they can't disagree with it.
+ */
+function StatPanels() {
+  const { identities, overview } = useApp();
+  const projects = new Set(identities.map((i) => i.boundAddress)).size;
+  const registered = identities.filter((i) => i.agentIds.length > 0).length;
+  const loading = identities.length === 0 && !overview;
+  const n = (v: number) => (loading ? <Skeleton w={40} /> : v.toLocaleString());
+  return (
+    <div className="stat-panels">
+      <div className="stat-panel">
+        <div className="stat-panel-n">{n(identities.length)}</div>
+        <div className="stat-panel-l"><Tip tip="Every identity the indexer knows on this network - claimed, registered, or referenced by an attestation.">UBIDs</Tip></div>
+      </div>
+      <div className="stat-panel">
+        <div className="stat-panel-n">{n(projects)}</div>
+        <div className="stat-panel-l"><Tip tip="Distinct collections and contracts that identities are bound to. A collection with a hundred agents counts once.">Projects</Tip></div>
+      </div>
+      <div className="stat-panel">
+        <div className="stat-panel-n">{n(registered)}</div>
+        <div className="stat-panel-l"><Tip tip="Identities with an ERC-8004 agent minted on the shared registry. The rest are counterfactual claims.">Registered on-chain</Tip></div>
+      </div>
+      <div className="stat-panel">
+        <div className="stat-panel-n">{loading || !overview ? <Skeleton w={40} /> : overview.attestations.toLocaleString()}</div>
+        <div className="stat-panel-l"><Tip tip="Stars, ratings, reviews and transaction records, across every identity.">Attestations</Tip></div>
       </div>
     </div>
   );

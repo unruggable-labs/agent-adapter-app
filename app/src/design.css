@@ -280,6 +280,13 @@ input, textarea, select { font: inherit; color: inherit; }
 /* ------------------------------------------------------------------ stats */
 
 .stat-row { display: flex; gap: 32px; flex-wrap: wrap; }
+
+/* Headline numbers above a listing: one card per figure, four across, two on narrow screens. */
+.stat-panels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 4px 0 16px; }
+.stat-panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 16px 12px; box-shadow: var(--shadow-1); }
+.stat-panel-n { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat-panel-l { font-size: 11.5px; color: var(--text-3); margin-top: 6px; }
+@media (max-width: 760px) { .stat-panels { grid-template-columns: 1fr 1fr; } }
 .stat .stat-n { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .stat .stat-l { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
 
