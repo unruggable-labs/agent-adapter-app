@@ -18,6 +18,7 @@ import {
   utf8ToHex,
 } from "../lib/chain";
 import { canSend, sendTx } from "../lib/tx";
+import { ConnectWalletButton } from "../components/connect";
 
 type Tab = "profile" | "history";
 
@@ -394,7 +395,7 @@ function AttestPanel({ id }: { id: Identity }) {
   }
 
   return (
-    <Section label={signer ? `Leave feedback as ${signer.label}` : "Leave feedback (connect a wallet)"}>
+    <Section label={signer ? `Leave feedback as ${signer.label}` : "Leave feedback"}>
       <div className="field">
         <label>Rating</label>
         <div className="row">
@@ -432,13 +433,19 @@ function AttestPanel({ id }: { id: Identity }) {
       </div>
 
       <div className="row" style={{ marginTop: 8 }}>
-        <button className="btn btn-primary" disabled={busy || !signer || !refValid} onClick={submit}>
-          {busy ? <Spinner /> : parts.length > 1 ? "Submit feedback" : "Submit rating"}
-        </button>
+        {signer ? (
+          <button className="btn btn-primary" disabled={busy || !refValid} onClick={submit}>
+            {busy ? <Spinner /> : parts.length > 1 ? "Submit feedback" : "Submit rating"}
+          </button>
+        ) : (
+          <ConnectWalletButton />
+        )}
         <span className="hint">
-          {parts.length === 1
-            ? "One transaction. Add a review or a hash above to publish more alongside it."
-            : `${COUNT_WORDS[parts.length]} transactions: ${parts.join(", then ")}. They are separate records on-chain.`}
+          {!signer
+            ? "Feedback is signed by your wallet, so connect one first. What you've typed stays."
+            : parts.length === 1
+              ? "One transaction. Add a review or a hash above to publish more alongside it."
+              : `${COUNT_WORDS[parts.length]} transactions: ${parts.join(", then ")}. They are separate records on-chain.`}
         </span>
       </div>
     </Section>
