@@ -27,6 +27,19 @@ testnet.adapterscan.com, adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
 	import adapterscan 8788
 }
 
+# The documentation site: the same build, entered through docs.html.
+docs.adapterscan.com {
+	encode gzip zstd
+	root * /srv/adapter/app/dist
+	try_files {path} /docs.html
+	file_server
+	header {
+		-Server
+		-X-Powered-By
+		Strict-Transport-Security "max-age=15768000"
+	}
+}
+
 # Ethereum. The mainnet proxy is not on v0.0.17 yet, so there is no mainnet indexer to route
 # to; until there is, the apex sends people to testnet. When the upgrade lands: set
 # MAINNET_FROM_BLOCK in /etc/adapter.env, `systemctl enable --now adapter-indexer@mainnet`,

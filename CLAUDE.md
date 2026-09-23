@@ -18,7 +18,10 @@ tooltips kept to the fewest sentences that do the job.
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
   API core, also used by the Vercel function in `app/api/`.
 - `app/` — Vite/React UI (Linear/Stripe-register design, tokens in `src/design.css`, light
-  default + dark toggle). Dev-only: local-devnet network + anvil persona writes, chosen with
+  default + dark toggle). Two entries in one build: `index.html` (the explorer) and `docs.html`
+  (`src/docs/`, the documentation site at docs.adapterscan.com - the model page, the protocol
+  concepts, a quickstart, the contract map and deployments; the contract repo stays the source
+  of truth and the docs link to it). Dev-only: local-devnet network + anvil persona writes, chosen with
   VITE_NETWORK=local. Production picks Sepolia or Ethereum from the hostname; writes go through the user's
   connected wallet (wagmi + Reown AppKit, needs VITE_WC_PROJECT_ID). Personas are devnet-only.
 - `contracts/` + `indexer/artifacts/` — vendored demo mock + build artifacts; regeneration

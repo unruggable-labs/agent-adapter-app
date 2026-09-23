@@ -33,8 +33,9 @@ curl -fsSL https://raw.githubusercontent.com/unruggable-labs/agent-adapter-app/m
 
 ## DNS
 
-A records → 178.105.235.22 for `adapterscan.com`, `www.adapterscan.com` and
-`testnet.adapterscan.com`. Caddy issues certificates on first request, so each
+A records → 178.105.235.22 for `adapterscan.com`, `www.adapterscan.com`,
+`testnet.adapterscan.com` and `docs.adapterscan.com` (the documentation site, same
+build, entered through `docs.html`). Caddy issues certificates on first request, so each
 name must resolve before it is served. `adapter.ens8004.xyz` (GoDaddy) and the
 sslip.io name keep working as aliases of testnet.
 

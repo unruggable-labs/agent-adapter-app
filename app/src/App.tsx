@@ -3,12 +3,11 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { SearchBar } from "./components/search";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, NETWORK, shortHex } from "./lib/chain";
+import { ACTORS, DOCS_URL, NETWORK, shortHex } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
-import { HowPage } from "./pages/How";
 import { IdentitiesPage } from "./pages/Identities";
 import { IdentityPage } from "./pages/Identity";
 
@@ -127,9 +126,6 @@ function Shell() {
   else if (route.startsWith("/address/")) page = <AddressPage address={route.split("/")[2]} />;
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/create")) page = <CreatePage />;
-  // /how/<part> keeps the selected component in the URL, so a reload or a shared link lands
-  // on the same explanation.
-  else if (route.startsWith("/how")) page = <HowPage part={route.split("/")[2]} />;
 
   return (
     <div className="shell">
@@ -148,7 +144,7 @@ function Shell() {
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
 
         <div className="nav-label">Learn</div>
-        <NavItem to="/how" label="Agent identity" />
+        <a className="nav-item" href={DOCS_URL} style={{ textDecoration: "none" }}>Docs <span className="t3" style={{ marginLeft: "auto" }}>↗</span></a>
 
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>

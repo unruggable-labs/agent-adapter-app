@@ -122,6 +122,12 @@ export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 /** 8004Scan's chain slugs. A chain it doesn't index (the local devnet) gets no link. */
 const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia" };
 
+/** The explorer and the docs are one build on two hostnames; each links to the other. In dev both
+ *  are served by Vite: the docs at /docs.html. */
+const IS_DOCS_HOST = location.hostname.startsWith("docs.");
+export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www)\./, "")}`;
+export const EXPLORER_URL: string = import.meta.env.DEV ? "/" : IS_DOCS_HOST ? `https://${location.hostname.replace(/^docs\./, "testnet.")}` : "/";
+
 /** Etherscan's chain hosts. The local devnet has no explorer, so its transactions get no link. */
 const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io" };
 

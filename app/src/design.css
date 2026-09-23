@@ -711,3 +711,19 @@ input, textarea, select { font: inherit; color: inherit; }
 .ms-option:hover { background: var(--surface-2); }
 .ms-option input { margin: 0; accent-color: var(--accent); }
 
+
+/* ------------------------------------------------------------------ docs site */
+.docs-page { max-width: 820px; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
+.docs-page h1.page-title { color: var(--text-1); }
+.docs-page p { margin: 0 0 12px; }
+.docs-page a { color: var(--accent); text-decoration: none; }
+.docs-page a:hover { text-decoration: underline; }
+.docs-h2 { margin: 30px 0 10px; color: var(--text-1); }
+.docs-page .table { margin: 6px 0 16px; }
+.docs-page .table td { white-space: normal; }
+.docs-page .codeblock { margin: 6px 0 16px; }
+.docs-page .claim-list { margin: 0 0 14px; }
+.docs-page .claim-list li b { color: var(--text-1); }
+.docs-page .how-page { color: inherit; }
+.docs-pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; }
+.sidebar a.nav-item { display: flex; }
