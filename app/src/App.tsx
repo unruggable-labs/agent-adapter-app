@@ -5,6 +5,7 @@ import { SearchBar } from "./components/search";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, NETWORK, shortHex } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
+import { AddressPage } from "./pages/Address";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
 import { HowPage } from "./pages/How";
@@ -123,6 +124,7 @@ function Shell() {
 
   let page = <IdentitiesPage />;
   if (route.startsWith("/identity/")) page = <IdentityPage ubid={route.split("/")[2]} />;
+  else if (route.startsWith("/address/")) page = <AddressPage address={route.split("/")[2]} />;
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/create")) page = <CreatePage />;
   // /how/<part> keeps the selected component in the URL, so a reload or a shared link lands

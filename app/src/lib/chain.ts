@@ -130,6 +130,11 @@ export function explorerTxUrl(hash: string): string | null {
   return base ? `${base}/tx/${hash}` : null;
 }
 
+export function explorerAddressUrl(address: string): string | null {
+  const base = EXPLORER[NETWORK.chain.id];
+  return base ? `${base}/address/${address}` : null;
+}
+
 /** The 8004Scan page for an ERC-8004 agent id on the current network, or null when there isn't one. */
 export function scanAgentUrl(agentId: string): string | null {
   const slug = SCAN_SLUGS[NETWORK.chain.id];

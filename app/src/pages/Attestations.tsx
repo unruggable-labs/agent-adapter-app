@@ -144,7 +144,7 @@ export function AttestationsPage() {
   );
 }
 
-function payloadPreview(a: AttestationRow): string {
+export function payloadPreview(a: AttestationRow): string {
   if (a.typeName === "STAR") return a.data === "0x01" ? "★ 1" : "0";
   if (a.typeName === "RATING") return `${parseInt(a.data.slice(2), 16)}/100`;
   if (a.typeName === "CONFIRM_ACCOUNT") return "—";
