@@ -713,7 +713,8 @@ input, textarea, select { font: inherit; color: inherit; }
 
 
 /* ------------------------------------------------------------------ docs site */
-.docs-page { max-width: 820px; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
+.docs-page { max-width: 1120px; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
+.docs-page p, .docs-page .claim-list, .docs-page .callout { max-width: 820px; } /* prose stays a readable measure; tables and code take the width */
 .docs-page h1.page-title { color: var(--text-1); }
 .docs-page p { margin: 0 0 12px; }
 .docs-page a { color: var(--accent); text-decoration: none; }
