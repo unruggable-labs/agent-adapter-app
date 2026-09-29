@@ -57,10 +57,10 @@ export function IdentitiesPage() {
             ))}
             {identities.length === 0 && status === "loading" && <SkeletonRows />}
             {identities.length === 0 && status === "error" && (
-              <tr><td colSpan={6}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
+              <tr className="is-static"><td colSpan={6}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
             )}
             {identities.length === 0 && status === "ready" && (
-              <tr><td colSpan={6}><div className="empty">No identities yet - run the demo scenario or create one.</div></td></tr>
+              <tr className="is-static"><td colSpan={6}><div className="empty">No identities yet.</div></td></tr>
             )}
           </tbody>
         </table>

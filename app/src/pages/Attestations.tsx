@@ -97,7 +97,7 @@ export function AttestationsPage() {
               );
             })}
             {shown.length === 0 && (
-              <tr><td colSpan={9}><div className="empty">{active ? "Nothing matches these filters." : "Nothing here yet."}</div></td></tr>
+              <tr className="is-static"><td colSpan={9}><div className="empty">{active ? "Nothing matches these filters." : "No attestations yet."}</div></td></tr>
             )}
           </tbody>
         </table>
