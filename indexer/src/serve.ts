@@ -74,6 +74,7 @@ async function main() {
 
   console.log(`Indexing ${name}: adapter ${net.adapter} from block ${net.fromBlock} via ${net.rpcUrl}`);
   const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) });
+  await preflight(client, net.rpcUrl, net.chainId, net.fromBlock);
   const store = new ProjectionStore(net.chainId, net.adapter);
   const ingester = new Ingester(client, store, net.adapter, net.fromBlock);
 
@@ -113,6 +114,29 @@ async function main() {
 
   startServer(store, client, net.adapter, net.port, ingester, net.pollMs);
   console.log(`API + UI on http://127.0.0.1:${net.port} (polling every ${net.pollMs / 1000}s)`);
+}
+
+/**
+ * Fail fast, in one line, on the two RPC misconfigurations that otherwise surface as a crash
+ * loop with a stack trace: an endpoint for the wrong chain, and one that caps eth_getLogs
+ * below the 10,000-block chunk the backfill uses (some free tiers allow 10). Both are fixed in
+ * /etc/adapter.env, not in code, so the message says which endpoint and what it said.
+ */
+async function preflight(client: ReturnType<typeof createPublicClient>, rpcUrl: string, chainId: bigint, fromBlock: bigint) {
+  const actual = BigInt(await client.getChainId());
+  if (actual !== chainId) {
+    throw new Error(`RPC ${rpcUrl} is chain ${actual}, not ${chainId}. Fix the *_RPC_URL in /etc/adapter.env.`);
+  }
+  try {
+    await client.getLogs({ address: "0x0000000000000000000000000000000000000000", fromBlock, toBlock: fromBlock + 9_999n });
+  } catch (err) {
+    const said = (err as { details?: string; shortMessage?: string; message?: string });
+    const detail = said.details ?? said.shortMessage ?? said.message ?? String(err);
+    if (/block range|range|exceed|too many|limit/i.test(detail)) {
+      throw new Error(`RPC ${rpcUrl} rejects a 10,000-block eth_getLogs range, which the backfill needs. It said: ${detail.slice(0, 200)}. Use an endpoint without that cap (PublicNode's free endpoint has none) or a higher tier.`);
+    }
+    // Anything else (a transient error) is left to the backfill, which retries.
+  }
 }
 
 main().catch((err) => {

@@ -62,11 +62,14 @@ $SUDO systemctl reload caddy
 echo "== 6/6 services =="
 # Chains on v0.0.17 with a known cutover start now; the others only once /etc/adapter.env
 # carries their <NAME>_FROM_BLOCK (see serve.ts). Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
-start_indexer() { # name port
+start_indexer() { # name port - a start replays the chain, so wait for the API rather than a fixed sleep
   $SUDO systemctl enable --now "adapter-indexer@$1"
-  sleep 8
-  $SUDO systemctl is-active "adapter-indexer@$1"
-  curl -fsS "http://127.0.0.1:$2/api/overview" && echo
+  for i in $(seq 1 24); do
+    if curl -fsS "http://127.0.0.1:$2/api/overview" 2>/dev/null; then echo; return 0; fi
+    [ "$($SUDO systemctl is-active "adapter-indexer@$1" || true)" = "failed" ] && break
+    sleep 5
+  done
+  echo "adapter-indexer@$1 did not come up; last log lines:"; $SUDO journalctl -u "adapter-indexer@$1" -n 20 --no-pager; return 1
 }
 start_indexer sepolia 8788
 start_indexer robinhood 8791

@@ -53,20 +53,21 @@ jobs:
               sudo systemctl restart "$SERVICE"
             done
 
-            sleep 5
+            echo "--- Health check (a restart replays the chain; allow up to 2 minutes) ---"
             for SERVICE in $SERVICES; do
-              status=$(sudo systemctl is-active "$SERVICE" || true)
-              echo "  $SERVICE: $status"
-              if [ "$status" != "active" ]; then
-                echo "  ERROR: $SERVICE failed to start!"
+              case "$SERVICE" in *sepolia) PORT=8788;; *mainnet) PORT=8789;; *base) PORT=8790;; *robinhood) PORT=8791;; esac
+              ok=""
+              for i in $(seq 1 24); do
+                status=$(sudo systemctl is-active "$SERVICE" || true)
+                if [ "$status" = "failed" ]; then break; fi
+                if curl -fsS "http://127.0.0.1:$PORT/api/overview" 2>/dev/null; then ok=1; echo; break; fi
+                sleep 5
+              done
+              if [ -z "$ok" ]; then
+                echo "  ERROR: $SERVICE ($status) did not answer on :$PORT"
                 sudo journalctl -u "$SERVICE" -n 30 --no-pager
                 exit 1
               fi
-            done
-
-            echo "--- Health check ---"
-            for SERVICE in $SERVICES; do
-              case "$SERVICE" in *sepolia) PORT=8788;; *mainnet) PORT=8789;; *base) PORT=8790;; *robinhood) PORT=8791;; esac
-              curl -fsS "http://127.0.0.1:$PORT/api/overview"; echo
+              echo "  $SERVICE: active, answering on :$PORT"
             done
             echo "========== DEPLOY COMPLETE =========="
