@@ -7,7 +7,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry, mainnet, sepolia } from "viem/chains";
+import { base, foundry, mainnet, robinhood, sepolia } from "viem/chains";
 
 /** The backends the app can face. Each network pairs an indexer API with the RPC the wizard's
  *  probes and the write paths use. On the local devnet, demo personas sign with anvil
@@ -18,9 +18,15 @@ interface NetworkConfig {
   label: string;
   apiBase: string;
   rpcUrl: string;
-  chain: typeof foundry | typeof sepolia | typeof mainnet;
+  chain: typeof foundry | typeof sepolia | typeof mainnet | typeof base | typeof robinhood;
   /** true = demo personas sign with anvil keys (local devnet). false = a real connected wallet signs. */
   personaWrites: boolean;
+  /** The public hostname this network is served on. */
+  host: string;
+  /** live = an indexer follows it. pending = the adapter on this chain is not on v0.0.17 yet. */
+  status: "live" | "pending";
+  /** One line for the chain picker. */
+  blurb: string;
 }
 
 export const NETWORKS: Record<string, NetworkConfig> = {
@@ -32,6 +38,9 @@ export const NETWORKS: Record<string, NetworkConfig> = {
           rpcUrl: "http://127.0.0.1:8547",
           chain: foundry,
           personaWrites: true,
+          host: "localhost",
+          status: "live",
+          blurb: "The anvil devnet with seeded personas. Dev builds only.",
         },
       }
     : {}),
@@ -42,6 +51,29 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     rpcUrl: import.meta.env.VITE_SEPOLIA_RPC ?? "https://gateway.tenderly.co/public/sepolia",
     chain: sepolia,
     personaWrites: false,
+    host: "testnet.adapterscan.com",
+    status: "live",
+    blurb: "The testnet. Free to try; nothing here is worth anything.",
+  },
+  robinhood: {
+    label: "Robinhood Chain",
+    apiBase: import.meta.env.VITE_ROBINHOOD_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8791/api" : "/api"),
+    rpcUrl: import.meta.env.VITE_ROBINHOOD_RPC ?? "https://rpc.mainnet.chain.robinhood.com",
+    chain: robinhood,
+    personaWrites: false,
+    host: "robinhood.adapterscan.com",
+    status: "live",
+    blurb: "Mainnet. The adapter's first production chain on v0.0.17.",
+  },
+  base: {
+    label: "Base",
+    apiBase: import.meta.env.VITE_BASE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8790/api" : "/api"),
+    rpcUrl: import.meta.env.VITE_BASE_RPC ?? "https://mainnet.base.org",
+    chain: base,
+    personaWrites: false,
+    host: "base.adapterscan.com",
+    status: "pending",
+    blurb: "Deployed, but the adapter on Base is not on v0.0.17 yet. Opens once it is upgraded.",
   },
   mainnet: {
     label: "Ethereum",
@@ -49,26 +81,38 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     rpcUrl: import.meta.env.VITE_MAINNET_RPC ?? "https://ethereum-rpc.publicnode.com",
     chain: mainnet,
     personaWrites: false,
+    host: "adapterscan.com",
+    status: "pending",
+    blurb: "Deployed, but the adapter on Ethereum is not on v0.0.17 yet. Opens once it is upgraded.",
   },
 };
 
 export type NetworkId = string;
 
 /**
- * Which network a deployed build serves is decided by its hostname: adapterscan.com is
- * Ethereum, testnet.adapterscan.com (and the older hostnames) is Sepolia. One static build
- * behind two hostnames, with Caddy routing /api to the matching indexer. In dev there is no
- * hostname to go by, so VITE_NETWORK picks (local | sepolia | mainnet), Sepolia by default.
+ * Which network a deployed build serves is decided by its hostname - one static build behind
+ * several hostnames, with Caddy routing each /api to its indexer. The apex (adapterscan.com) is
+ * the chain picker until Ethereum's adapter is upgraded and it becomes the Ethereum site. In dev
+ * there is no hostname to go by, so VITE_NETWORK picks (local | sepolia | robinhood | base |
+ * mainnet | select), Sepolia by default.
  */
-const HOST_NETWORK: Record<string, NetworkId> = {
-  "adapterscan.com": "mainnet",
-  "www.adapterscan.com": "mainnet",
+const HOST_NETWORK: Record<string, NetworkId | "select"> = {
+  "adapterscan.com": "select",
+  "www.adapterscan.com": "select",
+  "testnet.adapterscan.com": "sepolia",
+  "robinhood.adapterscan.com": "robinhood",
+  "base.adapterscan.com": "base",
 };
 const devChoice = import.meta.env.VITE_NETWORK as string | undefined;
-export const networkId: NetworkId = import.meta.env.DEV
-  ? devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
+const chosen: NetworkId | "select" = import.meta.env.DEV
+  ? devChoice === "select" ? "select" : devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
   : (HOST_NETWORK[location.hostname] ?? "sepolia");
+/** True on the apex: show the chain picker, not an explorer. */
+export const IS_CHAIN_SELECT = chosen === "select";
+export const networkId: NetworkId = chosen === "select" ? "sepolia" : chosen;
 export const NETWORK = NETWORKS[networkId];
+/** The networks the picker offers, live ones first. */
+export const PUBLIC_NETWORKS = Object.entries(NETWORKS).filter(([, n]) => !n.personaWrites).sort(([, a], [, b]) => (a.status === b.status ? 0 : a.status === "live" ? -1 : 1));
 
 export const RPC_URL = NETWORK.rpcUrl;
 
@@ -120,16 +164,16 @@ export const ATTESTATION_TYPES = { CONFIRM_ACCOUNT: 1, STAR: 2, RATING: 3, REVIE
 export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 
 /** 8004Scan's chain slugs. A chain it doesn't index (the local devnet) gets no link. */
-const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia" };
+const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia", 8453: "base" };
 
 /** The explorer and the docs are one build on two hostnames; each links to the other. In dev both
  *  are served by Vite: the docs at /docs.html. */
 const IS_DOCS_HOST = location.hostname.startsWith("docs.");
-export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www)\./, "")}`;
+export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www|base|robinhood)\./, "")}`;
 export const EXPLORER_URL: string = import.meta.env.DEV ? "/" : IS_DOCS_HOST ? `https://${location.hostname.replace(/^docs\./, "testnet.")}` : "/";
 
 /** Etherscan's chain hosts. The local devnet has no explorer, so its transactions get no link. */
-const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io" };
+const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io", 8453: "https://basescan.org", 4663: "https://robinhoodchain.blockscout.com" };
 
 export function explorerTxUrl(hash: string): string | null {
   const base = EXPLORER[NETWORK.chain.id];

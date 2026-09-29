@@ -8,8 +8,10 @@ What runs where:
 
 - `/srv/adapter` — this repo, `main` branch
 - `adapter-indexer@sepolia` — the Sepolia indexer (`indexer`, port 8788, localhost)
-- `adapter-indexer@mainnet` — the Ethereum indexer (port 8789), dormant until the
-  mainnet proxy runs v0.0.17 (see "Mainnet" below)
+- `adapter-indexer@robinhood` — the Robinhood Chain indexer (port 8791). The public RPC
+  is rate-limited; `ROBINHOOD_RPC_URL=` in `/etc/adapter.env` for a dedicated one.
+- `adapter-indexer@base` and `adapter-indexer@mainnet` (ports 8790, 8789) — dormant until
+  those proxies run v0.0.17 (see "Mainnet" below; Base is the same with `BASE_FROM_BLOCK`)
 - Caddy — one static `app/dist` behind two hostnames. `testnet.adapterscan.com`
   (plus the older `adapter.ens8004.xyz` and `adapter.178-105-235-22.sslip.io`)
   routes `/api/*` to the Sepolia indexer; `adapterscan.com` is Ethereum, and
@@ -34,8 +36,11 @@ curl -fsSL https://raw.githubusercontent.com/unruggable-labs/agent-adapter-app/m
 ## DNS
 
 A records → 178.105.235.22 for `adapterscan.com`, `www.adapterscan.com`,
-`testnet.adapterscan.com` and `docs.adapterscan.com` (the documentation site, same
-build, entered through `docs.html`). Caddy issues certificates on first request, so each
+`testnet.adapterscan.com`, `robinhood.adapterscan.com`, `base.adapterscan.com` and
+`docs.adapterscan.com` (the documentation site, same build, entered through `docs.html`).
+One hostname per chain: the app reads its network from the hostname, Caddy routes each
+`/api` to that chain's indexer (sepolia 8788, mainnet 8789, base 8790, robinhood 8791).
+The apex is the chain picker until Ethereum's adapter is upgraded. Caddy issues certificates on first request, so each
 name must resolve before it is served. `adapter.ens8004.xyz` (GoDaddy) and the
 sslip.io name keep working as aliases of testnet.
 

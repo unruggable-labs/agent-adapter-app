@@ -22,9 +22,18 @@
 	}
 }
 
-# Sepolia. The older hostnames keep working and serve the same thing.
+# One hostname per chain; the app reads its network from the hostname and Caddy routes /api
+# to that chain's indexer. Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
 testnet.adapterscan.com, adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
 	import adapterscan 8788
+}
+robinhood.adapterscan.com {
+	import adapterscan 8791
+}
+# Base's adapter is not on v0.0.17 yet: the app shows a notice on this host until it is, and
+# the indexer (adapter-indexer@base) starts once BASE_FROM_BLOCK is set. The route is ready.
+base.adapterscan.com {
+	import adapterscan 8790
 }
 
 # The documentation site: the same build, entered through docs.html.
@@ -40,10 +49,9 @@ docs.adapterscan.com {
 	}
 }
 
-# Ethereum. The mainnet proxy is not on v0.0.17 yet, so there is no mainnet indexer to route
-# to; until there is, the apex sends people to testnet. When the upgrade lands: set
-# MAINNET_FROM_BLOCK in /etc/adapter.env, `systemctl enable --now adapter-indexer@mainnet`,
-# and swap the redir for `import adapterscan 8789`.
+# The apex. Until Ethereum's adapter is on v0.0.17 the app shows the chain picker here (it
+# knows the hostname); when the upgrade lands, set MAINNET_FROM_BLOCK, enable
+# adapter-indexer@mainnet, and flip "adapterscan.com" to "mainnet" in app/src/lib/chain.ts.
 adapterscan.com, www.adapterscan.com {
-	redir https://testnet.adapterscan.com{uri} temporary
+	import adapterscan 8789
 }

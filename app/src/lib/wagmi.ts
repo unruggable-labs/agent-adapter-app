@@ -1,5 +1,5 @@
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import { foundry, mainnet, sepolia, type AppKitNetwork } from "@reown/appkit/networks";
+import { base, foundry, mainnet, robinhood, sepolia, type AppKitNetwork } from "@reown/appkit/networks";
 import { createAppKit } from "@reown/appkit/react";
 import { getBalance } from "@wagmi/core";
 import { formatUnits, type Address } from "viem";
@@ -20,11 +20,13 @@ export const appKitEnabled = Boolean(projectId);
 // Only the chain this build's indexer follows. Offering the other in the wallet menu would let
 // someone switch to a chain the app can't read, and the sidebar's network switch (dev only) is
 // what actually changes which backend the app talks to.
-const APPKIT_NETWORK: Record<number, AppKitNetwork> = { [mainnet.id]: mainnet, [sepolia.id]: sepolia, [foundry.id]: foundry };
+const APPKIT_NETWORK: Record<number, AppKitNetwork> = { [mainnet.id]: mainnet, [sepolia.id]: sepolia, [base.id]: base, [robinhood.id]: robinhood, [foundry.id]: foundry };
 const networks: [AppKitNetwork, ...AppKitNetwork[]] = [APPKIT_NETWORK[NETWORK.chain.id] ?? sepolia];
 const transports = {
   [mainnet.id]: http(NETWORKS.mainnet?.rpcUrl),
   [sepolia.id]: http(NETWORKS.sepolia?.rpcUrl),
+  [base.id]: http(NETWORKS.base?.rpcUrl),
+  [robinhood.id]: http(NETWORKS.robinhood?.rpcUrl),
   [foundry.id]: http(NETWORKS.local?.rpcUrl ?? "http://127.0.0.1:8547"),
 };
 
@@ -50,7 +52,7 @@ class Adapter extends WagmiAdapter {
 const adapter = projectId ? new Adapter({ networks, projectId, transports }) : null;
 
 export const wagmiConfig: Config =
-  adapter?.wagmiConfig ?? createConfig({ chains: [mainnet, sepolia, foundry], connectors: [injected()], transports });
+  adapter?.wagmiConfig ?? createConfig({ chains: [mainnet, sepolia, base, robinhood, foundry], connectors: [injected()], transports });
 
 if (adapter && projectId) {
   createAppKit({

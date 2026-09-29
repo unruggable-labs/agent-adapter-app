@@ -24,11 +24,13 @@ jobs:
             echo "========== DEPLOY START =========="
             cd /srv/adapter
 
-            SERVICES="adapter-indexer@sepolia"
-            # Mainnet joins once its cutover block is configured on the box.
-            if sudo systemctl is-enabled adapter-indexer@mainnet >/dev/null 2>&1; then
-              SERVICES="$SERVICES adapter-indexer@mainnet"
-            fi
+            # Every indexer instance the box has enabled. Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
+            SERVICES=""
+            for NET in sepolia robinhood base mainnet; do
+              if sudo systemctl is-enabled "adapter-indexer@$NET" >/dev/null 2>&1; then
+                SERVICES="$SERVICES adapter-indexer@$NET"
+              fi
+            done
 
             echo "--- Git pull ---"
             echo "  before: $(git rev-parse --short HEAD)"
@@ -63,6 +65,8 @@ jobs:
             done
 
             echo "--- Health check ---"
-            curl -fsS http://127.0.0.1:8788/api/overview; echo
-            if echo "$SERVICES" | grep -q mainnet; then curl -fsS http://127.0.0.1:8789/api/overview; echo; fi
+            for SERVICE in $SERVICES; do
+              case "$SERVICE" in *sepolia) PORT=8788;; *mainnet) PORT=8789;; *base) PORT=8790;; *robinhood) PORT=8791;; esac
+              curl -fsS "http://127.0.0.1:$PORT/api/overview"; echo
+            done
             echo "========== DEPLOY COMPLETE =========="

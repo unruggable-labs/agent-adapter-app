@@ -60,15 +60,16 @@ $SUDO install -m 0644 /tmp/Caddyfile.adapterscan /etc/caddy/Caddyfile
 $SUDO systemctl reload caddy
 
 echo "== 6/6 services =="
-$SUDO systemctl enable --now adapter-indexer@sepolia
-sleep 8
-$SUDO systemctl is-active adapter-indexer@sepolia
-curl -fsS http://127.0.0.1:8788/api/overview && echo
-# Mainnet starts only once /etc/adapter.env carries MAINNET_FROM_BLOCK (see serve.ts).
-if grep -qs '^MAINNET_FROM_BLOCK=.' /etc/adapter.env; then
-  $SUDO systemctl enable --now adapter-indexer@mainnet
+# Chains on v0.0.17 with a known cutover start now; the others only once /etc/adapter.env
+# carries their <NAME>_FROM_BLOCK (see serve.ts). Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
+start_indexer() { # name port
+  $SUDO systemctl enable --now "adapter-indexer@$1"
   sleep 8
-  $SUDO systemctl is-active adapter-indexer@mainnet
-  curl -fsS http://127.0.0.1:8789/api/overview && echo
-fi
-echo "== done: https://testnet.adapterscan.com (apex redirects there until mainnet is indexed) =="
+  $SUDO systemctl is-active "adapter-indexer@$1"
+  curl -fsS "http://127.0.0.1:$2/api/overview" && echo
+}
+start_indexer sepolia 8788
+start_indexer robinhood 8791
+grep -qs '^BASE_FROM_BLOCK=.' /etc/adapter.env && start_indexer base 8790
+grep -qs '^MAINNET_FROM_BLOCK=.' /etc/adapter.env && start_indexer mainnet 8789
+echo "== done: testnet. / robinhood.adapterscan.com live; apex is the chain picker =="

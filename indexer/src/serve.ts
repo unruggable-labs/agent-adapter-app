@@ -1,5 +1,5 @@
 import { createPublicClient, http, type Address } from "viem";
-import { mainnet, sepolia } from "viem/chains";
+import { base, mainnet, robinhood, sepolia } from "viem/chains";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
 import { startServer } from "./server.js";
@@ -9,7 +9,12 @@ import { startServer } from "./server.js";
  * (it deploys the stack it indexes); this entrypoint points at an already-deployed adapter.
  *
  *   npm run serve:sepolia
- *   npx tsx src/serve.ts mainnet   (needs MAINNET_FROM_BLOCK, see below)
+ *   npx tsx src/serve.ts robinhood
+ *   npx tsx src/serve.ts base       (needs BASE_FROM_BLOCK - see below)
+ *   npx tsx src/serve.ts mainnet    (needs MAINNET_FROM_BLOCK)
+ *
+ * Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791. Caddy routes each hostname's /api
+ * to its port.
  */
 const NETWORKS = {
   sepolia: {
@@ -37,6 +42,27 @@ const NETWORKS = {
     port: 8789,
     pollMs: 12_000,
   },
+  base: {
+    chain: base,
+    chainId: 8453n,
+    rpcUrl: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
+    adapter: "0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" as Address, // the Base proxy
+    // Same situation as mainnet: not on v0.0.17 yet, so no default cutover block.
+    fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : null,
+    port: 8790,
+    pollMs: 6_000,
+  },
+  robinhood: {
+    chain: robinhood,
+    chainId: 4663n,
+    // The public endpoint is rate-limited; ROBINHOOD_RPC_URL in /etc/adapter.env for a dedicated one.
+    rpcUrl: process.env.ROBINHOOD_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com",
+    adapter: "0x000000009d62675362a58911e3f32FEcf46F5E18" as Address, // deployed at v0.0.17
+    // Fresh v0.0.17 deployment: the block the proxy's code first appeared in is the start.
+    fromBlock: 75_810_067n,
+    port: 8791,
+    pollMs: 6_000, // 100 ms blocks: a poll covers ~60 blocks
+  },
 } as const;
 
 async function main() {
@@ -44,7 +70,7 @@ async function main() {
   const net = NETWORKS[name];
   if (!net) throw new Error(`unknown network ${String(name)}; known: ${Object.keys(NETWORKS).join(", ")}`);
   if (net.fromBlock === null)
-    throw new Error(`${name}: no cutover block. Set MAINNET_FROM_BLOCK to the block the v0.0.17 upgrade landed in; older events must not be indexed.`);
+    throw new Error(`${name}: no cutover block. Set ${name.toUpperCase()}_FROM_BLOCK to the block the v0.0.17 upgrade landed in; older events must not be indexed.`);
 
   console.log(`Indexing ${name}: adapter ${net.adapter} from block ${net.fromBlock} via ${net.rpcUrl}`);
   const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) });

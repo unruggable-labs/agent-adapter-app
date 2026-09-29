@@ -40,10 +40,11 @@ tooltips kept to the fewest sentences that do the job.
 ## Deploy
 
 Push to `main` = production deploy (GitHub Action → Hetzner box shared with ens8004.xyz →
-systemd `adapter-indexer@<network>` + Caddy). Live at https://testnet.adapterscan.com (Sepolia);
-https://adapterscan.com is Ethereum and redirects to testnet until the mainnet proxy runs
-v0.0.17 and its indexer is enabled (deploy/README.md "Mainnet"). One static build serves both:
-the app picks its network from the hostname. Server config is versioned in `deploy/`; box access:
+systemd `adapter-indexer@<network>` + Caddy). One hostname per chain, one static build: the app
+picks its network from the hostname. Live: testnet.adapterscan.com (Sepolia),
+robinhood.adapterscan.com (Robinhood Chain, proxy 0x000000009d62675362a58911e3f32FEcf46F5E18,
+v0.0.17 from block 75810067). Pending the v0.0.17 upgrade: base.adapterscan.com and the apex
+(Ethereum) - the apex shows a chain picker until then (deploy/README.md "Mainnet"). Server config is versioned in `deploy/`; box access:
 `ssh ens8004` (deploy) or `root@178.105.235.22` (same key, admin). RPC is PublicNode's free
 endpoint by default (`SEPOLIA_RPC_URL` in `/etc/adapter.env` overrides; beware: load-balanced
 free RPCs have been observed returning incomplete logs — serve.ts verifies backfills).
