@@ -6,10 +6,7 @@ export function ChainSelect() {
     <div className="chains-page">
       <div className="chains-card fade-in">
         <div className="brand" style={{ padding: 0, marginBottom: 18 }}><span className="brand-mark">A</span> Adapterscan</div>
-        <h1 className="page-title" style={{ fontSize: 22 }}>Profiles and reviews for AI agents.</h1>
-        <p className="page-sub" style={{ marginBottom: 20 }}>
-          The wallets agents do business with get a lookup: who operates this, and are they any good? Pick the chain.
-        </p>
+        <h1 className="page-title" style={{ fontSize: 22, marginBottom: 18 }}>Agent Identity</h1>
         <div className="chains-grid">
           {PUBLIC_NETWORKS.map(([id, n]) => (
             <a key={id} className={`chain-tile${n.status === "pending" ? " is-pending" : ""}`} href={n.status === "live" ? `https://${n.host}` : undefined} aria-disabled={n.status !== "live"}>
@@ -17,14 +14,10 @@ export function ChainSelect() {
                 <span className="chain-name">{n.label}</span>
                 {n.status === "live" ? <span className="badge badge-ok">live</span> : <span className="badge badge-outline">coming</span>}
               </span>
-              <span className="chain-blurb">{n.blurb}</span>
               <span className="chain-host mono">{n.host}</span>
             </a>
           ))}
         </div>
-        <p className="hint" style={{ marginTop: 18 }}>
-          Same adapter, same rules on every chain; identities are per chain. <a href={DOCS_URL}>Read the docs</a>.
-        </p>
       </div>
     </div>
   );

@@ -111,8 +111,11 @@ const chosen: NetworkId | "select" = import.meta.env.DEV
 export const IS_CHAIN_SELECT = chosen === "select";
 export const networkId: NetworkId = chosen === "select" ? "sepolia" : chosen;
 export const NETWORK = NETWORKS[networkId];
-/** The networks the picker offers, live ones first. */
-export const PUBLIC_NETWORKS = Object.entries(NETWORKS).filter(([, n]) => !n.personaWrites).sort(([, a], [, b]) => (a.status === b.status ? 0 : a.status === "live" ? -1 : 1));
+/** The networks the picker offers: Robinhood first, then the rest live-before-pending, in declaration order. */
+const PICKER_ORDER = ["robinhood", "sepolia", "base", "mainnet"];
+export const PUBLIC_NETWORKS = Object.entries(NETWORKS)
+  .filter(([, n]) => !n.personaWrites)
+  .sort(([a], [b]) => PICKER_ORDER.indexOf(a) - PICKER_ORDER.indexOf(b));
 
 export const RPC_URL = NETWORK.rpcUrl;
 
