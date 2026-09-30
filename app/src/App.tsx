@@ -1,11 +1,11 @@
 import { useAppKit, useAppKitAccount, useAppKitTheme } from "@reown/appkit/react";
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { ChainGrid } from "./components/chains";
+import { ChainGrid, ChainIcon } from "./components/chains";
 import { SearchBar } from "./components/search";
 import { Modal } from "./components/ui";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, DOCS_URL, NETWORK, shortHex } from "./lib/chain";
+import { ACTORS, DOCS_URL, NETWORK, networkId, shortHex } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
 import { AttestationsPage } from "./pages/Attestations";
@@ -154,9 +154,6 @@ function Shell() {
         <div className="nav-label">Learn</div>
         <a className="nav-item" href={DOCS_URL} style={{ textDecoration: "none" }}>Docs <span className="t3" style={{ marginLeft: "auto" }}>↗</span></a>
 
-        <div className="nav-label">Chains</div>
-        <button className="nav-item" onClick={() => setPickChain(true)}>{NETWORK.label} <span className="t3" style={{ marginLeft: "auto" }}>switch</span></button>
-
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
@@ -168,6 +165,9 @@ function Shell() {
           <span />
           <SearchBar />
           <div className="topbar-right">
+            <button className="chain-btn" title={`${NETWORK.label} - switch chain`} aria-label="Switch chain" onClick={() => setPickChain(true)}>
+              <ChainIcon id={networkId} size={22} />
+            </button>
             <WalletControl />
           </div>
         </header>
