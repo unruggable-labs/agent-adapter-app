@@ -70,7 +70,7 @@ export function AddressPage({ address }: { address: string }) {
           {wallet === undefined ? <Spinner /> : operates ? (
             <IdentityTable rows={[{ id: operates, note: wallet?.verified ? "This address is the verified operating wallet for an agent." : "This wallet says that it is the operating wallet for an agent; the agent does not say the same", tone: wallet?.verified ? "ok" : "warn" }]} />
           ) : (
-            <p className="t2 small" style={{ margin: 0 }}>This address is not the operating wallet for any registered agent.</p>
+            <p className="t2 small" style={{ margin: 0 }}>This address is not the operating wallet for any known agent.</p>
           )}
           {namedBy.length > 0 && (
             <div style={{ marginTop: 12 }}>
