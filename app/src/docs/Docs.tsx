@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CodeBlock } from "../components/code";
-import { EXPLORER_URL } from "../lib/chain";
+import { ChainGrid } from "../components/chains";
+import { Modal } from "../components/ui";
 import { Counterfactual } from "./pages/Counterfactual";
 import { Deployments } from "./pages/Deployments";
 import { Identities } from "./pages/Identities";
@@ -68,6 +69,7 @@ export function Docs() {
   const [slug, sub] = useHashRoute();
   const page = ALL.find((p) => p.slug === slug) ?? ALL[0];
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
+  const [pickChain, setPickChain] = useState(false);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("aa-theme", theme);
@@ -93,12 +95,17 @@ export function Docs() {
           </div>
         ))}
         <div className="sidebar-foot">
-          <a className="btn btn-sm" href={EXPLORER_URL} style={{ marginBottom: 8, textDecoration: "none" }}>Open the explorer</a>
+          <button className="btn btn-primary" style={{ width: "100%", marginBottom: 8 }} onClick={() => setPickChain(true)}>Open the explorer</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
         </div>
       </aside>
+      {pickChain && (
+        <Modal title="Which chain?" width={600} onClose={() => setPickChain(false)}>
+          <ChainGrid />
+        </Modal>
+      )}
       <main className="main">
         <div className="main-scroll">
           <div className="page docs-page fade-in" key={page.slug}>

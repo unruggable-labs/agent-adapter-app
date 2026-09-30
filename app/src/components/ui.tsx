@@ -319,10 +319,13 @@ export function Modal({
   title,
   onClose,
   children,
+  width,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Override the default 460px when the content is wider than a form, like a grid of tiles. */
+  width?: number;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -332,7 +335,7 @@ export function Modal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal fade-in" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className="modal fade-in" role="dialog" aria-modal="true" aria-label={title} style={width ? { maxWidth: width } : undefined} onClick={(e) => e.stopPropagation()}>
         <div className="row spread" style={{ marginBottom: 14 }}>
           <h2 className="h-section" style={{ margin: 0 }}>{title}</h2>
           <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close">✕</button>

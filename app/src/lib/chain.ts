@@ -173,7 +173,6 @@ const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia",
  *  are served by Vite: the docs at /docs.html. */
 const IS_DOCS_HOST = location.hostname.startsWith("docs.");
 export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www|base|robinhood)\./, "")}`;
-export const EXPLORER_URL: string = import.meta.env.DEV ? "/" : IS_DOCS_HOST ? `https://${location.hostname.replace(/^docs\./, "testnet.")}` : "/";
 
 /** Etherscan's chain hosts. The local devnet has no explorer, so its transactions get no link. */
 const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io", 8453: "https://basescan.org", 4663: "https://robinhoodchain.blockscout.com" };

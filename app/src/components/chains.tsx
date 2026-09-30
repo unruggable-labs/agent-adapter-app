@@ -35,26 +35,34 @@ export function ChainIcon({ id, size = 28 }: { id: string; size?: number }) {
   }
 }
 
+/** The chain tiles: one per network, live ones linking to their hostname. Used by the apex
+ *  picker and by the docs' "Open the explorer" dialog. */
+export function ChainGrid() {
+  return (
+    <div className="chains-grid">
+      {PUBLIC_NETWORKS.map(([id, n]) => (
+        <a key={id} className={`chain-tile${n.status === "pending" ? " is-pending" : ""}`} href={n.status === "live" ? `https://${n.host}` : undefined} aria-disabled={n.status !== "live"}>
+          <span className="row spread">
+            <span className="row" style={{ gap: 10 }}>
+              <ChainIcon id={id} />
+              <span className="chain-name">{n.label}</span>
+            </span>
+            {n.status === "live" ? <span className="badge badge-ok">live</span> : <span className="badge badge-outline">coming</span>}
+          </span>
+          <span className="chain-host mono">{n.host}</span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 /** adapterscan.com until Ethereum is indexed: pick a chain. Each chain is its own hostname. */
 export function ChainSelect() {
   return (
     <div className="chains-page">
       <div className="chains-card fade-in">
         <h1 className="page-title" style={{ fontSize: 24, marginBottom: 20 }}>Agent Identity</h1>
-        <div className="chains-grid">
-          {PUBLIC_NETWORKS.map(([id, n]) => (
-            <a key={id} className={`chain-tile${n.status === "pending" ? " is-pending" : ""}`} href={n.status === "live" ? `https://${n.host}` : undefined} aria-disabled={n.status !== "live"}>
-              <span className="row spread">
-                <span className="row" style={{ gap: 10 }}>
-                  <ChainIcon id={id} />
-                  <span className="chain-name">{n.label}</span>
-                </span>
-                {n.status === "live" ? <span className="badge badge-ok">live</span> : <span className="badge badge-outline">coming</span>}
-              </span>
-              <span className="chain-host mono">{n.host}</span>
-            </a>
-          ))}
-        </div>
+        <ChainGrid />
       </div>
       <p className="chains-foot">Adapterscan · <a href={DOCS_URL}>Docs</a></p>
     </div>
