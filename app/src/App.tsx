@@ -1,6 +1,7 @@
 import { useAppKit, useAppKitAccount, useAppKitTheme } from "@reown/appkit/react";
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { Brand } from "./components/brand";
 import { ChainGrid, ChainIcon } from "./components/chains";
 import { SearchBar } from "./components/search";
 import { Modal } from "./components/ui";
@@ -139,9 +140,7 @@ function Shell() {
         </Modal>
       )}
       <aside className="sidebar">
-        <div className="brand">
-          Adapterscan
-        </div>
+        <div className="brand"><Brand /></div>
 
         <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => (location.hash = "/create")}>
           + Create identity

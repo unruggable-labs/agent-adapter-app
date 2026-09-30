@@ -759,3 +759,9 @@ input, textarea, select { font: inherit; color: inherit; }
 .chain-tile .chain-host { margin-top: 2px; }
 .chain-blurb { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
 .chain-host { font-size: 11px; color: var(--text-3); }
+
+/* ------------------------------------------------------------------ wordmark */
+.wordmark { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; letter-spacing: -0.02em; line-height: 1; color: var(--text-1); }
+.wordmark-mark { color: var(--accent); flex-shrink: 0; }
+.wordmark-accent { color: var(--accent); }
+.wordmark-suffix { margin-left: 4px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }

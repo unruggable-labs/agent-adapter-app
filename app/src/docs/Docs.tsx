@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Brand } from "../components/brand";
 import { CodeBlock } from "../components/code";
 import { ChainGrid } from "../components/chains";
 import { Modal } from "../components/ui";
@@ -82,7 +83,7 @@ export function Docs() {
     <div className="shell">
       <aside className="sidebar">
         <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}>
-          Adapterscan <span className="t3" style={{ fontWeight: 500 }}>Docs</span>
+          <Brand suffix="Docs" />
         </a>
         {GROUPS.map((g) => (
           <div key={g.label}>
