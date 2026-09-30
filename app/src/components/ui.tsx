@@ -249,7 +249,7 @@ export function AgentIds({ ids }: { ids: string[] }) {
 export function StatusBadge({ id }: { id: Identity }) {
   if (id.agentIds.length)
     return (
-      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with id #${id.agentIds.join(", #")}. Click the id to open it on 8004Scan.`}>
+      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with ID #${id.agentIds.join(", #")}.`}>
         <span className="dot" /> ERC-8004 <AgentIds ids={id.agentIds} />
       </Badge>
     );
