@@ -29,6 +29,35 @@ const row = (style: Record<string, unknown>, children: unknown) => el("div", { d
 const col = (style: Record<string, unknown>, children: unknown) => el("div", { display: "flex", flexDirection: "column", ...style }, children);
 const text = (s: string, style: Record<string, unknown>) => el("div", { display: "flex", ...style }, s);
 const pill = (s: string, fg: string, bg: string) => text(s, { fontSize: 22, fontWeight: 500, color: fg, backgroundColor: bg, padding: "6px 16px", borderRadius: 999 });
+
+export interface Chain {
+  id: number;
+  label: string;
+}
+
+/** The chain's mark, the same shapes the app's picker draws, in the chain's colour. */
+function chainIcon(id: number, size = 32): El {
+  const ico = (color: string, paths: El[]) =>
+    el("svg", { width: size, height: size }, [el("circle", {}, undefined, { cx: 16, cy: 16, r: 16, fill: color, opacity: 0.14 }), ...paths], { viewBox: "0 0 32 32", width: size, height: size });
+  const p = (d: string, color: string, extra: Record<string, unknown> = {}) => el("path", {}, undefined, { d, fill: color, ...extra });
+  switch (id) {
+    case 4663:
+      return ico("#1ea36a", [p("M22.5 8.5c-4.6.4-8.6 3.6-10.3 8.1-.9 2.4-1.2 4.9-1.7 7.4.5-.3 1-.7 1.4-1.1 1.9-1.9 3.6-4 5.6-5.8-1.2 2.6-2.9 4.9-4.7 7.1 3.2-.7 6.1-2.5 7.9-5.3 1.9-2.9 2.3-6.6 1.8-10.4z", "#1ea36a")]);
+    case 8453:
+      return ico("#0052ff", [p("M16 6a10 10 0 1 1-9.95 11h13.2v-2H6.05A10 10 0 0 1 16 6z", "#0052ff")]);
+    case 11155111:
+      return ico("#5b616c", [p("M16 5l7 11.4-7 4.2-7-4.2L16 5zm0 17.3l7-4.2L16 27l-7-8.9 7 4.2z", "#5b616c", { opacity: 0.9 })]);
+    default:
+      return ico("#627eea", [p("M16 5l7 11.4-7 4.2-7-4.2L16 5zm0 17.3l7-4.2L16 27l-7-8.9 7 4.2z", "#627eea")]);
+  }
+}
+
+/** The chain pill: its icon and its name. */
+const chainPill = (c: Chain) =>
+  row({ gap: 12, backgroundColor: C.card, padding: "6px 20px 6px 8px", borderRadius: 999 }, [
+    chainIcon(c.id),
+    text(c.label, { fontSize: 22, fontWeight: 500, color: C.t2 }),
+  ]);
 const mono = { fontFamily: "Mono" };
 
 export interface IdentityCard {
@@ -80,11 +109,11 @@ async function imageData(url: string | null): Promise<string | null> {
   }
 }
 
-function frame(host: string, chain: string, body: unknown) {
+function frame(host: string, chain: Chain, body: unknown) {
   return col({ width: W, height: H, backgroundColor: C.bg, padding: 56, fontFamily: "Inter", color: C.t1 }, [
     row({ justifyContent: "space-between", marginBottom: 40 }, [
       text("adapterscan", { ...mono, fontSize: 30, fontWeight: 500 }),
-      pill(chain, C.t2, C.card),
+      chainPill(chain),
     ]),
     body,
     row({ justifyContent: "space-between", marginTop: "auto" }, [
@@ -106,7 +135,7 @@ async function png(node: unknown): Promise<Buffer> {
   return Buffer.from(new Resvg(svg, { fitTo: { mode: "width", value: W } }).render().asPng());
 }
 
-export async function identityCard(host: string, chain: string, c: IdentityCard): Promise<Buffer> {
+export async function identityCard(host: string, chain: Chain, c: IdentityCard): Promise<Buffer> {
   const img = await imageData(c.image);
   const avatar = img
     ? el("img", { width: 160, height: 160, borderRadius: 60, objectFit: "cover" }, undefined, { src: img })
@@ -132,7 +161,7 @@ export async function identityCard(host: string, chain: string, c: IdentityCard)
   return png(frame(host, chain, body));
 }
 
-export async function addressCard(host: string, chain: string, a: AddressCard): Promise<Buffer> {
+export async function addressCard(host: string, chain: Chain, a: AddressCard): Promise<Buffer> {
   const body = col({ flex: 1 }, [
     row({ gap: 32 }, [
       el("div", { display: "flex", alignItems: "center", justifyContent: "center", width: 160, height: 160, borderRadius: 60, backgroundColor: "#e9ebee", color: C.t3, fontSize: 72, fontWeight: 700 }, "@"),
@@ -151,7 +180,7 @@ export async function addressCard(host: string, chain: string, a: AddressCard): 
   return png(frame(host, chain, body));
 }
 
-export async function defaultCard(host: string, chain: string, counts: { identities: number; attestations: number }): Promise<Buffer> {
+export async function defaultCard(host: string, chain: Chain, counts: { identities: number; attestations: number }): Promise<Buffer> {
   const body = col({ flex: 1, justifyContent: "center", gap: 18 }, [
     text("Agent Identity", { fontSize: 88, fontWeight: 700, letterSpacing: -3, lineHeight: 1 }),
     text("Who operates this wallet, and are they any good?", { fontSize: 34, color: C.t2 }),

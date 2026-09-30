@@ -39,6 +39,7 @@ export function startServer(
 ) {
   if (ingester) setInterval(() => ingester.sync().catch(() => {}), pollMs);
   const chain = opts.networkLabel ?? `chain ${store.chainId}`;
+  const chainCard = { id: Number(store.chainId), label: chain };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -72,7 +73,7 @@ export function startServer(
         if (!id) return send(404, "text/plain", "no such identity");
         const v = await identityView(store, client, id);
         const png = await cached(`identity:${id.ubid}:${id.lastEvent?.blockNumber ?? 0}:${v.reputation.stars}:${v.reputation.ratings.length}:${v.reputation.reviews.length}:${v.reputation.interactions.length}`, () =>
-          identityCard(host, chain, {
+          identityCard(host, chainCard, {
             name: v.agentName ?? v.subjectLabel,
             ubid: id.ubid,
             standardName: v.standardName,
@@ -94,7 +95,7 @@ export function startServer(
         const bound = [...store.identities.values()].filter((i) => i.boundAddress === a).length;
         const statements = [...store.attestations.values()].filter((s) => s.attester === a && !s.revoked).length;
         const png = await cached(`address:${a}:${statements}:${w?.designation?.ubid ?? ""}`, () =>
-          addressCard(host, chain, {
+          addressCard(host, chainCard, {
             address: a,
             isAgent: !!w?.self,
             operates: w?.designation ? (w.verified ? "verified" : "claimed") : "no",
@@ -106,7 +107,7 @@ export function startServer(
       }
       if (url.pathname === "/og/default.png") {
         const png = await cached(`default:${store.identities.size}:${store.attestations.size}`, () =>
-          defaultCard(host, chain, { identities: store.identities.size, attestations: store.attestations.size }),
+          defaultCard(host, chainCard, { identities: store.identities.size, attestations: store.attestations.size }),
         );
         return send(200, "image/png", png, pngHeaders);
       }
