@@ -10,6 +10,9 @@ import { wagmiConfig } from "./lib/wagmi";
 
 const queryClient = new QueryClient();
 
+// The same page serves every hostname; say which chain this one is in the tab.
+if (!IS_CHAIN_SELECT) document.title = `${NETWORK.label} · Agent Identity · Adapterscan`;
+
 // The apex is the chain picker and a not-yet-indexed chain's host is a notice: neither needs
 // wallet plumbing or the indexer poll, so they render without the providers.
 const root = IS_CHAIN_SELECT ? <ChainSelect /> : NETWORK.status === "pending" ? <PendingChain /> : (

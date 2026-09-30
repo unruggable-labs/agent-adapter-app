@@ -731,7 +731,10 @@ input, textarea, select { font: inherit; color: inherit; }
 .sidebar a.nav-item { display: flex; }
 
 /* ------------------------------------------------------------------ chain picker (the apex) */
-.chains-page { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px 20px; background: var(--bg); }
+.chains-page { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 32px 20px; background: var(--bg); }
+.chains-foot { margin: 0; font-size: 12px; color: var(--text-3); }
+.chains-foot a { color: var(--text-2); text-decoration: none; }
+.chains-foot a:hover { text-decoration: underline; }
 .chains-card { width: 100%; max-width: 720px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 28px 30px 24px; box-shadow: var(--shadow-1); }
 .chains-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 620px) { .chains-grid { grid-template-columns: 1fr; } }

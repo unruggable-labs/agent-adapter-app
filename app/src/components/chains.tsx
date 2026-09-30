@@ -40,8 +40,7 @@ export function ChainSelect() {
   return (
     <div className="chains-page">
       <div className="chains-card fade-in">
-        <div className="brand" style={{ padding: 0, marginBottom: 18 }}>Adapterscan</div>
-        <h1 className="page-title" style={{ fontSize: 22, marginBottom: 18 }}>Agent Identity</h1>
+        <h1 className="page-title" style={{ fontSize: 24, marginBottom: 20 }}>Agent Identity</h1>
         <div className="chains-grid">
           {PUBLIC_NETWORKS.map(([id, n]) => (
             <a key={id} className={`chain-tile${n.status === "pending" ? " is-pending" : ""}`} href={n.status === "live" ? `https://${n.host}` : undefined} aria-disabled={n.status !== "live"}>
@@ -57,6 +56,7 @@ export function ChainSelect() {
           ))}
         </div>
       </div>
+      <p className="chains-foot">Adapterscan · <a href={DOCS_URL}>Docs</a></p>
     </div>
   );
 }
@@ -67,7 +67,6 @@ export function PendingChain() {
   return (
     <div className="chains-page">
       <div className="chains-card fade-in">
-        <div className="brand" style={{ padding: 0, marginBottom: 18 }}>Adapterscan</div>
         <h1 className="page-title" style={{ fontSize: 22 }}>{NETWORK.label} is not indexed yet.</h1>
         <p className="page-sub">
           The adapter is deployed on {NETWORK.label}, but it is not on v0.0.17, and Adapterscan indexes a chain
