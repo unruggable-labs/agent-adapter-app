@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Addr, Badge, ControllerCell, Modal, MultiSelect, registrationOf, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
+import { Addr, Badge, ControllerCell, Modal, MultiSelect, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import { adapterAbi, shortHex, STANDARD_NAMES } from "../lib/chain";
@@ -21,9 +21,9 @@ export function AttestationsPage() {
     return () => clearInterval(t);
   }, []);
 
-  if (!rows || !overview) return <div className="page"><Spinner /></div>;
+  const loading = !rows || !overview;
   const standardOf = (ubid: string) => identities.find((i) => i.ubid === ubid)?.standardName ?? null;
-  const shown = rows
+  const shown = (rows ?? [])
     .filter((r) => !mineOnly || r.attester === signer?.address)
     .filter((r) => types.length === 0 || types.includes(r.typeName))
     .filter((r) => standards.length === 0 || standards.includes(standardOf(r.ubid) ?? ""))
@@ -82,7 +82,7 @@ export function AttestationsPage() {
                         onClick={async (e) => {
                           e.stopPropagation();
                           setBusy(a.attestationId);
-                          const r = await sendTx(signer, overview.adapter, adapterAbi, "revoke", [a.attestationId]);
+                          const r = await sendTx(signer, overview!.adapter, adapterAbi, "revoke", [a.attestationId]);
                           toast(r.message);
                           await settle(refresh);
                           await load();
@@ -96,7 +96,8 @@ export function AttestationsPage() {
                 </tr>
               );
             })}
-            {shown.length === 0 && (
+            {loading && <SkeletonRows widths={[0, 40, 50, 60, 55, 70, 35, 30, 20]} />}
+            {!loading && shown.length === 0 && (
               <tr className="is-static"><td colSpan={9}><div className="empty">{active ? "Nothing matches these filters." : "No attestations yet."}</div></td></tr>
             )}
           </tbody>

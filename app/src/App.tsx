@@ -1,7 +1,9 @@
 import { useAppKit, useAppKitAccount, useAppKitTheme } from "@reown/appkit/react";
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { ChainGrid } from "./components/chains";
 import { SearchBar } from "./components/search";
+import { Modal } from "./components/ui";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, DOCS_URL, NETWORK, shortHex } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
@@ -116,6 +118,7 @@ function AppKitTheme({ theme }: { theme: string }) {
 function Shell() {
   const { route, overview } = useApp();
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
+  const [pickChain, setPickChain] = useState(false);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("aa-theme", theme);
@@ -130,6 +133,11 @@ function Shell() {
   return (
     <div className="shell">
       {appKitEnabled && <AppKitTheme theme={theme} />}
+      {pickChain && (
+        <Modal title="Which chain?" width={600} onClose={() => setPickChain(false)}>
+          <ChainGrid />
+        </Modal>
+      )}
       <aside className="sidebar">
         <div className="brand">
           Adapterscan
@@ -145,6 +153,9 @@ function Shell() {
 
         <div className="nav-label">Learn</div>
         <a className="nav-item" href={DOCS_URL} style={{ textDecoration: "none" }}>Docs <span className="t3" style={{ marginLeft: "auto" }}>↗</span></a>
+
+        <div className="nav-label">Chains</div>
+        <button className="nav-item" onClick={() => setPickChain(true)}>{NETWORK.label} <span className="t3" style={{ marginLeft: "auto" }}>switch</span></button>
 
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>

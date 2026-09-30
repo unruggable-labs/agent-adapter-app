@@ -358,6 +358,50 @@ export function Spinner() {
   return <span className="spinner" />;
 }
 
+/** Placeholder table rows: `widths` are per-column bar widths in percent (0 = an avatar-sized square). */
+export function SkeletonRows({ widths, rows = 4 }: { widths: number[]; rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, i) => (
+        <tr key={i} className="skel-row" aria-hidden>
+          {widths.map((w, j) => (
+            <td key={j}>{w === 0 ? <span className="row" style={{ gap: 8 }}><Skeleton size={28} /><Skeleton w={70} /></span> : <Skeleton w={w} />}</td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+/** The profile page's shape while the identity loads: picture, title, badges, then two cards. */
+export function ProfileSkeleton() {
+  return (
+    <div className="page" aria-busy>
+      <div className="row" style={{ gap: 16, marginTop: 40, marginBottom: 18, alignItems: "center" }}>
+        <Skeleton size={72} />
+        <div style={{ display: "grid", gap: 10, flex: 1 }}>
+          <span className="row" style={{ gap: 8 }}><Skeleton w="180px" /><Skeleton w="90px" /><Skeleton w="60px" /></span>
+          <Skeleton w="60%" />
+        </div>
+      </div>
+      <div className="stack">
+        <div className="card">
+          <Skeleton w="80px" />
+          <div className="row" style={{ gap: 32, marginTop: 16 }}>
+            <Skeleton w="48px" /><Skeleton w="48px" /><Skeleton w="48px" />
+          </div>
+        </div>
+        <div className="card">
+          <Skeleton w="120px" />
+          <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+            <Skeleton w="90%" /><Skeleton w="70%" /><Skeleton w="80%" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** A grey bar standing in for text that hasn't arrived. A bare number is a percentage, so a row
  *  of these keeps the real column rhythm and the table doesn't jump when the data lands.
  *  `size` renders the square-ish avatar placeholder instead of a text bar. */

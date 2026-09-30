@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, AgentIds, Avatar, Badge, Callout, Section, Spinner, StandardBadge, Stat, StatusBadge } from "../components/ui";
+import { Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge } from "../components/ui";
 import { api, type HistoryEntry, type Identity } from "../lib/api";
 import { useApp, settle } from "../lib/app-state";
 import {
@@ -31,14 +31,14 @@ export function IdentityPage({ ubid }: { ubid: string }) {
 
   // "not found" is only true once the indexer has actually answered — on a deep link the first
   // render has no identities yet, and claiming the UBID doesn't exist would be a lie.
-  if (!id && status === "loading") return <div className="page"><Spinner /></div>;
+  if (!id && status === "loading") return <ProfileSkeleton />;
   if (!id)
     return (
       <div className="page">
         <p className="t2">Identity not found (yet). <button className="btn btn-ghost" onClick={() => navigate("/identities")}>Back</button></p>
       </div>
     );
-  if (!overview) return <div className="page"><Spinner /></div>;
+  if (!overview) return <ProfileSkeleton />;
 
   return (
     <div className="page fade-in">

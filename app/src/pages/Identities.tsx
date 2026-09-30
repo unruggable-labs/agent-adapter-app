@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../lib/app-state";
-import { Addr, ControllerCell, registrationOf, Skeleton, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
+import { Addr, ControllerCell, registrationOf, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
 
 const PAGE_SIZE = 25;
 
@@ -55,7 +55,7 @@ export function IdentitiesPage() {
                 <td className="td-center num">{id.reputation.stars || <span className="t3">0</span>}</td>
               </tr>
             ))}
-            {identities.length === 0 && status === "loading" && <SkeletonRows />}
+            {identities.length === 0 && status === "loading" && <SkeletonRows widths={[0, 50, 60, 60, 30, 30]} />}
             {identities.length === 0 && status === "error" && (
               <tr className="is-static"><td colSpan={6}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
             )}
@@ -120,20 +120,3 @@ function StatPanels() {
   );
 }
 
-/** Placeholder rows in the real column shape, so the first paint says "coming" instead of "none". */
-function SkeletonRows() {
-  return (
-    <>
-      {[0, 1, 2, 3].map((i) => (
-        <tr key={i} className="skel-row" aria-hidden>
-          <td><span className="row" style={{ gap: 8 }}><Skeleton size={28} /><Skeleton w={80} /></span></td>
-          <td><Skeleton w={50} /></td>
-          <td><Skeleton w={60} /></td>
-          <td><Skeleton w={60} /></td>
-          <td className="td-center"><Skeleton w={30} /></td>
-          <td className="td-center"><Skeleton w={30} /></td>
-        </tr>
-      ))}
-    </>
-  );
-}
