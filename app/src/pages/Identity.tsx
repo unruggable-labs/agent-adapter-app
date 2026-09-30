@@ -9,7 +9,9 @@ import {
   adapterAbi,
   controlLine,
   displayName,
+  explorerBlockUrl,
   explorerTxUrl,
+  scanAgentUrl,
   plural,
   pluralise,
   shortHex,
@@ -201,13 +203,17 @@ function HistoryPanel({ id }: { id: Identity }) {
                 const url = h.transactionHash ? explorerTxUrl(h.transactionHash) : null;
                 return (
                   <tr key={`${h.order.blockNumber}:${h.order.logIndex}`} className={h.outcome !== "applied" ? "is-muted" : undefined}>
-                    <td className="td-right num">{h.order.blockNumber}</td>
+                    <td className="td-right num">
+                      {explorerBlockUrl(h.order.blockNumber)
+                        ? <a className="agent-link" href={explorerBlockUrl(h.order.blockNumber)!} target="_blank" rel="noopener noreferrer">{h.order.blockNumber}</a>
+                        : h.order.blockNumber}
+                    </td>
                     <td><span className="mono small">{h.eventName}</span></td>
                     <td>{h.actor ? <Addr value={h.actor} n={8} /> : <span className="t3">—</span>}</td>
                     <td className="td-wrap">
                       {h.outcome !== "applied" && <Badge tone={h.outcome === "dropped" ? "danger" : "warn"}>{h.outcome}</Badge>}
                       {h.outcome !== "applied" && " "}
-                      <span className="small">{h.effect}</span>
+                      <span className="small"><Effect text={h.effect} /></span>
                     </td>
                     <td>
                       {h.transactionHash ? (
@@ -224,6 +230,24 @@ function HistoryPanel({ id }: { id: Identity }) {
         </div>
       )}
     </Section>
+  );
+}
+
+/** An effect line with any "ERC-8004 agent #id" / "ERC-8004 #id" linked to its 8004Scan page. */
+function Effect({ text }: { text: string }) {
+  const parts = text.split(/(ERC-8004 (?:agent )?#\d+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const m = /^ERC-8004 (agent )?#(\d+)$/.exec(part);
+        const url = m ? scanAgentUrl(m[2]) : null;
+        return url ? (
+          <span key={i}>ERC-8004 {m![1] ?? ""}<a className="agent-link" href={url} target="_blank" rel="noopener noreferrer">#{m![2]}</a></span>
+        ) : (
+          <span key={i}>{part}</span>
+        );
+      })}
+    </>
   );
 }
 
@@ -443,7 +467,7 @@ function AttestPanel({ id }: { id: Identity }) {
             ? "A transaction hash is 0x followed by 64 hex characters."
             : hasTx
               ? "Attached to everything you submit here. Anyone reading it can check the hash against the chain."
-              : "The transaction you had with this agent, if there was one. It turns an opinion into a record."}
+              : "The transaction you had with this agent, if there was one."}
         </span>
       </div>
 

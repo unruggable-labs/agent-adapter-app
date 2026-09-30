@@ -183,6 +183,11 @@ export function explorerTxUrl(hash: string): string | null {
   return base ? `${base}/tx/${hash}` : null;
 }
 
+export function explorerBlockUrl(block: string | number | bigint): string | null {
+  const base = EXPLORER[NETWORK.chain.id];
+  return base ? `${base}/block/${block}` : null;
+}
+
 export function explorerAddressUrl(address: string): string | null {
   const base = EXPLORER[NETWORK.chain.id];
   return base ? `${base}/address/${address}` : null;
