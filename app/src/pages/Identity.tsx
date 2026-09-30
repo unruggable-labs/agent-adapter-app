@@ -11,6 +11,7 @@ import {
   displayName,
   explorerBlockUrl,
   explorerTxUrl,
+  publicClient,
   scanAgentUrl,
   plural,
   pluralise,
@@ -92,15 +93,15 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <div key={r.attestationId} className="review-item">
               <div>{r.score !== null && r.score !== undefined && <span className="num" style={{ marginRight: 8 }}>{r.score}/100</span>}"{r.text}"</div>
               <div className="t3 small">
-                — <span className="mono">{shortHex(r.attester, 8)}</span> · block {r.order.blockNumber}
-                {r.reference && r.reference !== ZERO32 && <> · ref <span className="mono">{shortHex(r.reference, 10)}</span></>}
+                — <AddressLink address={r.attester} /> · block {r.order.blockNumber}
+                {r.reference && r.reference !== ZERO32 && <> · ref <TxRef hash={r.reference} /></>}
               </div>
             </div>
           ))}
           {id.reputation.interactions.map((x) => (
             <div key={x.attestationId} className="review-item">
               <div><span className="num">{x.score}/100</span> {x.text && <span className="t2">· {x.text}</span>}</div>
-              <div className="t3 small">transaction · ref <span className="mono">{shortHex(x.reference, 10)}</span> - <span className="mono">{shortHex(x.attester, 8)}</span></div>
+              <div className="t3 small">transaction · ref <TxRef hash={x.reference} /> · by <AddressLink address={x.attester} /></div>
             </div>
           ))}
           {id.reputation.confirmedAccounts.length > 0 && (
@@ -230,6 +231,42 @@ function HistoryPanel({ id }: { id: Identity }) {
         </div>
       )}
     </Section>
+  );
+}
+
+/** A full address, linking to its page in this explorer. */
+function AddressLink({ address }: { address: string }) {
+  const { navigate } = useApp();
+  return <button className="agent-link mono" style={{ overflowWrap: "anywhere" }} onClick={() => navigate(`/address/${address}`)}>{address}</button>;
+}
+
+/**
+ * A referenced transaction hash, in full, linked to the chain's explorer, and checked against
+ * the chain: a reference is a claim until the transaction is found. Zero means "no reference".
+ */
+const txChecks = new Map<string, Promise<"found" | "missing">>();
+function TxRef({ hash }: { hash: string }) {
+  const [state, setState] = useState<"checking" | "found" | "missing">("checking");
+  useEffect(() => {
+    if (hash === ZERO32) return;
+    let cancelled = false;
+    if (!txChecks.has(hash)) {
+      txChecks.set(hash, publicClient.getTransaction({ hash: hash as Hex }).then(() => "found" as const).catch(() => "missing" as const));
+    }
+    txChecks.get(hash)!.then((r) => !cancelled && setState(r));
+    return () => {
+      cancelled = true;
+    };
+  }, [hash]);
+  if (hash === ZERO32) return <span className="t3">none</span>;
+  const url = explorerTxUrl(hash);
+  const label = <span className="mono" style={{ overflowWrap: "anywhere" }}>{hash}</span>;
+  return (
+    <>
+      {url ? <a className="agent-link" href={url} target="_blank" rel="noopener noreferrer">{label}</a> : label}{" "}
+      {state === "found" && <Badge tone="ok">on chain</Badge>}
+      {state === "missing" && <Badge tone="warn" tip="No transaction with this hash was found on this chain. The reference is the attester's claim.">not found</Badge>}
+    </>
   );
 }
 
@@ -463,8 +500,8 @@ function AttestPanel({ id }: { id: Identity }) {
           {!refValid
             ? "A transaction hash is 0x followed by 64 hex characters."
             : hasTx
-              ? "This becomes a record of that transaction - its own score and note - and leaves your rating of the agent as a whole untouched."
-              : "Rating a specific transaction? Paste its hash. Without one, this is your opinion of the agent as a whole."}
+              ? "You are rating a specific transaction."
+              : "Rating a specific transaction? Paste its hash."}
         </span>
       </div>
 
@@ -480,10 +517,10 @@ function AttestPanel({ id }: { id: Identity }) {
           {!signer
             ? "Feedback is signed by your wallet, so connect one first. What you've typed stays."
             : hasTx
-              ? "One transaction: a record of this dealing."
+              ? "One transaction - a record of this interaction."
               : mine !== undefined
                 ? "One transaction. Replaces your current rating and review; the old ones stay in the history."
-                : "One transaction. Your rating and review travel together."}
+                : "One transaction."}
         </span>
       </div>
     </Section>
