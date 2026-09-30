@@ -7,7 +7,7 @@ import { displayName, explorerAddressUrl, explorerName, plural, pluralise } from
 import { payloadPreview } from "./Attestations";
 
 /**
- * Everything the registry knows about one address: whether it is an agent itself, which agent it
+ * Everything the registry knows about one address: whether it is an agent, which agent it
  * operates (and whether that link is verified both ways), what it holds or controls, what is bound
  * to it, and every statement it has made. Read-only; the actions live on the profiles.
  */
@@ -51,8 +51,8 @@ export function AddressPage({ address }: { address: string }) {
       </div>
 
       <div className="stat-row" style={{ marginBottom: 18 }}>
-        <Stat n={self ? "Yes" : "No"} label="is an agent itself" />
-        <Stat n={operates ? (wallet?.verified ? "Yes" : "Claimed") : "No"} label="operates an agent" />
+        <Stat n={self ? "Yes" : "No"} label="is an agent" />
+        <Stat n={operates ? (wallet?.verified ? "Yes" : "Claimed") : "No"} label="operating wallet of an agent" />
         <Stat n={holds.length} label={(holds.length === 1 ? "identity" : "identities") + " held or controlled"} />
         <Stat n={rows ? rows.length : "…"} label={pluralise(rows?.length ?? 0, "statement") + " made"} />
       </div>

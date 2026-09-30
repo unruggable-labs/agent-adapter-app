@@ -171,8 +171,8 @@ export async function addressCard(host: string, chain: Chain, a: AddressCard): P
       ]),
     ]),
     row({ gap: 72, marginTop: 52 }, [
-      stat(a.isAgent ? "Yes" : "No", "is an agent itself"),
-      stat(a.operates === "verified" ? "Yes" : a.operates === "claimed" ? "Claimed" : "No", "operates an agent"),
+      stat(a.isAgent ? "Yes" : "No", "is an agent"),
+      stat(a.operates === "verified" ? "Yes" : a.operates === "claimed" ? "Claimed" : "No", "operating wallet of an agent"),
       stat(String(a.bound), a.bound === 1 ? "identity bound to it" : "identities bound to it"),
       stat(String(a.statements), a.statements === 1 ? "statement" : "statements"),
     ]),
