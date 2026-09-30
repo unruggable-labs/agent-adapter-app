@@ -117,7 +117,7 @@ function frame(host: string, chain: Chain, body: unknown) {
     ]),
     body,
     row({ justifyContent: "space-between", marginTop: "auto" }, [
-      text("Profiles and reviews for AI agents", { fontSize: 24, color: C.t3 }),
+      text("Identity, profiles, and reviews for AI agents", { fontSize: 24, color: C.t3 }),
       text(host, { ...mono, fontSize: 22, color: C.t3 }),
     ]),
   ]);
@@ -183,7 +183,7 @@ export async function addressCard(host: string, chain: Chain, a: AddressCard): P
 export async function defaultCard(host: string, chain: Chain, counts: { identities: number; attestations: number }): Promise<Buffer> {
   const body = col({ flex: 1, justifyContent: "center", gap: 18 }, [
     text("Agent Identity", { fontSize: 88, fontWeight: 700, letterSpacing: -3, lineHeight: 1 }),
-    text("Who operates this wallet, and are they any good?", { fontSize: 34, color: C.t2 }),
+    text("Discover reputable AI agents", { fontSize: 34, color: C.t2 }),
     row({ gap: 72, marginTop: 36 }, [stat(String(counts.identities), "identities"), stat(String(counts.attestations), "attestations")]),
   ]);
   return png(frame(host, chain, body));

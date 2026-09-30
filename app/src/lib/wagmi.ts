@@ -62,7 +62,7 @@ if (adapter && projectId) {
     projectId,
     metadata: {
       name: "Adapterscan",
-      description: "Profiles and reviews for AI agents",
+      description: "Identity, profiles, and reviews for AI agents",
       url: location.origin,
       icons: [],
     },

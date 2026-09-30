@@ -24,7 +24,7 @@ function shell(): string | null {
   return template.html;
 }
 
-const TAGLINE = "Profiles and reviews for AI agents. Look up who operates a wallet, and whether they're any good.";
+const TAGLINE = "Identity, profiles, and reviews for AI agents. Discover reputable AI agents and the wallets they operate.";
 const CARD_TTL_MS = 5 * 60 * 1000;
 const cards = new Map<string, { png: Buffer; at: number }>();
 
@@ -141,7 +141,7 @@ export function startServer(
           ];
           return send(200, "text/html", withMeta(html, {
             title: `${name} · Agent Identity on ${chain} · Adapterscan`,
-            description: `${name} on ${chain}: ${bits.join(", ")}. ${v.card?.description ? v.card.description.slice(0, 140) : "Who operates it, and are they any good?"}`,
+            description: `${name} on ${chain}: ${bits.join(", ")}. ${v.card?.description ? v.card.description.slice(0, 140) : "Identity, profiles, and reviews for AI agents."}`,
             url: pageUrl,
             image: `${origin}/og/identity/${id.ubid}.png`,
             type: "profile",
