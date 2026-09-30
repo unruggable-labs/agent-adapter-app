@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { isAddress } from "viem";
-import { Addr, Badge, ControllerCell, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, TypeBadge, UbidCell } from "../components/ui";
+import { Badge, ControllerCell, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow, type Identity } from "../lib/api";
 import { useApp } from "../lib/app-state";
-import { displayName, explorerAddressUrl, plural, pluralise } from "../lib/chain";
+import { displayName, explorerAddressUrl, explorerName, plural, pluralise } from "../lib/chain";
 import { payloadPreview } from "./Attestations";
 
 /**
@@ -44,8 +44,8 @@ export function AddressPage({ address }: { address: string }) {
         <div style={{ display: "grid", gap: 4, minWidth: 0, flex: 1 }}>
           <h1 className="page-title mono" style={{ fontSize: 16, overflowWrap: "anywhere" }}>{addr}</h1>
           <span className="row wrap" style={{ gap: 8 }}>
-            <Addr value={addr} n={10} />
-            {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">Etherscan</a>}
+            <CopyAddress value={addr} />
+            {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">View on {explorerName()}</a>}
           </span>
         </div>
       </div>
@@ -124,6 +124,16 @@ export function AddressPage({ address }: { address: string }) {
         </Section>
       </div>
     </div>
+  );
+}
+
+/** A small copy control for the address shown in full above it. */
+function CopyAddress({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 900); }}>
+      {copied ? "Copied" : "Copy address"}
+    </button>
   );
 }
 

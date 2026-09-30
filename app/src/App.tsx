@@ -140,7 +140,7 @@ function Shell() {
         </Modal>
       )}
       <aside className="sidebar">
-        <div className="brand"><Brand /></div>
+        <button className="brand" onClick={() => navigate("/")} title="Home"><Brand /></button>
 
         <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => navigate("/create")}>
           + Create identity

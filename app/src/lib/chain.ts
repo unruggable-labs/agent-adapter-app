@@ -176,6 +176,12 @@ export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOS
 
 /** Etherscan's chain hosts. The local devnet has no explorer, so its transactions get no link. */
 const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io", 8453: "https://basescan.org", 4663: "https://robinhoodchain.blockscout.com" };
+const EXPLORER_NAME: Record<number, string> = { 1: "Etherscan", 11155111: "Sepolia Etherscan", 8453: "Basescan", 4663: "Blockscout" };
+
+/** What this chain's block explorer is called, for link labels. */
+export function explorerName(): string {
+  return EXPLORER_NAME[NETWORK.chain.id] ?? "block explorer";
+}
 
 export function explorerTxUrl(hash: string): string | null {
   const base = EXPLORER[NETWORK.chain.id];
