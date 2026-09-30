@@ -287,7 +287,8 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* ------------------------------------------------------------------ stats */
 
-.stat-row { display: flex; gap: 32px; flex-wrap: wrap; }
+.stat-row { display: flex; gap: 36px; flex-wrap: wrap; }
+.stat { text-align: center; } /* no card edge to align to, so the number sits over its label */
 
 /* Headline numbers above a listing: one card per figure, four across, two on narrow screens. */
 .stat-panels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 4px 0 16px; }
