@@ -761,7 +761,5 @@ input, textarea, select { font: inherit; color: inherit; }
 .chain-host { font-size: 11px; color: var(--text-3); }
 
 /* ------------------------------------------------------------------ wordmark */
-.wordmark { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; letter-spacing: -0.02em; line-height: 1; color: var(--text-1); }
-.wordmark-mark { color: var(--accent); flex-shrink: 0; }
-.wordmark-accent { color: var(--accent); }
-.wordmark-suffix { margin-left: 4px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
+.wordmark { font-family: var(--mono); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-1); }
+.wordmark-suffix { color: var(--text-3); }
