@@ -80,7 +80,7 @@ export function Docs() {
     <div className="shell">
       <aside className="sidebar">
         <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}>
-          <span className="brand-mark">A</span> Adapterscan <span className="t3" style={{ fontWeight: 500 }}>Docs</span>
+          Adapterscan <span className="t3" style={{ fontWeight: 500 }}>Docs</span>
         </a>
         {GROUPS.map((g) => (
           <div key={g.label}>

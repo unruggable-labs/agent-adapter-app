@@ -132,7 +132,7 @@ function Shell() {
       {appKitEnabled && <AppKitTheme theme={theme} />}
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">A</span> Adapterscan
+          Adapterscan
         </div>
 
         <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => (location.hash = "/create")}>

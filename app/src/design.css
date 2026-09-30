@@ -89,16 +89,10 @@ input, textarea, select { font: inherit; color: inherit; }
   display: flex; flex-direction: column;
   padding: 14px 10px;
 }
-.sidebar .brand {
+.sidebar .brand, .brand {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 8px 14px;
-  font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em;
-}
-.brand-mark {
-  width: 18px; height: 18px; border-radius: 5px;
-  background: linear-gradient(135deg, var(--accent), #4c54b8);
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; color: #fff;
+  font-weight: 650; font-size: 14.5px; letter-spacing: -0.02em;
 }
 .nav-label {
   padding: 14px 8px 4px;
@@ -746,5 +740,12 @@ input, textarea, select { font: inherit; color: inherit; }
 .chain-tile.is-pending { opacity: 0.6; cursor: default; }
 .chain-tile.is-pending:hover { border-color: var(--border); background: var(--surface-1); }
 .chain-name { font-weight: 600; font-size: 14px; }
+.chain-icon { flex-shrink: 0; }
+.chain-icon-robinhood { color: #1ea36a; }
+.chain-icon-base { color: #0052ff; }
+.chain-icon-sepolia { color: var(--text-2); }
+.chain-icon-mainnet { color: #627eea; }
+.chain-tile { padding: 16px 18px; }
+.chain-tile .chain-host { margin-top: 2px; }
 .chain-blurb { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
 .chain-host { font-size: 11px; color: var(--text-3); }
