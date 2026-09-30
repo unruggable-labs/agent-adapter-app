@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, type Address, type Hex, type PublicClient } from "viem";
 import type { Ingester } from "./ingest.js";
@@ -22,6 +22,17 @@ function shell(): string | null {
   const mtime = statSync(p).mtimeMs;
   if (!template || template.mtime !== mtime) template = { mtime, html: readFileSync(p, "utf8") };
   return template.html;
+}
+
+const TYPES: Record<string, string> = { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff", ".map": "application/json", ".json": "application/json", ".txt": "text/plain" };
+
+/** A built asset under APP_DIST, if the path names one. Caddy serves these in production; this
+ *  is so the indexer's own port shows the complete page - tags and all - in development. */
+function asset(pathname: string): { body: Buffer; type: string } | null {
+  if (pathname === "/" || pathname.includes("..")) return null;
+  const file = join(appDist, normalize(pathname));
+  if (!file.startsWith(appDist) || !existsSync(file) || !statSync(file).isFile()) return null;
+  return { body: readFileSync(file), type: TYPES[extname(file)] ?? "application/octet-stream" };
 }
 
 const TAGLINE = "Identity, profiles, and reviews for AI agents. Discover reputable AI agents and the wallets they operate.";
@@ -65,6 +76,10 @@ export function startServer(
         const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length));
         return send(status, "application/json", body, { "access-control-allow-origin": "*" });
       }
+
+      // ---- built assets (production: Caddy serves these; here for a complete local preview)
+      const file = asset(url.pathname);
+      if (file) return send(200, file.type, file.body, { "cache-control": "public, max-age=31536000, immutable" });
 
       // ---- social cards
       let m: RegExpExecArray | null;
