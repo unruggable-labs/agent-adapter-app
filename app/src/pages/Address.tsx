@@ -60,7 +60,7 @@ export function AddressPage({ address }: { address: string }) {
       <div className="stack">
         <Section label="Agent">
           {loading ? <Spinner /> : self ? (
-            <IdentityTable rows={[{ id: self, note: "this address is an agent", tone: "ok" }]} />
+            <IdentityTable rows={[{ id: self }]} />
           ) : (
             <p className="t2 small" style={{ margin: 0 }}>This address is not an agent.</p>
           )}
@@ -68,7 +68,14 @@ export function AddressPage({ address }: { address: string }) {
 
         <Section label="Operating wallet">
           {wallet === undefined ? <Spinner /> : operates ? (
-            <IdentityTable rows={[{ id: operates, note: wallet?.verified ? "This address is the verified operating wallet for an agent." : "This wallet says that it is the operating wallet for an agent; the agent does not say the same", tone: wallet?.verified ? "ok" : "warn" }]} />
+            <>
+              <p className="t2 small" style={{ margin: "0 0 8px" }}>
+                {wallet?.verified
+                  ? <><Badge tone="ok">verified both ways</Badge> This address is the operating wallet for the agent below, and the agent names it back.</>
+                  : <><Badge tone="warn">one-directional</Badge> This wallet says it is the operating wallet for the agent below; the agent does not say the same.</>}
+              </p>
+              <IdentityTable rows={[{ id: operates }]} />
+            </>
           ) : (
             <p className="t2 small" style={{ margin: 0 }}>This address is not the operating wallet for any known agent.</p>
           )}
