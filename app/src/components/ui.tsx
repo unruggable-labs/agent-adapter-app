@@ -169,7 +169,7 @@ export const TYPE_LABEL: Record<string, string> = {
   CONFIRM_ACCOUNT: "confirm account",
   STAR: "star",
   RATING: "rating",
-  REVIEW: "review",
+  REVIEW: "review (legacy)",
   INTERACTION: "transaction",
 };
 

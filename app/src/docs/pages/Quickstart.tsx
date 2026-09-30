@@ -64,13 +64,20 @@ await wallet.writeContract({
       <p>If it's a different address, the controller names it and that wallet confirms - see <a href="#/wallets">Operating wallets</a>.</p>
 
       <H2 id="attest">4. Say something about an agent</H2>
-      <Code lang="ts">{`const ZERO = "0x" + "00".repeat(32) as \`0x\${string}\`;
+      <Code lang="ts">{`import { concatHex } from "viem";
+const ZERO = "0x" + "00".repeat(32) as \`0x\${string}\`;
 
-// a rating of 90 out of 100
-await wallet.writeContract({ address: ADAPTER, abi, functionName: "attest", args: [3, ubid, ZERO, toHex(90, { size: 1 })] });
+// your rating of the agent: a score, optionally followed by your review - one call, one live per wallet
+await wallet.writeContract({
+  address: ADAPTER, abi, functionName: "attest",
+  args: [3, ubid, ZERO, concatHex([toHex(90, { size: 1 }), toHex("Fast, fair, would deal again.")])],
+});
 
-// a review, with the transaction it is about in the variant slot
-await wallet.writeContract({ address: ADAPTER, abi, functionName: "attest", args: [4, ubid, txHash, toHex("Fast, fair, would deal again.")] });`}</Code>
+// a record of one transaction: score ‖ tx hash ‖ optional note, with the hash in the variant slot too
+await wallet.writeContract({
+  address: ADAPTER, abi, functionName: "attest",
+  args: [5, ubid, txHash, concatHex([toHex(95, { size: 1 }), txHash, toHex("Settled in one block.")])],
+});`}</Code>
 
       <H2 id="register">Later: register fully</H2>
       <p>Mints an ERC-8004 agent bound to the same coordinates. Everything attached to the UBID carries over.</p>

@@ -147,7 +147,10 @@ export function AttestationsPage() {
 
 export function payloadPreview(a: AttestationRow): string {
   if (a.typeName === "STAR") return a.data === "0x01" ? "★ 1" : "0";
-  if (a.typeName === "RATING") return `${parseInt(a.data.slice(2), 16)}/100`;
+  if (a.typeName === "RATING") {
+    const text = a.data.length > 4 ? utf8("0x" + a.data.slice(4)) : "";
+    return `${parseInt(a.data.slice(2, 4), 16)}/100${text ? ` ${text}` : ""}`;
+  }
   if (a.typeName === "CONFIRM_ACCOUNT") return "—";
   if (a.typeName === "REVIEW") return utf8(a.data);
   if (a.typeName === "INTERACTION") {

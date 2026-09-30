@@ -26,9 +26,10 @@ export interface Reputation {
   starredBy?: Address[];
   ratingAverage: number | null;
   ratings: { attester: Address; value: number }[];
-  /** `reference` is the statement's variant slot - the transaction it is about, or zero. Optional:
-   *  an indexer that predates this field simply omits it. */
-  reviews: { attester: Address; text: string; attestationId: Hex; order: Order; reference?: Hex }[];
+  /** Reviews: the text carried by an attester's live rating (score present), or a legacy REVIEW
+   *  statement (score null). `reference` is the statement's variant slot - the transaction it
+   *  is about, or zero. Older indexers omit the newer fields. */
+  reviews: { attester: Address; text: string; score?: number | null; source?: "rating" | "review"; attestationId: Hex; order: Order; reference?: Hex }[];
   interactions: { attester: Address; attestationId: Hex; score: number; reference: Hex; text: string; order: Order }[];
   confirmedAccounts: { attester: Address; verified: boolean }[];
 }

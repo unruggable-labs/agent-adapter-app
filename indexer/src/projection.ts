@@ -454,21 +454,33 @@ export class ProjectionStore {
     }
     const stars = starredBy.length;
     // RATING aggregates by averaging each attester's live value; 0-100, invalid at read otherwise.
+    // RATING is the agent-level opinion: one live statement per attester, latest wins. Its
+    // payload is the 0-100 score, optionally followed by review text (UTF-8). A rating's text is
+    // the attester's review; re-rating supersedes both - earlier versions stay in the history.
     const ratings: { attester: Address; value: number }[] = [];
+    const ratingReviews: ReviewView[] = [];
     for (const attester of this.attestersOf(ubid, AttestationType.RATING)) {
       const live = this.liveStateValue(ubid, attester, AttestationType.RATING);
       if (!live) continue;
-      const value = ProjectionStore.payloadByte(live.data);
-      if (value !== null && value <= 100) ratings.push({ attester, value });
+      // The score is the first byte; anything after it is the review text.
+      const value = live.data.length >= 4 ? parseInt(live.data.slice(2, 4), 16) : null;
+      if (value === null || Number.isNaN(value) || value > 100) continue;
+      ratings.push({ attester, value });
+      const text = ratingText(live.data);
+      if (text) ratingReviews.push({ attester, text, score: value, order: live.order, attestationId: live.attestationId, reference: live.variant, source: "rating" });
     }
     const ratingAverage = ratings.length
       ? ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length
       : null;
 
     // Stream classes accumulate all live statements, each individually valid or not at read.
-    const reviews = [...this.attestations.values()]
+    // REVIEW is a legacy type: still projected, no longer written by the explorer.
+    const legacyReviews: ReviewView[] = [...this.attestations.values()]
       .filter((a) => !a.revoked && a.ubid === ubid && a.attestationType === AttestationType.REVIEW && a.data !== "0x")
-      .map((a) => ({ attester: a.attester, text: hexToUtf8(a.data), order: a.order, attestationId: a.attestationId, reference: a.variant }));
+      .map((a) => ({ attester: a.attester, text: hexToUtf8(a.data), score: null, order: a.order, attestationId: a.attestationId, reference: a.variant, source: "review" as const }));
+    const reviews = [...ratingReviews, ...legacyReviews].sort((a, b) =>
+      a.order.blockNumber === b.order.blockNumber ? a.order.logIndex - b.order.logIndex : a.order.blockNumber < b.order.blockNumber ? -1 : 1,
+    );
 
     const interactions = [...this.attestations.values()]
       .filter((a) => !a.revoked && a.ubid === ubid && a.attestationType === AttestationType.INTERACTION)
@@ -521,6 +533,30 @@ export class ProjectionStore {
   }
 }
 
+/** A review as the API shows it: from a rating's text, or a legacy REVIEW statement. */
+export interface ReviewView {
+  attester: Address;
+  text: string;
+  /** The score it came with; null for a legacy REVIEW. */
+  score: number | null;
+  order: OrderKey;
+  attestationId: Hex;
+  reference: Hex;
+  source: "rating" | "review";
+}
+
+/** The text after a rating's score byte, when it decodes as UTF-8 with no control characters. */
+export function ratingText(data: Hex): string | null {
+  if (data.length <= 4) return null;
+  try {
+    const bytes = new Uint8Array((data.slice(4).match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)));
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim();
+    return text.length > 0 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text) ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 function hexToUtf8(data: Hex): string {
   const bytes = data.slice(2).match(/.{2}/g) ?? [];
   return new TextDecoder().decode(new Uint8Array(bytes.map((b) => parseInt(b, 16))));
@@ -558,7 +594,7 @@ const ATTESTATION_LABEL: Record<number, string> = {
   [AttestationType.CONFIRM_ACCOUNT]: "account confirmation",
   [AttestationType.STAR]: "star",
   [AttestationType.RATING]: "rating",
-  [AttestationType.REVIEW]: "review",
+  [AttestationType.REVIEW]: "review (legacy type)",
   [AttestationType.INTERACTION]: "transaction record",
 };
 
@@ -569,8 +605,11 @@ function describeAttestation(type: AttestationType, data: Hex): string {
   switch (type) {
     case AttestationType.STAR:
       return data === "0x01" ? "Star given" : "Star withdrawn";
-    case AttestationType.RATING:
-      return Number.isNaN(first) ? "Rating (unreadable)" : `Rating ${first}/100`;
+    case AttestationType.RATING: {
+      if (Number.isNaN(first)) return "Rating (unreadable)";
+      const text = ratingText(data);
+      return text ? `Rating ${first}/100 with review: ${JSON.stringify(text.length > 80 ? `${text.slice(0, 77)}…` : text)}` : `Rating ${first}/100`;
+    }
     case AttestationType.INTERACTION:
       return Number.isNaN(first) ? "Transaction record (unreadable)" : `Transaction record scored ${first}/100`;
     case AttestationType.REVIEW: {

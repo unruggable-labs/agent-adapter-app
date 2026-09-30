@@ -220,3 +220,27 @@ describe("audit trail", () => {
     expect(store.identities.get(UBID7)!.agentURI).toBe("ipfs://b");
   });
 });
+
+describe("ratings carry reviews", () => {
+  const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
+  it("projects a rating's text as the attester's review, supersedes on re-rate, and keeps legacy REVIEWs", () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    let seq = 0;
+    const text = (t: string) => ("0x" + Array.from(new TextEncoder().encode(t), (b) => b.toString(16).padStart(2, "0")).join("")) as Hex;
+    const attested = (attester: Address, type: AttestationType, data: Hex, block: number, variant: Hex = ZERO32) => {
+      const attestationId = computeAttestationId(CHAIN, ADAPTER, attester, UBID7, type, BigInt(block), variant, data);
+      return { blockNumber: BigInt(block), logIndex: 0, eventName: "Attested", args: { attester, attestationType: type, ubid: UBID7, attestationId, variant, data } } as LogEvent;
+    };
+    store.apply(attested(BOB, AttestationType.RATING, ("0x50" + text("Solid.").slice(2)) as Hex, ++seq));   // 80 + review
+    store.apply(attested(ALICE, AttestationType.RATING, "0x3c", ++seq));                                     // 60, no text
+    store.apply(attested(ALICE, AttestationType.REVIEW, text("Old-style review."), ++seq));                  // legacy
+    let rep = store.reputation(UBID7);
+    expect(rep.ratingAverage).toBe(70);
+    expect(rep.reviews.map((r) => [r.source, r.text, r.score])).toEqual([["rating", "Solid.", 80], ["review", "Old-style review.", null]]);
+
+    store.apply(attested(BOB, AttestationType.RATING, ("0x5a" + text("Even better now.").slice(2)) as Hex, ++seq)); // 90, supersedes
+    rep = store.reputation(UBID7);
+    expect(rep.ratings.find((r) => r.attester === BOB)?.value).toBe(90);
+    expect(rep.reviews.filter((r) => r.attester === BOB).map((r) => r.text)).toEqual(["Even better now."]);
+  });
+});

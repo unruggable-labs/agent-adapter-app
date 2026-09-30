@@ -90,7 +90,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
           </div>
           {id.reputation.reviews.map((r) => (
             <div key={r.attestationId} className="review-item">
-              <div>"{r.text}"</div>
+              <div>{r.score !== null && r.score !== undefined && <span className="num" style={{ marginRight: 8 }}>{r.score}/100</span>}"{r.text}"</div>
               <div className="t3 small">
                 — <span className="mono">{shortHex(r.attester, 8)}</span> · block {r.order.blockNumber}
                 {r.reference && r.reference !== ZERO32 && <> · ref <span className="mono">{shortHex(r.reference, 10)}</span></>}
@@ -395,14 +395,12 @@ export function StarButton({ id }: { id: Identity }) {
 }
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
-const COUNT_WORDS = ["", "One", "Two", "Three"];
 
 /**
- * Rating, review and transaction in one form. They are separate attestation types and `attest`
- * takes one type per call, so each part is its own wallet prompt - said up front rather than
- * discovered when the second one appears. A transaction hash, when given, goes into the
- * reference slot of every statement sent, and additionally produces the scored transaction
- * record that points at it.
+ * One form, one call. Without a transaction hash it is a RATING - the attester's opinion of the
+ * agent as a whole, score plus optional review text, one live per attester, latest wins. With a
+ * hash it is an INTERACTION - a record of that one dealing, score plus hash plus optional text,
+ * which does not touch the agent-level rating.
  */
 function AttestPanel({ id }: { id: Identity }) {
   const { attest, busy, signer, ready } = useAttest(id);
@@ -423,12 +421,11 @@ function AttestPanel({ id }: { id: Identity }) {
   const txHash = (refValid && ref ? ref.toLowerCase() : ZERO32) as Hex;
   const hasTx = txHash !== ZERO32;
 
-  const parts = ["the rating", ...(review ? ["the review"] : []), ...(hasTx ? ["the transaction record"] : [])];
-
   async function submit() {
-    if (!(await attest(ATTESTATION_TYPES.RATING, toByteHex(rating), txHash))) return;
-    if (review && !(await attest(ATTESTATION_TYPES.REVIEW, utf8ToHex(review), txHash))) return;
-    if (hasTx && !(await attest(ATTESTATION_TYPES.INTERACTION, (toByteHex(rating) + txHash.slice(2)) as Hex, txHash))) return;
+    const ok = hasTx
+      ? await attest(ATTESTATION_TYPES.INTERACTION, (toByteHex(rating) + txHash.slice(2) + utf8ToHex(review).slice(2)) as Hex, txHash)
+      : await attest(ATTESTATION_TYPES.RATING, (toByteHex(rating) + utf8ToHex(review).slice(2)) as Hex);
+    if (!ok) return;
     setText("");
     setReference("");
   }
@@ -440,15 +437,15 @@ function AttestPanel({ id }: { id: Identity }) {
         <div className="row">
           <input type="range" min={0} max={100} value={rating} onChange={(e) => setRating(Number(e.target.value))} style={{ width: 220 }} />
           <span className="num" style={{ width: 40, fontWeight: 600 }}>{rating}</span>
-          {mine !== undefined && <span className="hint">You rated this {mine}. Moving the slider updates it.</span>}
+          {mine !== undefined && !hasTx && <span className="hint">You rated this {mine}. Moving the slider updates it.</span>}
         </div>
       </div>
 
       <div className="field">
-        <label>Review <span className="t3">(optional)</span></label>
+        <label>{hasTx ? "Note" : "Review"} <span className="t3">(optional)</span></label>
         <textarea
           className="textarea"
-          placeholder="Review your experience with this agent…"
+          placeholder={hasTx ? "What happened in this transaction." : "Review your experience with this agent…"}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -466,15 +463,15 @@ function AttestPanel({ id }: { id: Identity }) {
           {!refValid
             ? "A transaction hash is 0x followed by 64 hex characters."
             : hasTx
-              ? "Attached to everything you submit here. Anyone reading it can check the hash against the chain."
-              : "The transaction you had with this agent, if there was one."}
+              ? "This becomes a record of that transaction - its own score and note - and leaves your rating of the agent as a whole untouched."
+              : "Rating a specific transaction? Paste its hash. Without one, this is your opinion of the agent as a whole."}
         </span>
       </div>
 
       <div className="row" style={{ marginTop: 8 }}>
         {signer ? (
           <button className="btn btn-primary" disabled={busy || !refValid} onClick={submit}>
-            {busy ? <Spinner /> : mine !== undefined ? (parts.length > 1 ? "Update feedback" : "Update rating") : parts.length > 1 ? "Submit feedback" : "Submit rating"}
+            {busy ? <Spinner /> : hasTx ? "Record transaction" : mine !== undefined ? "Update rating" : "Submit rating"}
           </button>
         ) : (
           <ConnectWalletButton />
@@ -482,9 +479,11 @@ function AttestPanel({ id }: { id: Identity }) {
         <span className="hint">
           {!signer
             ? "Feedback is signed by your wallet, so connect one first. What you've typed stays."
-            : parts.length === 1
-              ? "One transaction. Add a review or a hash above to publish more alongside it."
-              : `${COUNT_WORDS[parts.length]} transactions: ${parts.join(", then ")}. They are separate records on-chain.`}
+            : hasTx
+              ? "One transaction: a record of this dealing."
+              : mine !== undefined
+                ? "One transaction. Replaces your current rating and review; the old ones stay in the history."
+                : "One transaction. Your rating and review travel together."}
         </span>
       </div>
     </Section>

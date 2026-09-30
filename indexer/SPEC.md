@@ -78,9 +78,15 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
 - State classes (`CONFIRM_ACCOUNT`, `STAR`, `RATING`): latest live statement per
   `(attester, ubid, type)`; revocation can resurrect an older live statement.
 - Stream classes (`REVIEW`, `INTERACTION`): all live statements accumulate.
-- Payload validity is read-time: `STAR` ∈ {0,1} (1 byte), `RATING` ∈ [0,100] (1 byte), `REVIEW`
-  non-empty UTF-8, `INTERACTION` ≥ 33 bytes (`uint8 score ≤ 100 || bytes32 reference || text`).
-  Invalid payloads are excluded from aggregation, never errors.
+- Payload validity is read-time: `STAR` ∈ {0,1} (1 byte), `RATING` = `uint8 score ≤ 100` optionally
+  followed by UTF-8 review text (so a 1-byte rating and a rating-with-review are one type),
+  `INTERACTION` ≥ 33 bytes (`uint8 score ≤ 100 || bytes32 reference || text`). `REVIEW` (UTF-8,
+  non-empty) is a legacy type: still projected, no longer written by the explorer. Invalid
+  payloads are excluded from aggregation, never errors.
+- Two levels of feedback, by type: `RATING` is the attester's opinion of the agent as a whole -
+  one live statement per attester, latest wins, its text is that attester's review and
+  re-rating supersedes both. `INTERACTION` is a record of one dealing, keyed by its reference;
+  many per attester. Their scores are averaged separately and never blended.
 - Aggregation: `STAR` counts attesters whose live value is 1; `RATING` averages per-attester
   live values.
 - `CONFIRM_ACCOUNT` counts only while the identity's **current** forward `account[...]` metadata
