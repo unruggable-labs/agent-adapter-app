@@ -167,7 +167,7 @@ export const ATTESTATION_TYPES = { CONFIRM_ACCOUNT: 1, STAR: 2, RATING: 3, REVIE
 export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 
 /** 8004Scan's chain slugs. A chain it doesn't index (the local devnet) gets no link. */
-const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia", 8453: "base" };
+const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia", 8453: "base", 4663: "robinhood-chain" };
 
 /** The explorer and the docs are one build on two hostnames; each links to the other. In dev both
  *  are served by Vite: the docs at /docs.html. */

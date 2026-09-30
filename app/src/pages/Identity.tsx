@@ -382,9 +382,15 @@ const COUNT_WORDS = ["", "One", "Two", "Three"];
  */
 function AttestPanel({ id }: { id: Identity }) {
   const { attest, busy, signer, ready } = useAttest(id);
-  const [rating, setRating] = useState(80);
+  // The connected wallet's live rating, if it has one: the slider starts there and the button
+  // says "update", because a new rating replaces it rather than adding to it.
+  const mine = signer ? id.reputation.ratings.find((r) => r.attester === signer.address)?.value : undefined;
+  const [rating, setRating] = useState(mine ?? 80);
   const [text, setText] = useState("");
   const [reference, setReference] = useState("");
+  useEffect(() => {
+    if (mine !== undefined) setRating(mine);
+  }, [mine, id.ubid]);
 
   if (!ready) return null;
   const review = text.trim();
@@ -410,7 +416,7 @@ function AttestPanel({ id }: { id: Identity }) {
         <div className="row">
           <input type="range" min={0} max={100} value={rating} onChange={(e) => setRating(Number(e.target.value))} style={{ width: 220 }} />
           <span className="num" style={{ width: 40, fontWeight: 600 }}>{rating}</span>
-          <span className="hint">Replaces any rating you gave before. The profile shows the average across raters.</span>
+          {mine !== undefined && <span className="hint">You rated this {mine}. Moving the slider updates it.</span>}
         </div>
       </div>
 
@@ -418,7 +424,7 @@ function AttestPanel({ id }: { id: Identity }) {
         <label>Review <span className="t3">(optional)</span></label>
         <textarea
           className="textarea"
-          placeholder="On-chain and permanent - revoking one is itself recorded."
+          placeholder="Review your experience with this agent…"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -444,7 +450,7 @@ function AttestPanel({ id }: { id: Identity }) {
       <div className="row" style={{ marginTop: 8 }}>
         {signer ? (
           <button className="btn btn-primary" disabled={busy || !refValid} onClick={submit}>
-            {busy ? <Spinner /> : parts.length > 1 ? "Submit feedback" : "Submit rating"}
+            {busy ? <Spinner /> : mine !== undefined ? (parts.length > 1 ? "Update feedback" : "Update rating") : parts.length > 1 ? "Submit feedback" : "Submit rating"}
           </button>
         ) : (
           <ConnectWalletButton />
