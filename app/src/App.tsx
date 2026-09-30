@@ -151,13 +151,11 @@ function Shell() {
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
 
-        <div className="nav-label">Learn</div>
-        <a className="nav-item" href={DOCS_URL} style={{ textDecoration: "none" }}>Docs <span className="t3" style={{ marginLeft: "auto" }}>↗</span></a>
-
         <div className="sidebar-foot">
-          <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
+          <a className="sidebar-link" href={DOCS_URL}>Documentation ↗</a>
         </div>
       </aside>
       <main className="main">
