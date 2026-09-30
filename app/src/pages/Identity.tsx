@@ -237,7 +237,7 @@ function HistoryPanel({ id }: { id: Identity }) {
 /** A full address, linking to its page in this explorer. */
 function AddressLink({ address }: { address: string }) {
   const { navigate } = useApp();
-  return <button className="agent-link mono" style={{ overflowWrap: "anywhere" }} onClick={() => navigate(`/address/${address}`)}>{address}</button>;
+  return <button className="agent-link mono" title={address} onClick={() => navigate(`/address/${address}`)}>{shortHex(address, 10)}</button>;
 }
 
 /**
@@ -260,7 +260,7 @@ function TxRef({ hash }: { hash: string }) {
   }, [hash]);
   if (hash === ZERO32) return <span className="t3">none</span>;
   const url = explorerTxUrl(hash);
-  const label = <span className="mono" style={{ overflowWrap: "anywhere" }}>{hash}</span>;
+  const label = <span className="mono" title={hash}>{shortHex(hash, 12)}</span>;
   return (
     <>
       {url ? <a className="agent-link" href={url} target="_blank" rel="noopener noreferrer">{label}</a> : label}{" "}
