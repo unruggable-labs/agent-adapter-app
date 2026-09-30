@@ -38,7 +38,16 @@ const Ctx = createContext<AppState>(null as unknown as AppState);
 export const useApp = () => useContext(Ctx);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [route, setRoute] = useState(location.hash.slice(1) || "/");
+  // Path routes (/identity/<ubid>, /address/<addr>, ...) so a shared link carries the page in
+  // the part of the URL servers and crawlers see. Old hash links still land: #/x becomes /x.
+  const [route, setRoute] = useState(() => {
+    if (location.hash.startsWith("#/")) {
+      const path = location.hash.slice(1);
+      history.replaceState(null, "", path);
+      return path;
+    }
+    return location.pathname || "/";
+  });
   const [actorIndex, setActorIndex] = useState(0);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
@@ -63,9 +72,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : null;
 
   useEffect(() => {
-    const onHash = () => setRoute(location.hash.slice(1) || "/");
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const onPop = () => setRoute(location.pathname || "/");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -91,7 +100,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const navigate = useCallback((r: string) => {
-    location.hash = r;
+    if (r !== location.pathname) history.pushState(null, "", r);
+    setRoute(r);
+    window.scrollTo({ top: 0 });
   }, []);
 
   return (

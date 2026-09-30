@@ -11,6 +11,10 @@
     "serve:sepolia": "tsx src/serve.ts sepolia"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.33.5",
     "viem": "^2.21.0"
   },
   "devDependencies": {

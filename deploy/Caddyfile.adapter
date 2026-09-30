@@ -5,13 +5,34 @@
 (adapterscan) {
 	encode gzip zstd
 
+	# The API, the social cards, and the crawlers' files come from the chain's indexer.
 	handle /api/* {
 		reverse_proxy 127.0.0.1:{args[0]}
 	}
+	handle /og/* {
+		reverse_proxy 127.0.0.1:{args[0]}
+	}
+	handle /robots.txt {
+		reverse_proxy 127.0.0.1:{args[0]}
+	}
+	handle /sitemap.xml {
+		reverse_proxy 127.0.0.1:{args[0]}
+	}
 
+	# Built assets are served as files. Page paths (/identity/<ubid>, /address/<addr>, /) go to
+	# the indexer, which returns the same index.html with the title, description and card
+	# tags filled in for what the path is about - what crawlers and link unfurlers read.
 	handle {
 		root * /srv/adapter/app/dist
-		try_files {path} /index.html
+		@page not file
+		reverse_proxy @page 127.0.0.1:{args[0]}
+		file_server
+	}
+
+	# No indexer behind this host (a chain that is not on v0.0.17 yet): the plain shell.
+	handle_errors 502 503 {
+		root * /srv/adapter/app/dist
+		rewrite * /index.html
 		file_server
 	}
 

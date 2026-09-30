@@ -17,7 +17,7 @@ export function toJson(value: unknown): string {
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-async function identityView(store: ProjectionStore, client: PublicClient, id: IdentityState) {
+export async function identityView(store: ProjectionStore, client: PublicClient, id: IdentityState) {
   // Read-time advisory: who currently holds the controller, and is the bound token ownerless?
   //
   // `currentControllerHolder` is the address that passes _hasBindingControl today. It is only

@@ -115,7 +115,7 @@ async function main() {
     console.warn("Backfill verification skipped: RPC rejected the full-range query.");
   }
 
-  startServer(store, client, net.adapter, net.port, ingester, net.pollMs);
+  startServer(store, client, net.adapter, net.port, ingester, net.pollMs, { networkLabel: net.chain.name });
   console.log(`API + UI on http://127.0.0.1:${net.port} (polling every ${net.pollMs / 1000}s)`);
 }
 

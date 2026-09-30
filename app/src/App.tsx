@@ -117,7 +117,7 @@ function AppKitTheme({ theme }: { theme: string }) {
 }
 
 function Shell() {
-  const { route, overview } = useApp();
+  const { route, overview, navigate } = useApp();
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
   const [pickChain, setPickChain] = useState(false);
   useEffect(() => {
@@ -142,7 +142,7 @@ function Shell() {
       <aside className="sidebar">
         <div className="brand"><Brand /></div>
 
-        <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => (location.hash = "/create")}>
+        <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => navigate("/create")}>
           + Create identity
         </button>
 
