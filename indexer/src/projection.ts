@@ -15,6 +15,13 @@ export interface LogEvent {
   args: Record<string, unknown>;
   /** The transaction that emitted it, when the source knows (synthetic test events don't). */
   transactionHash?: Hex;
+  /**
+   * What `block.number` was inside the contract when it emitted this - it sits in every
+   * attestationId preimage. On Ethereum-like chains that is the log's own block. On
+   * Arbitrum-style chains (Robinhood Chain) `block.number` is the parent chain's block, which
+   * the node reports as the L2 block's `l1BlockNumber`. Unset means "same as blockNumber".
+   */
+  contractBlockNumber?: bigint;
 }
 
 /**
@@ -362,7 +369,7 @@ export class ProjectionStore {
       attester,
       ubid,
       attestationType,
-      order.blockNumber,
+      ev.contractBlockNumber ?? order.blockNumber,
       variant,
       data,
     );

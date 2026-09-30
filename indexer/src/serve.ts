@@ -62,6 +62,9 @@ const NETWORKS = {
     fromBlock: 75_810_067n,
     port: 8791,
     pollMs: 6_000, // 100 ms blocks: a poll covers ~60 blocks
+    // Arbitrum Orbit: block.number inside a contract is the parent chain's block. Attestation
+    // ids are hashed with it, so the ingester reads each block's l1BlockNumber.
+    blockNumbers: "arbitrum" as const,
   },
 } as const;
 
@@ -76,7 +79,7 @@ async function main() {
   const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) });
   await preflight(client, net.rpcUrl, net.chainId, net.fromBlock);
   const store = new ProjectionStore(net.chainId, net.adapter);
-  const ingester = new Ingester(client, store, net.adapter, net.fromBlock);
+  const ingester = new Ingester(client, store, net.adapter, net.fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2");
 
   let syncedTo = net.fromBlock;
   const count = await ingester.sync((from, to, head) => {

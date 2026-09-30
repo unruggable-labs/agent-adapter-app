@@ -7,6 +7,8 @@ import { ProjectionStore, type LogEvent } from "./projection.js";
  * in (blockNumber, logIndex) order. Called repeatedly it acts as a poller; reorg handling is
  * replay-from-scratch (create a fresh store), which is exactly what conformance requires.
  */
+export type BlockNumberSemantics = "l2" | "arbitrum";
+
 export class Ingester {
   private nextBlock: bigint;
 
@@ -17,8 +19,29 @@ export class Ingester {
     fromBlock: bigint = 0n,
     /** Public RPCs cap eth_getLogs ranges; backfills are chunked to stay under the cap. */
     private maxRange: bigint = 10_000n,
+    /**
+     * What `block.number` means on this chain. "arbitrum": a contract sees the parent chain's
+     * block, which the node exposes as the block's `l1BlockNumber`; the ingester reads it for
+     * every block that carries adapter logs, so attestation ids recompute correctly.
+     */
+    private blockNumbers: BlockNumberSemantics = "l2",
   ) {
     this.nextBlock = fromBlock;
+  }
+
+  /** The contract's view of block.number for a block, per the chain's semantics. */
+  private async contractBlockNumber(blockNumber: bigint, cache: Map<bigint, bigint>): Promise<bigint | undefined> {
+    if (this.blockNumbers !== "arbitrum") return undefined;
+    const hit = cache.get(blockNumber);
+    if (hit !== undefined) return hit;
+    const raw = (await this.client.request({
+      method: "eth_getBlockByNumber",
+      params: [`0x${blockNumber.toString(16)}`, false],
+    } as never)) as { l1BlockNumber?: `0x${string}` } | null;
+    if (!raw?.l1BlockNumber) throw new Error(`block ${blockNumber} has no l1BlockNumber; is this really an Arbitrum-style chain?`);
+    const l1 = BigInt(raw.l1BlockNumber);
+    cache.set(blockNumber, l1);
+    return l1;
   }
 
   async sync(onProgress?: (from: bigint, to: bigint, head: bigint) => void): Promise<number> {
@@ -33,7 +56,11 @@ export class Ingester {
         toBlock: to,
       });
       const events = decodeAdapterLogs(logs);
-      for (const ev of events) this.store.apply(ev);
+      const cache = new Map<bigint, bigint>();
+      for (const ev of events) {
+        ev.contractBlockNumber = await this.contractBlockNumber(ev.blockNumber, cache);
+        this.store.apply(ev);
+      }
       applied += events.length;
       this.nextBlock = to + 1n;
     }

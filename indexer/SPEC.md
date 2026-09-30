@@ -69,7 +69,10 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
 ## 5. Attestations (restating `docs/specs/attestation-type-registry-v1.md` §5–§7)
 
 - Collapse: byte-identical content (same attester, ubid, type, variant, data, block) is one
-  statement with one id. Re-emitting a revoked id reactivates it in log order.
+  statement with one id. "Block" is `block.number` as the contract saw it: on Arbitrum-style
+  chains (Robinhood Chain) that is the parent chain's block, exposed by the node as the L2
+  block's `l1BlockNumber`, not the log's own block. The ingester reads it per block; the
+  projection recomputes ids with it. Ordering still uses the log's own (blockNumber, logIndex). Re-emitting a revoked id reactivates it in log order.
 - `AttestationRevoked` changes state only when `revoker == attester` of the named statement;
   everything else — unknown id, zero id, wrong revoker — is recorded inert history.
 - State classes (`CONFIRM_ACCOUNT`, `STAR`, `RATING`): latest live statement per
