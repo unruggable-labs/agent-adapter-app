@@ -68,7 +68,7 @@ export function IdentitiesPage() {
       <div className="row spread" style={{ marginTop: 10 }}>
         {overview ? (
           <p className="hint" style={{ margin: 0 }}>
-            <Addr value={overview.adapter} /> is the adapter every UBID is scoped to on chain {overview.chainId}.
+            <Addr value={overview.adapter} n={42} /> is the adapter every UBID is scoped to on chain <b>{overview.chainId}</b>.
           </p>
         ) : (
           <span />
