@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { isAddress } from "viem";
-import { Badge, ControllerCell, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, TypeBadge, UbidCell } from "../components/ui";
+import { Badge, ControllerCell, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow, type Identity } from "../lib/api";
 import { useApp } from "../lib/app-state";
 import { displayName, explorerAddressUrl, explorerName, plural, pluralise } from "../lib/chain";
@@ -67,24 +67,15 @@ export function AddressPage({ address }: { address: string }) {
         </Section>
 
         <Section label="Operating wallet">
-          {wallet === undefined ? <Spinner /> : operates ? (
-            <>
-              <p className="t2 small" style={{ margin: "0 0 8px" }}>
-                {wallet?.verified
-                  ? <><Badge tone="ok">verified both ways</Badge> This address is the operating wallet for the agent below, and the agent names it back.</>
-                  : <><Badge tone="warn">one-directional</Badge> This wallet says it is the operating wallet for the agent below; the agent does not say the same.</>}
-              </p>
-              <IdentityTable rows={[{ id: operates }]} />
-            </>
-          ) : (
+          {wallet === undefined ? <Spinner /> : !operates && namedBy.length === 0 ? (
             <p className="t2 small" style={{ margin: 0 }}>This address is not the operating wallet for any known agent.</p>
-          )}
-          {namedBy.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div className="section-label">Named as operating wallet by</div>
-              <IdentityTable rows={namedBy.map((id) => ({ id, note: "one-directional claim", tone: "warn" }))} />
-              <p className="hint" style={{ marginTop: 8 }}>These agents name this wallet, but the wallet has not pointed back. Either half alone is easy to fake.</p>
-            </div>
+          ) : (
+            <IdentityTable
+              rows={[
+                ...(operates ? [{ id: operates, link: (wallet?.verified ? "both" : "wallet-only") as LinkState }] : []),
+                ...namedBy.map((id) => ({ id, link: "agent-only" as LinkState })),
+              ]}
+            />
           )}
         </Section>
 
@@ -144,23 +135,47 @@ function CopyAddress({ value }: { value: string }) {
   );
 }
 
+/** How a wallet link stands between this address and an agent. */
+type LinkState = "both" | "wallet-only" | "agent-only";
+
+const LINK_TIP: Record<LinkState, string> = {
+  both: "Verified both ways: this wallet points at the agent, and the agent names this wallet.",
+  "wallet-only": "One way: this wallet points at the agent, but the agent does not name this wallet. Not verified.",
+  "agent-only": "One way: the agent names this wallet, but this wallet has not pointed back. Not verified.",
+};
+
+/** Two arrows for a verified link, one arrow in the direction of the single claim. */
+function LinkMark({ state }: { state: LinkState }) {
+  const tone = state === "both" ? "var(--ok)" : "var(--warn)";
+  return (
+    <Tip tip={LINK_TIP[state]}>
+      <svg width="34" height="16" viewBox="0 0 34 16" fill="none" stroke={tone} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-label={LINK_TIP[state]}>
+        {state !== "agent-only" && <path d="M3 5h28M27 1l4 4-4 4" />}
+        {state !== "wallet-only" && <path d="M31 11H3M7 7l-4 4 4 4" />}
+      </svg>
+    </Tip>
+  );
+}
+
 /** Identities as a table, in the identities page's columns, plus why each one is listed here. */
-function IdentityTable({ rows }: { rows: { id: Identity; note?: string; tone?: string }[] }) {
+function IdentityTable({ rows }: { rows: { id: Identity; note?: string; tone?: string; link?: LinkState }[] }) {
   const { navigate } = useApp();
   const withNotes = rows.some((r) => r.note);
+  const withLink = rows.some((r) => r.link);
   return (
     <div className="table-scroll">
       <table className="table clickable">
         <thead>
-          <tr><th>UBID</th><th>Standard</th><th>Controller</th><th>Registration</th>{withNotes && <th>Why it's here</th>}</tr>
+          <tr><th>UBID</th><th>Standard</th><th>Controller</th><th>Registration</th>{withLink && <th><Tip tip="Whether the wallet link is confirmed from both sides. Either side alone is a claim.">Link</Tip></th>}{withNotes && <th>Why it's here</th>}</tr>
         </thead>
         <tbody>
-          {rows.map(({ id, note, tone }) => (
+          {rows.map(({ id, note, tone, link }) => (
             <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
               <td><UbidCell ubid={id.ubid} image={id.image} registration={registrationOf(id)} /></td>
               <td><StandardBadge id={id} /></td>
               <td><ControllerCell id={id} /></td>
               <td><StatusBadge id={id} /></td>
+              {withLink && <td>{link && <LinkMark state={link} />}</td>}
               {withNotes && <td>{note && <Badge tone={tone ?? "outline"}>{note}</Badge>}</td>}
             </tr>
           ))}
