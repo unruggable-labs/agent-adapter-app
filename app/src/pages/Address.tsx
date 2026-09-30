@@ -58,19 +58,19 @@ export function AddressPage({ address }: { address: string }) {
       </div>
 
       <div className="stack">
-        <Section label="As an agent">
+        <Section label="Agent">
           {loading ? <Spinner /> : self ? (
-            <IdentityTable rows={[{ id: self, note: "this address is the agent", tone: "ok" }]} />
+            <IdentityTable rows={[{ id: self, note: "this address is an agent", tone: "ok" }]} />
           ) : (
-            <p className="t2 small" style={{ margin: 0 }}>Not an agent itself. Nothing has claimed this address as an ACCOUNT identity.</p>
+            <p className="t2 small" style={{ margin: 0 }}>This address is not an agent.</p>
           )}
         </Section>
 
-        <Section label="Operates">
+        <Section label="Operating wallet">
           {wallet === undefined ? <Spinner /> : operates ? (
-            <IdentityTable rows={[{ id: operates, note: wallet?.verified ? "verified both ways" : "this wallet says so; the agent doesn't say it back", tone: wallet?.verified ? "ok" : "warn" }]} />
+            <IdentityTable rows={[{ id: operates, note: wallet?.verified ? "This address is the verified operating wallet for an agent." : "This wallet says that it is the operating wallet for an agent; the agent does not say the same", tone: wallet?.verified ? "ok" : "warn" }]} />
           ) : (
-            <p className="t2 small" style={{ margin: 0 }}>This address doesn't point at any agent as its operating wallet.</p>
+            <p className="t2 small" style={{ margin: 0 }}>This address is not the operating wallet for any registered agent.</p>
           )}
           {namedBy.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -83,7 +83,7 @@ export function AddressPage({ address }: { address: string }) {
 
         <Section label={`Holds or controls · ${holds.length} ${holds.length === 1 ? "identity" : "identities"}`}>
           {loading ? <Spinner /> : holds.length === 0 ? (
-            <p className="t2 small" style={{ margin: 0 }}>No tokens or contracts this address currently controls have identities.</p>
+            <p className="t2 small" style={{ margin: 0 }}>No tokens or contracts this address currently controls have agent identities.</p>
           ) : (
             <IdentityTable rows={holds.map((id) => ({ id, note: id.standard <= 4 ? "holds the token" : "owner" }))} />
           )}
