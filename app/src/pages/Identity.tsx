@@ -528,18 +528,8 @@ function ManagePanel({ id }: { id: Identity }) {
   }, [signer?.address, overview?.adapter, id.ubid, id.agentURI, id.standard, id.boundAddress, id.tokenId]);
 
   if (!overview || !signer || canManage === null) return null;
-  if (!canManage) {
-    const holder = id.currentControllerHolder;
-    return (
-      <p className="hint" style={{ margin: "2px 0 0" }}>
-        {holder ? (
-          <>This profile is controlled by <Addr value={holder} n={8} />, so its settings aren't yours to change.</>
-        ) : (
-          <>This profile's settings aren't yours to change.</>
-        )}
-      </p>
-    );
-  }
+  // Not the holder: the manage panel simply doesn't appear. Who controls it is on the record.
+  if (!canManage) return null;
 
   return <ManageForm id={id} busy={busy} setBusy={setBusy} refresh={refresh} toast={toast} adapter={overview.adapter} signer={signer} />;
 }
