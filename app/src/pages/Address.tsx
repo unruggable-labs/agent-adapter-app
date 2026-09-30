@@ -149,9 +149,9 @@ function LinkMark({ state }: { state: LinkState }) {
   const tone = state === "both" ? "var(--ok)" : "var(--warn)";
   return (
     <Tip tip={LINK_TIP[state]}>
-      <svg width="34" height="16" viewBox="0 0 34 16" fill="none" stroke={tone} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-label={LINK_TIP[state]}>
-        {state !== "agent-only" && <path d="M3 5h28M27 1l4 4-4 4" />}
-        {state !== "wallet-only" && <path d="M31 11H3M7 7l-4 4 4 4" />}
+      <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke={tone} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-label={LINK_TIP[state]}>
+        {state !== "agent-only" && <path d="M2 4h13M12 1l3 3-3 3" />}
+        {state !== "wallet-only" && <path d="M16 10H3M6 7l-3 3 3 3" />}
       </svg>
     </Tip>
   );
