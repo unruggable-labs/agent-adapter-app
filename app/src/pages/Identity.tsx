@@ -472,8 +472,8 @@ function AttestPanel({ id }: { id: Identity }) {
       <div className="field">
         <label>Rating</label>
         <div className="row">
-          <input type="range" min={0} max={100} value={rating} onChange={(e) => setRating(Number(e.target.value))} style={{ width: 220 }} />
-          <span className="num" style={{ width: 40, fontWeight: 600 }}>{rating}</span>
+          <input type="range" min={0} max={100} value={rating} onChange={(e) => setRating(Number(e.target.value))} style={{ flex: "1 1 120px", maxWidth: 220, minWidth: 0 }} />
+          <span className="num" style={{ width: 40, fontWeight: 600, flexShrink: 0 }}>{rating}</span>
           {mine !== undefined && !hasTx && <span className="hint">You rated this {mine}. Moving the slider updates it.</span>}
         </div>
       </div>
@@ -641,9 +641,9 @@ function ManageForm({
               })}
             </div>
           )}
-          <div className="row">
-            <input className="input mono" style={{ maxWidth: 220 }} placeholder="key" value={metaKey} onChange={(e) => setMetaKey(e.target.value)} />
-            <input className="input" placeholder="value" value={metaValue} onChange={(e) => setMetaValue(e.target.value)} />
+          <div className="row wrap">
+            <input className="input mono" style={{ flex: "1 1 120px", maxWidth: 220 }} placeholder="key" value={metaKey} onChange={(e) => setMetaKey(e.target.value)} />
+            <input className="input" style={{ flex: "1 1 160px" }} placeholder="value" value={metaValue} onChange={(e) => setMetaValue(e.target.value)} />
             <button
               className="btn"
               disabled={!!busy || !metaKey.trim()}

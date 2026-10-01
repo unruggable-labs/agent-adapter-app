@@ -32,7 +32,7 @@ export function IdentitiesPage() {
 
       <StatPanels />
 
-      <div className="card table-scroll" style={{ padding: "4px 14px" }}>
+      <div className="card card-table table-scroll">
         <table className="table clickable">
           <thead>
             <tr>

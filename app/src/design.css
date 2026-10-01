@@ -81,7 +81,7 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* ------------------------------------------------------------------ shell */
 
-.shell { display: flex; height: 100%; }
+.shell { display: flex; height: 100%; height: 100dvh; }
 .sidebar {
   width: 220px; flex-shrink: 0;
   background: var(--surface-1);
@@ -111,6 +111,14 @@ input, textarea, select { font: inherit; color: inherit; }
 .nav-item .count { margin-left: auto; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
 .sidebar-foot { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid var(--border); }
+/* The brand row; on a phone it also carries the drawer's close control. */
+.sidebar-top { display: flex; align-items: flex-start; justify-content: space-between; }
+.sidebar-top .nav-close, .menu-btn, .topbar-brand, .mobile-bar, .nav-backdrop { display: none; }
+.menu-btn {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: var(--r-md);
+  align-items: center; justify-content: center; color: var(--text-2);
+}
+.menu-btn:hover { background: var(--surface-2); color: var(--text-1); }
 /* Quiet links at the foot of the sidebar - present, not competing with the nav. */
 .sidebar-link { display: block; margin-top: 10px; padding: 0 8px; font-size: 12px; color: var(--text-3); text-decoration: none; }
 .sidebar-link:hover { color: var(--text-1); }
@@ -158,10 +166,6 @@ input, textarea, select { font: inherit; color: inherit; }
 .search-item-ubid { font-weight: 600; font-size: 12.5px; color: var(--text-1); }
 .search-item-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-empty { padding: 10px 12px; }
-@media (max-width: 760px) {
-  .topbar { grid-template-columns: 1fr auto; }
-  .topbar > span:first-child { display: none; }
-}
 .page { max-width: 1040px; margin: 0 auto; padding: 28px 32px 80px; }
 /* Table pages get the room their columns need before falling back to a scroll. */
 .page-wide { max-width: 1360px; }
@@ -193,6 +197,8 @@ input, textarea, select { font: inherit; color: inherit; }
   padding: 16px 18px;
 }
 .card + .card, .stack > * + * { margin-top: 14px; }
+/* A card that is only a table: tighter padding so the rows own the width. */
+.card-table { padding: 4px 14px; }
 
 .table { width: 100%; border-collapse: collapse; }
 .table th {
@@ -387,6 +393,8 @@ input, textarea, select { font: inherit; color: inherit; }
 /* ------------------------------------------------------------------ misc */
 
 .row { display: flex; align-items: center; gap: 8px; }
+/* A field in a row may shrink below its intrinsic width, so a row of inputs fits a phone. */
+.row > .input, .row > .select, .row > .textarea { min-width: 0; }
 .wrap { flex-wrap: wrap; }
 .spread { justify-content: space-between; }
 .divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
@@ -763,3 +771,93 @@ input, textarea, select { font: inherit; color: inherit; }
 /* ------------------------------------------------------------------ wordmark */
 .wordmark { font-family: var(--mono); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-1); }
 .wordmark-suffix { color: var(--text-3); }
+
+@media (max-width: 1100px) {
+  .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .topbar-spacer { display: none; }
+}
+
+/* ------------------------------------------------------------------ phones
+   One breakpoint. The sidebar becomes a drawer behind a menu button, the header stacks the
+   search under the controls, tables keep their first column pinned while the rest scrolls,
+   and key/value lists stack. Inputs go to 16px so iOS doesn't zoom into them on focus. */
+@media (max-width: 760px) {
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 190;
+    width: min(280px, 85vw);
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-100%);
+    transition: transform 0.18s ease-out;
+    box-shadow: 0 0 0 1px var(--border);
+    overflow-y: auto;
+  }
+  .shell.nav-open .sidebar { transform: none; box-shadow: 0 12px 40px rgba(10, 12, 18, 0.3); }
+  .nav-backdrop { position: fixed; inset: 0; z-index: 180; background: rgba(10, 12, 18, 0.45); }
+  .shell.nav-open .nav-backdrop { display: block; }
+  .sidebar-top .nav-close { display: inline-flex; margin-top: 1px; }
+  .nav-item { padding: 9px 10px; font-size: 14px; }
+  .sidebar-link { padding: 4px 8px; font-size: 13px; }
+
+  /* The header: menu, brand and the account on one line; the search box on its own line. */
+  .topbar {
+    display: flex; flex-wrap: wrap; align-items: center;
+    height: auto; padding: 8px 12px; gap: 8px;
+  }
+  .topbar-spacer { display: none; }
+  .menu-btn { display: inline-flex; }
+  .topbar-brand { display: inline-flex; padding: 0; margin-right: auto; }
+  .topbar-right { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .topbar-right > label > .hint { display: none; } /* the devnet 'Acting as' label */
+  .search { order: 10; flex-basis: 100%; }
+  .search-input { height: 38px; }
+  .mobile-bar {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    height: 50px; padding: 0 12px;
+    background: var(--surface-1); border-bottom: 1px solid var(--border);
+  }
+  .mobile-bar .brand { padding: 0; }
+
+  .page { padding: 18px 16px 64px; }
+  .page-head { flex-wrap: wrap; row-gap: 8px; }
+  .page-sub { margin-bottom: 16px; }
+  .card { padding: 14px; }
+  .how-page .card { padding: 16px; }
+  .card-table { padding: 2px 0; }
+  .card-table .table th:first-child, .card-table .table td:first-child { padding-left: 14px; }
+  .card-table .table th:last-child, .card-table .table td:last-child { padding-right: 14px; }
+  .card-table .empty { padding: 24px 14px; }
+
+  /* Wide tables scroll sideways; the first column stays put so a row keeps its name. */
+  .card .table th:first-child, .card .table td:first-child {
+    position: sticky; left: 0; z-index: 1;
+    background: var(--surface-1);
+    box-shadow: 1px 0 0 var(--border);
+  }
+  .card .table.clickable tbody tr:hover td:first-child { background: var(--surface-2); }
+  /* Docs tables that opted into scrolling keep readable columns and scroll instead of squeezing. */
+  .docs-page .table-scroll .table { min-width: 760px; }
+  .table td { max-width: 260px; }
+
+  .kv { grid-template-columns: 1fr; row-gap: 2px; }
+  .kv dt { margin-top: 8px; }
+  .kv dt:first-child { margin-top: 0; }
+
+  .stat-row { gap: 20px 28px; }
+  .seg { display: flex; flex-wrap: wrap; }
+  .seg button { flex: 1 1 auto; }
+  .head-actions { flex-wrap: wrap; }
+
+  .btn { height: 34px; }
+  .btn-sm { height: 29px; }
+  .input, .textarea, .select, .search-input { font-size: 16px; }
+  .input.mono { font-size: 15px; }
+
+  .modal-backdrop { padding: 12px; align-items: flex-end; }
+  .modal { max-height: calc(100dvh - 24px); padding: 18px 16px 20px; }
+  .toast { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+  .tip-bubble { max-width: min(320px, calc(100vw - 16px)); }
+
+  .docs-page { font-size: 14px; }
+  .docs-pager { flex-direction: column; gap: 8px; }
+  .chains-card { padding: 20px 16px; }
+}

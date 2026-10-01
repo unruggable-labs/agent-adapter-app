@@ -47,7 +47,7 @@ export function AttestationsPage() {
         Public statements about agents.
       </p>
 
-      <div className="card table-scroll" style={{ padding: "4px 14px" }}>
+      <div className="card card-table table-scroll">
         <table className="table clickable">
           <thead>
             <tr>

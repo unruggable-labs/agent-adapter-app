@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Brand } from "../components/brand";
 import { CodeBlock } from "../components/code";
 import { ChainGrid } from "../components/chains";
+import { MenuButton, NavBackdrop, NavClose, useNavDrawer } from "../components/shell";
 import { Modal } from "../components/ui";
 import { Counterfactual } from "./pages/Counterfactual";
 import { Deployments } from "./pages/Deployments";
@@ -71,6 +72,7 @@ export function Docs() {
   const page = ALL.find((p) => p.slug === slug) ?? ALL[0];
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
   const [pickChain, setPickChain] = useState(false);
+  const [navOpen, setNavOpen] = useNavDrawer(slug);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("aa-theme", theme);
@@ -80,11 +82,15 @@ export function Docs() {
   const next = ALL[i + 1];
 
   return (
-    <div className="shell">
+    <div className={`shell${navOpen ? " nav-open" : ""}`}>
+      <NavBackdrop onClick={() => setNavOpen(false)} />
       <aside className="sidebar">
-        <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}>
-          <Brand suffix="Docs" />
-        </a>
+        <div className="sidebar-top">
+          <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}>
+            <Brand suffix="Docs" />
+          </a>
+          <NavClose onClick={() => setNavOpen(false)} />
+        </div>
         {GROUPS.map((g) => (
           <div key={g.label}>
             <div className="nav-label">{g.label}</div>
@@ -108,6 +114,10 @@ export function Docs() {
         </Modal>
       )}
       <main className="main">
+        <header className="mobile-bar">
+          <MenuButton onClick={() => setNavOpen(true)} />
+          <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}><Brand suffix="Docs" /></a>
+        </header>
         <div className="main-scroll">
           <div className="page docs-page fade-in" key={page.slug}>
             {page.render(sub)}

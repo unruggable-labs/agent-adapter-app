@@ -4,6 +4,7 @@ import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { Brand } from "./components/brand";
 import { ChainGrid, ChainIcon } from "./components/chains";
 import { SearchBar } from "./components/search";
+import { MenuButton, NavBackdrop, NavClose, useNavDrawer } from "./components/shell";
 import { Modal } from "./components/ui";
 import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, DOCS_URL, NETWORK, networkId, shortHex } from "./lib/chain";
@@ -120,6 +121,7 @@ function Shell() {
   const { route, overview, navigate } = useApp();
   const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
   const [pickChain, setPickChain] = useState(false);
+  const [navOpen, setNavOpen] = useNavDrawer(route);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("aa-theme", theme);
@@ -132,15 +134,19 @@ function Shell() {
   else if (route.startsWith("/create")) page = <CreatePage />;
 
   return (
-    <div className="shell">
+    <div className={`shell${navOpen ? " nav-open" : ""}`}>
       {appKitEnabled && <AppKitTheme theme={theme} />}
       {pickChain && (
         <Modal title="Which chain?" width={600} onClose={() => setPickChain(false)}>
           <ChainGrid />
         </Modal>
       )}
+      <NavBackdrop onClick={() => setNavOpen(false)} />
       <aside className="sidebar">
-        <button className="brand" onClick={() => navigate("/")} title="Home"><Brand /></button>
+        <div className="sidebar-top">
+          <button className="brand" onClick={() => navigate("/")} title="Home"><Brand /></button>
+          <NavClose onClick={() => setNavOpen(false)} />
+        </div>
 
         <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => navigate("/create")}>
           + Create identity
@@ -159,7 +165,9 @@ function Shell() {
       </aside>
       <main className="main">
         <header className="topbar">
-          <span />
+          <MenuButton onClick={() => setNavOpen(true)} />
+          <button className="brand topbar-brand" onClick={() => navigate("/")} title="Home"><Brand /></button>
+          <span className="topbar-spacer" />
           <SearchBar />
           <div className="topbar-right">
             <button className="chain-btn" title={`${NETWORK.label} - switch chain`} aria-label="Switch chain" onClick={() => setPickChain(true)}>
