@@ -44,6 +44,7 @@ function readUrl() {
     bucket: (["day", "week", "month"].includes(p.get("bucket") ?? "") ? p.get("bucket") : "auto") as StatsBucket | "auto",
     chains: p.get("chains")?.split(",").filter(Boolean) ?? null,
     cumulative: p.get("cumulative") === "1",
+    withTotal: p.get("total") !== "0",
     compare: (p.get("project")?.split(",") ?? [])
       .map((s) => {
         const [chain, address] = s.includes(":") ? s.split(":") : [null, s];
@@ -67,6 +68,8 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     initial.compare.map((c) => ({ chain: (c.chain && offered.includes(c.chain) ? c.chain : offered[0]) as NetworkId, address: c.address })).slice(0, MAX_COMPARE),
   );
   const [compareSeries, setCompareSeries] = useState<Record<string, StatsSeries["series"][number]>>({});
+  // Whether the whole stays on the chart while comparing. Off, the scale fits the compared projects alone.
+  const [withTotal, setWithTotal] = useState(initial.withTotal);
   const [data, setData] = useState<Loaded | null>(null);
   const [firstEvent, setFirstEvent] = useState<number | null>(null);
   const [error, setError] = useState(false);
@@ -74,15 +77,16 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
   // Keep the view in the URL.
   useEffect(() => {
     const p = new URLSearchParams(location.search);
-    for (const k of ["range", "bucket", "cumulative", "chains", "project"]) p.delete(k);
+    for (const k of ["range", "bucket", "cumulative", "chains", "project", "total"]) p.delete(k);
     if (range !== "30d") p.set("range", range);
     if (bucketChoice !== "auto") p.set("bucket", bucketChoice);
     if (cumulative) p.set("cumulative", "1");
     if (allChains) p.set("chains", chains.join(","));
     if (compare.length) p.set("project", compare.map((c) => (allChains ? pickKey(c) : c.address)).join(","));
+    if (compare.length && !withTotal) p.set("total", "0");
     const qs = p.toString();
     history.replaceState(null, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [range, bucketChoice, cumulative, chains, allChains, compare]);
+  }, [range, bucketChoice, cumulative, chains, allChains, compare, withTotal]);
 
   const now = Math.floor(Date.now() / 1000 / 3600) * 3600; // to the hour, so the URL and the cache stay stable for a while
   const from = range === "7d" ? now - 7 * DAY : range === "30d" ? now - 30 * DAY : range === "90d" ? now - 90 * DAY : firstEvent ?? now - 365 * DAY;
@@ -174,8 +178,8 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
         { key: "claims", label: "Counterfactual claims", color: "var(--c-amber)", points: run(claims) },
         { key: "registrations", label: "ERC-8004 registrations", color: "var(--c-emerald)", points: run(regs) },
       ];
-    // Comparing: the whole as a quiet line, each project in its own colour, on the same buckets as the total.
-    const lines: ChartSeries[] = [{ key: "identities", label: "All identities", color: "var(--text-3)", points: run(total) }];
+    // Comparing: the whole as a quiet line (unless hidden, so the scale fits the projects), each project in its own colour, on the same buckets as the total.
+    const lines: ChartSeries[] = withTotal ? [{ key: "identities", label: "All identities", color: "var(--text-3)", points: run(total) }] : [];
     compare.forEach((c, i) => {
       const sr = compareSeries[pickKey(c)];
       const byT = new Map((sr?.points ?? []).map((p) => [p.t, p.v]));
@@ -184,7 +188,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
       lines.push({ key: pickKey(c), label, color: COMPARE_COLORS[i % COMPARE_COLORS.length], points: run(total.map((p) => ({ t: p.t, v: byT.get(p.t) ?? 0 }))) });
     });
     return lines;
-  }, [data, cumulative, compare, compareSeries, allChains]);
+  }, [data, cumulative, compare, compareSeries, allChains, withTotal]);
 
   const toggleCompare = (pick: Pick) =>
     setCompare((cur) => (cur.some((c) => pickKey(c) === pickKey(pick)) ? cur.filter((c) => pickKey(c) !== pickKey(pick)) : cur.length >= MAX_COMPARE ? cur : [...cur, pick]));
@@ -252,13 +256,16 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
         </div>
         {compare.length > 0 && (
           <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
-            {chart.slice(1).map((line, i) => (
+            {chart.slice(withTotal ? 1 : 0).map((line, i) => (
               <span key={line.key} className="badge badge-outline" style={{ height: 24, gap: 6 }}>
                 <span className="chart-swatch" style={{ background: line.color }} />{line.label}
                 <button className="t3" aria-label={`Stop comparing ${line.label}`} title="Remove from the chart" onClick={() => toggleCompare(compare[i])}>✕</button>
               </span>
             ))}
             <button className="btn btn-ghost btn-sm" onClick={() => setCompare([])}>Clear</button>
+            <label className="row" style={{ gap: 6, fontSize: 12.5, marginLeft: "auto" }} title="Off, the scale fits the compared projects alone">
+              <input type="checkbox" checked={withTotal} onChange={(e) => setWithTotal(e.target.checked)} /> Against all identities
+            </label>
           </div>
         )}
         {data ? <LineChart series={chart} /> : <div className="chart-empty" style={{ height: 280 }}><Skeleton w="40%" /></div>}
