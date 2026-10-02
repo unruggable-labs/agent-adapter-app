@@ -155,7 +155,7 @@ export function AttestationPage({ id }: { id: string }) {
       {showPreimage && (
         <Modal title="How the Attestation ID is calculated" width={760} onClose={() => setShowPreimage(false)}>
           <p className="t2 small" style={{ margin: "0 0 12px" }}>
-            The ID is a hash of the eight fields below. The indexer recomputes it from the event's own fields before letting a statement in; one that doesn't match is dropped and never shown. So a statement on this page is one whose ID checks out.
+            The ID is a hash of the eight fields below. The indexer recomputes it from the event's own fields before accepting it.
           </p>
           <dl className="kv small">
             <dt>Chain</dt><dd className="num">{a.preimage.chainId}</dd>
@@ -165,9 +165,8 @@ export function AttestationPage({ id }: { id: string }) {
             <dt>Type</dt><dd className="num">{a.preimage.attestationType} <span className="t3">({a.typeName})</span></dd>
             <dt>Block</dt>
             <dd className="num">{a.preimage.blockNumber}</dd>
-            <dt><Tip tip="The reference slot, as hashed - zero when the statement is about no particular transaction.">Variant</Tip></dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.variant}</dd>
+            <dt>Reference</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.variant}</dd>
             <dt>Data</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.data}</dd>
-            <dt>Attestation ID</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.attestationId}</dd>
           </dl>
           {a.preimage.blockNumber !== a.order.blockNumber && (
             <p className="hint" style={{ margin: "12px 0 0" }}>
