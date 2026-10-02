@@ -30,6 +30,12 @@ export interface IngestOptions {
   onReorg?: (reorg: Reorg) => void;
 }
 
+interface Header {
+  hash?: Hex;
+  l1BlockNumber?: Hex;
+  timestamp?: Hex;
+}
+
 export class Ingester {
   private nextBlock: bigint;
   private readonly log: EventLog | undefined;
@@ -86,16 +92,36 @@ export class Ingester {
   }
 
   /** The raw block header, so chains with extra fields (Arbitrum's l1BlockNumber) need no formatter. */
-  private async block(blockNumber: bigint): Promise<{ hash?: Hex; l1BlockNumber?: Hex } | null> {
+  private async block(blockNumber: bigint): Promise<Header | null> {
     return (await this.client.request({
       method: "eth_getBlockByNumber",
       params: [`0x${blockNumber.toString(16)}`, false],
-    } as never)) as { hash?: Hex; l1BlockNumber?: Hex } | null;
+    } as never)) as Header | null;
   }
 
   private async blockHash(blockNumber: bigint): Promise<Hex | null> {
     const raw = await this.block(blockNumber).catch(() => null);
     return raw?.hash ?? null;
+  }
+
+  /** Timestamps for the event blocks stored before this build kept them. Runs after boot, a
+   *  few at a time, and stops when every event block has one. Returns how many it filled. */
+  async backfillTimestamps(onProgress?: (filled: number) => void): Promise<number> {
+    if (!this.log) return 0;
+    let filled = 0;
+    for (;;) {
+      const missing = this.log.blocksWithoutTimestamp(100);
+      if (missing.length === 0) return filled;
+      const stamps = new Map<bigint, number>();
+      for (let i = 0; i < missing.length; i += 3) {
+        const got = await Promise.all(missing.slice(i, i + 3).map(async (n) => [n, await this.block(n).catch(() => null)] as const));
+        for (const [n, h] of got) if (h?.timestamp) stamps.set(n, Number(BigInt(h.timestamp)));
+      }
+      if (stamps.size === 0) return filled; // the RPC isn't answering; try again next boot
+      this.log.setTimestamps(stamps);
+      filled += stamps.size;
+      onProgress?.(filled);
+    }
   }
 
   async sync(onProgress?: (from: bigint, to: bigint, head: bigint) => void): Promise<number> {
@@ -105,10 +131,10 @@ export class Ingester {
     while (this.nextBlock <= head) {
       const to = this.nextBlock + this.maxRange - 1n > head ? head : this.nextBlock + this.maxRange - 1n;
       onProgress?.(this.nextBlock, to, head);
-      // The checkpoint hash is read before the logs. If the chain reorganises between the two
+      // The checkpoint header is read before the logs. If the chain reorganises between the two
       // reads, the stored hash is the old chain's and the next poll notices.
-      const toHash = this.log ? await this.blockHash(to) : null;
-      if (this.log && !toHash) throw new Error(`block ${to} not found while syncing; head was ${head}`);
+      const toHeader = this.log ? await this.block(to).catch(() => null) : null;
+      if (this.log && !toHeader?.hash) throw new Error(`block ${to} not found while syncing; head was ${head}`);
       const logs = await this.client.getLogs({
         address: this.adapter,
         fromBlock: this.nextBlock,
@@ -117,7 +143,16 @@ export class Ingester {
       const events = decodeAdapterLogs(logs);
       const cache = new Map<bigint, bigint>();
       for (const ev of events) ev.contractBlockNumber = await this.contractBlockNumber(ev.blockNumber, cache);
-      if (this.log) this.log.append(events, { number: to, hash: toHash! });
+      if (this.log) {
+        // Each event block's header, once per block: the timestamp the stats page buckets by.
+        const headers = new Map<bigint, Header | null>();
+        for (const ev of events) {
+          if (!headers.has(ev.blockNumber)) headers.set(ev.blockNumber, ev.blockNumber === to ? toHeader : await this.block(ev.blockNumber).catch(() => null));
+          const h = headers.get(ev.blockNumber);
+          if (h?.timestamp) ev.blockTimestamp = Number(BigInt(h.timestamp));
+        }
+        this.log.append(events, { number: to, hash: toHeader!.hash!, timestamp: toHeader!.timestamp ? Number(BigInt(toHeader!.timestamp)) : undefined });
+      }
       for (const ev of events) this.store.apply(ev);
       applied += events.length;
       this.nextBlock = to + 1n;

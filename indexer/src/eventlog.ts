@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { Address, Hex } from "viem";
 import type { LogEvent } from "./projection.js";
+import { computeUbid, type Standard } from "./ubid.js";
 
 /**
  * The adapter's event log, on disk: one SQLite file per network.
@@ -16,6 +17,12 @@ import type { LogEvent } from "./projection.js";
  * the chain no longer has the checkpoint block under that hash, the newest stored block it does
  * still have is the fork point.
  *
+ * Two things ride along for the stats page (stats.ts). Each block row carries its timestamp, read
+ * from the header the ingester already fetches, so events can be bucketed by day. And each event
+ * row carries a few facts pulled out of its args - the UBID, the bound address, who acted, the
+ * attestation type - in indexed columns, so "attestations per week by type" is one query rather
+ * than a scan that parses JSON. Neither changes the fold; the store never reads them.
+ *
  * The file is only a copy of the chain. Deleting it costs a re-index, never data.
  */
 
@@ -26,6 +33,19 @@ export interface Checkpoint {
 
 export interface StoredEvent extends LogEvent {
   blockHash: Hex;
+  /** The block's timestamp, unix seconds, when the source knows it. */
+  blockTimestamp?: number;
+}
+
+/** What an event says about itself, in columns. Null where the event has no such field. */
+export interface EventFacts {
+  ubid: Hex | null;
+  boundAddress: Address | null;
+  /** Who did it: the emitter, the registrant, the attester, the revoker, the account. */
+  actor: Address | null;
+  attestationType: number | null;
+  attestationId: Hex | null;
+  agentId: string | null;
 }
 
 export interface LogIdentity {
@@ -34,7 +54,7 @@ export interface LogIdentity {
   fromBlock: bigint;
 }
 
-const SCHEMA = "1";
+const SCHEMA = "2";
 
 /** How many blocks' hashes to keep beyond the ones that carry events: the reorg window. */
 const HASH_WINDOW = 100_000n;
@@ -48,6 +68,8 @@ export class EventLog {
     readonly path: string,
     identity: LogIdentity,
   ) {
+    this.chainId = identity.chainId;
+    this.adapter = identity.adapter.toLowerCase() as Address;
     this.db = new DatabaseSync(path);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
@@ -61,23 +83,29 @@ export class EventLog {
         event_name TEXT NOT NULL,
         args TEXT NOT NULL,
         contract_block INTEGER,
+        ubid TEXT,
+        bound_address TEXT,
+        actor TEXT,
+        attestation_type INTEGER,
+        attestation_id TEXT,
+        agent_id TEXT,
         PRIMARY KEY (block_number, log_index)
       ) WITHOUT ROWID;
-      CREATE TABLE IF NOT EXISTS blocks (number INTEGER PRIMARY KEY, hash TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS blocks (number INTEGER PRIMARY KEY, hash TEXT NOT NULL, timestamp INTEGER);
     `);
     // A log is for one adapter on one chain from one cutover. Anything else is a different log,
-    // and the fix is a re-index, not a guess - say so and stop.
+    // and the fix is a re-index, not a guess - say so and stop. The schema version is ours to
+    // move: an older file is migrated in place.
     const want: Record<string, string> = {
-      schema: SCHEMA,
       chainId: identity.chainId.toString(),
-      adapter: identity.adapter.toLowerCase(),
+      adapter: this.adapter,
       fromBlock: identity.fromBlock.toString(),
     };
     const rows = this.db.prepare("SELECT key, value FROM meta").all() as { key: string; value: string }[];
     const have = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     if (rows.length === 0) {
       const put = this.db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)");
-      for (const [k, v] of Object.entries(want)) put.run(k, v);
+      for (const [k, v] of Object.entries({ schema: SCHEMA, ...want })) put.run(k, v);
     } else {
       for (const [k, v] of Object.entries(want)) {
         if (have[k] !== v)
@@ -86,6 +114,90 @@ export class EventLog {
               `It is only a copy of the chain: delete the file to re-index.`,
           );
       }
+      if (have.schema === "1") this.migrateFrom1();
+      else if (have.schema !== SCHEMA) throw new Error(`${path} has event log schema ${have.schema}; this build reads ${SCHEMA}. Delete the file to re-index.`);
+    }
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS events_name_block ON events (event_name, block_number);
+      CREATE INDEX IF NOT EXISTS events_ubid ON events (ubid);
+      CREATE INDEX IF NOT EXISTS events_bound ON events (bound_address, block_number);
+      CREATE INDEX IF NOT EXISTS events_actor ON events (actor);
+      CREATE INDEX IF NOT EXISTS events_attestation ON events (attestation_id);
+    `);
+  }
+
+  private readonly chainId: bigint;
+  private readonly adapter: Address;
+
+  /** The connection, for the read-only stats queries. Nothing else writes through it. */
+  get connection(): DatabaseSync {
+    return this.db;
+  }
+
+  /** Schema 1 had no timestamps and no fact columns. Add them, fill the facts from the stored args
+   *  in log order (agent-keyed events look up the AgentBound row before them), and move on. */
+  private migrateFrom1(): void {
+    const cols = ["ubid TEXT", "bound_address TEXT", "actor TEXT", "attestation_type INTEGER", "attestation_id TEXT", "agent_id TEXT"];
+    this.db.exec("BEGIN");
+    try {
+      for (const c of cols) this.db.exec(`ALTER TABLE events ADD COLUMN ${c}`);
+      this.db.exec("ALTER TABLE blocks ADD COLUMN timestamp INTEGER");
+      const rows = this.db.prepare("SELECT block_number, log_index, event_name, args FROM events ORDER BY block_number, log_index").all() as {
+        block_number: number; log_index: number; event_name: string; args: string;
+      }[];
+      const put = this.db.prepare("UPDATE events SET ubid = ?, bound_address = ?, actor = ?, attestation_type = ?, attestation_id = ?, agent_id = ? WHERE block_number = ? AND log_index = ?");
+      for (const r of rows) {
+        const f = this.factsOf(r.event_name, decodeArgs(r.args));
+        put.run(f.ubid, f.boundAddress, f.actor, f.attestationType, f.attestationId, f.agentId, r.block_number, r.log_index);
+      }
+      this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)").run(SCHEMA);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /** The facts in an event's args. Agent-keyed registry events (URI, metadata, wallet) name only the
+   *  agent id; their UBID and bound address come from the AgentBound row already in the log. A
+   *  revocation names only the attestation id; its UBID comes from the Attested row. */
+  factsOf(eventName: string, args: Record<string, unknown>): EventFacts {
+    const lower = (v: unknown) => (typeof v === "string" ? (v.toLowerCase() as Hex) : null);
+    const none: EventFacts = { ubid: null, boundAddress: null, actor: null, attestationType: null, attestationId: null, agentId: null };
+    switch (eventName) {
+      case "CounterfactualAgentRegistered":
+      case "CounterfactualAgentURISet":
+      case "CounterfactualMetadataSet":
+      case "CounterfactualMetadataBatchSet":
+      case "CounterfactualAgentWalletSet":
+      case "CounterfactualAgentWalletUnset":
+        return { ...none, ubid: lower(args.ubid), boundAddress: lower(args.boundAddress) as Address | null, actor: lower(args.emitter) as Address | null };
+      case "AgentBound": {
+        const bound = lower(args.boundAddress) as Address | null;
+        const ubid = bound && args.tokenId !== undefined ? computeUbid(this.chainId, this.adapter, Number(args.standard) as Standard, bound, BigInt(args.tokenId as bigint)) : null;
+        return { ...none, ubid, boundAddress: bound, actor: lower(args.registeredBy) as Address | null, agentId: args.agentId === undefined ? null : String(args.agentId) };
+      }
+      case "AgentURISet":
+      case "MetadataSet":
+      case "AgentWalletSet":
+      case "AgentWalletUnset": {
+        const agentId = args.agentId === undefined ? null : String(args.agentId);
+        const bound = agentId ? (this.db.prepare("SELECT ubid, bound_address FROM events WHERE event_name = 'AgentBound' AND agent_id = ? LIMIT 1").get(agentId) as { ubid: Hex; bound_address: Address } | undefined) : undefined;
+        return { ...none, ubid: bound?.ubid ?? null, boundAddress: bound?.bound_address ?? null, agentId };
+      }
+      case "WalletUBIDSet":
+        return { ...none, ubid: lower(args.ubid), boundAddress: lower(args.boundAddress) as Address | null, actor: lower(args.account) as Address | null };
+      case "WalletUBIDCleared":
+        return { ...none, actor: lower(args.account) as Address | null };
+      case "Attested":
+        return { ...none, ubid: lower(args.ubid), actor: lower(args.attester) as Address | null, attestationType: args.attestationType === undefined ? null : Number(args.attestationType), attestationId: lower(args.attestationId) };
+      case "AttestationRevoked": {
+        const attestationId = lower(args.attestationId);
+        const a = attestationId ? (this.db.prepare("SELECT ubid, attestation_type FROM events WHERE event_name = 'Attested' AND attestation_id = ? LIMIT 1").get(attestationId) as { ubid: Hex; attestation_type: number } | undefined) : undefined;
+        return { ...none, ubid: a?.ubid ?? null, actor: lower(args.revoker) as Address | null, attestationType: a?.attestation_type ?? null, attestationId };
+      }
+      default:
+        return none;
     }
   }
 
@@ -148,16 +260,18 @@ export class EventLog {
   }
 
   /** One synced range: its events, the hashes of their blocks, and the new checkpoint, committed together. */
-  append(events: StoredEvent[], checkpoint: Checkpoint): void {
+  append(events: StoredEvent[], checkpoint: Checkpoint & { timestamp?: number }): void {
     const putEvent = this.db.prepare(
-      "INSERT OR REPLACE INTO events (block_number, log_index, block_hash, tx_hash, event_name, args, contract_block) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO events (block_number, log_index, block_hash, tx_hash, event_name, args, contract_block, ubid, bound_address, actor, attestation_type, attestation_id, agent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
-    const putBlock = this.db.prepare("INSERT OR REPLACE INTO blocks (number, hash) VALUES (?, ?)");
+    // A block's hash may be re-stated by a later range; its timestamp is kept if the new row has none.
+    const putBlock = this.db.prepare("INSERT INTO blocks (number, hash, timestamp) VALUES (?, ?, ?) ON CONFLICT(number) DO UPDATE SET hash = excluded.hash, timestamp = COALESCE(excluded.timestamp, blocks.timestamp)");
     const putMeta = this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('checkpoint', ?)");
     const prune = this.db.prepare("DELETE FROM blocks WHERE number < ? AND number NOT IN (SELECT block_number FROM events)");
     this.db.exec("BEGIN");
     try {
       for (const ev of events) {
+        const f = this.factsOf(ev.eventName, ev.args);
         putEvent.run(
           Number(ev.blockNumber),
           ev.logIndex,
@@ -166,12 +280,36 @@ export class EventLog {
           ev.eventName,
           encodeArgs(ev.args),
           ev.contractBlockNumber === undefined ? null : Number(ev.contractBlockNumber),
+          f.ubid,
+          f.boundAddress,
+          f.actor,
+          f.attestationType,
+          f.attestationId,
+          f.agentId,
         );
-        putBlock.run(Number(ev.blockNumber), ev.blockHash);
+        putBlock.run(Number(ev.blockNumber), ev.blockHash, ev.blockTimestamp ?? null);
       }
-      putBlock.run(Number(checkpoint.number), checkpoint.hash);
+      putBlock.run(Number(checkpoint.number), checkpoint.hash, checkpoint.timestamp ?? null);
       putMeta.run(`${checkpoint.number}:${checkpoint.hash}`);
       if (checkpoint.number > HASH_WINDOW) prune.run(Number(checkpoint.number - HASH_WINDOW));
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /** Event blocks whose timestamp is not known yet - the backfill's worklist, oldest first. */
+  blocksWithoutTimestamp(limit = 200): bigint[] {
+    const rows = this.db.prepare("SELECT DISTINCT e.block_number AS n FROM events e JOIN blocks b ON b.number = e.block_number WHERE b.timestamp IS NULL ORDER BY e.block_number LIMIT ?").all(limit) as { n: number }[];
+    return rows.map((r) => BigInt(r.n));
+  }
+
+  setTimestamps(stamps: Map<bigint, number>): void {
+    const put = this.db.prepare("UPDATE blocks SET timestamp = ? WHERE number = ?");
+    this.db.exec("BEGIN");
+    try {
+      for (const [n, t] of stamps) put.run(t, Number(n));
       this.db.exec("COMMIT");
     } catch (e) {
       this.db.exec("ROLLBACK");
