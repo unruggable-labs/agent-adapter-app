@@ -335,16 +335,17 @@ function Tile({ label, tip, figure, loading }: { label: string; tip: string; fig
 
 type SortKey = "name" | "identities" | "registered" | "attestations" | "ratingAverage" | "stars" | "firstSeen" | "lastEvent";
 
-type RegistrationKind = "counterfactual" | "registered" | "mixed";
-const REGISTRATION_KINDS: RegistrationKind[] = ["counterfactual", "registered", "mixed"];
-const REGISTRATION_LABEL: Record<RegistrationKind, string> = { counterfactual: "Counterfactual only", registered: "On-chain only", mixed: "Both kinds" };
-const registrationKind = (r: ProjectRow): RegistrationKind => (r.registered === 0 ? "counterfactual" : r.registered >= r.identities ? "registered" : "mixed");
+/** The two ways an identity exists. A tick means the project has identities of that kind; both ticked means it has both. */
+type RegistrationKind = "counterfactual" | "registered";
+const REGISTRATION_KINDS: RegistrationKind[] = ["counterfactual", "registered"];
+const REGISTRATION_LABEL: Record<RegistrationKind, string> = { counterfactual: "Counterfactual", registered: "On-chain (ERC-8004)" };
+const hasKind = (r: ProjectRow, k: RegistrationKind) => (k === "registered" ? r.registered > 0 : r.registered < r.identities);
 
 function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { rows: (ProjectRow & { chain: NetworkId })[] | null; allChains: boolean; window: { from: number; to: number }; compare: Pick[]; onToggleCompare: (p: Pick) => void }) {
   const compared = new Set(compare.map(pickKey));
   const full = compare.length >= MAX_COMPARE;
   const [standards, setStandards] = useState<string[]>([]);
-  // How a project's identities exist: all counterfactual, all registered on ERC-8004, or some of each. Any mix of these; none means any.
+  // Which kinds of identity a project must have; none means any.
   const [registration, setRegistration] = useState<RegistrationKind[]>([]);
   const [active, setActive] = useState(false);
   const [q, setQ] = useState("");
@@ -358,7 +359,7 @@ function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { 
   const shown = useMemo(() => {
     let list = rows ?? [];
     if (standards.length) list = list.filter((r) => r.standards.some((s) => standards.includes(s)));
-    if (registration.length) list = list.filter((r) => registration.includes(registrationKind(r)));
+    if (registration.length) list = list.filter((r) => registration.every((k) => hasKind(r, k)));
     if (active) list = list.filter((r) => r.lastEvent !== null && r.lastEvent >= window.from);
     const needle = q.trim().toLowerCase();
     if (needle) list = list.filter((r) => r.address.includes(needle) || (r.name ?? "").toLowerCase().includes(needle));
