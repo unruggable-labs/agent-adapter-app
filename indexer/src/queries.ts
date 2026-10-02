@@ -75,7 +75,7 @@ export function listIdentities(store: ProjectionStore, views: ViewCache, p: URLS
   const q = p.get("q")?.trim().toLowerCase();
   if (q) ids = ids.filter((i) => (isHex(q) ? matchesHex(views, i, q) : matchesText(views, i, q)));
   ids.sort((a, b) => newestFirst(a.created, b.created));
-  return { items: ids.slice(offset, offset + limit).map((i) => views.view(i)), total: ids.length, offset, limit };
+  return { items: ids.slice(offset, offset + limit).map((i) => views.viewWanted(i)), total: ids.length, offset, limit };
 }
 
 export type SearchHit =
@@ -98,7 +98,7 @@ export function search(store: ProjectionStore, views: ViewCache, raw: string): S
   const add = (id: IdentityState, note?: string, tone?: string) => {
     if (seen.has(id.ubid) || seen.size >= MAX_HITS) return;
     seen.add(id.ubid);
-    const hit: SearchHit = { kind: "identity", identity: views.view(id) };
+    const hit: SearchHit = { kind: "identity", identity: views.viewWanted(id) };
     if (note) hit.note = note;
     if (tone) hit.tone = tone;
     out.push(hit);
@@ -136,7 +136,7 @@ export function search(store: ProjectionStore, views: ViewCache, raw: string): S
 /** One statement as the API shows it: the record, its type's name, and the identity it is about when known. */
 export function attestationRow(store: ProjectionStore, views: ViewCache, a: AttestationRecord) {
   const target = store.identities.get(a.ubid);
-  return { ...a, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? views.view(target) : null };
+  return { ...a, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? views.viewWanted(target) : null };
 }
 
 /** A page of statements, newest first. Filters: type (names), standard (of the identity; hides unresolved), attester, ubid. */
@@ -175,11 +175,11 @@ export function addressView(store: ProjectionStore, views: ViewCache, raw: strin
   const statements = [...store.attestations.values()].filter((s) => s.attester === a).sort((x, y) => newestFirst(x.order, y.order));
   return {
     address: a,
-    self: w?.self ? views.view(w.self) : null,
-    operates: operatesId ? { identity: views.view(operatesId), verified: w!.verified } : null,
-    namedBy: ids.filter((i) => i.agentWallet === a && i.ubid !== operatesId?.ubid).map((i) => views.view(i)),
-    holds: ids.filter((i) => views.holder(i) === a && i.boundAddress !== a).map((i) => views.view(i)),
-    boundHere: boundHere.slice(0, BOUND_HERE_LIMIT).map((i) => views.view(i)),
+    self: w?.self ? views.viewWanted(w.self) : null,
+    operates: operatesId ? { identity: views.viewWanted(operatesId), verified: w!.verified } : null,
+    namedBy: ids.filter((i) => i.agentWallet === a && i.ubid !== operatesId?.ubid).map((i) => views.viewWanted(i)),
+    holds: ids.filter((i) => views.holder(i) === a && i.boundAddress !== a).map((i) => views.viewWanted(i)),
+    boundHere: boundHere.slice(0, BOUND_HERE_LIMIT).map((i) => views.viewWanted(i)),
     boundHereTotal: boundHere.length,
     statements: statements.map((s) => attestationRow(store, views, s)),
   };

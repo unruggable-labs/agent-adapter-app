@@ -10,12 +10,12 @@ const PUNKS = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9" as Address;
 const ALICE = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8" as Address;
 const UBID7 = computeUbid(CHAIN, ADAPTER, Standard.ERC721, PUNKS, 7n);
 
-function registered(block: number): LogEvent {
+function registered(block: number, tokenId = 7n): LogEvent {
   return {
     blockNumber: BigInt(block),
     logIndex: 0,
     eventName: "CounterfactualAgentRegistered",
-    args: { ubid: UBID7, boundAddress: PUNKS, tokenId: 7n, standard: Standard.ERC721, emitter: ALICE, agentURI: null, metadata: [] },
+    args: { ubid: computeUbid(CHAIN, ADAPTER, Standard.ERC721, PUNKS, tokenId), boundAddress: PUNKS, tokenId, standard: Standard.ERC721, emitter: ALICE, agentURI: null, metadata: [] },
   };
 }
 
@@ -23,8 +23,8 @@ function registered(block: number): LogEvent {
 function fakeChain() {
   const calls: string[] = [];
   const client = {
-    readContract: async ({ functionName }: { functionName: string }) => {
-      calls.push(functionName);
+    readContract: async ({ functionName, args }: { functionName: string; args?: unknown[] }) => {
+      calls.push(functionName === "ownerOf" ? `ownerOf ${args?.[0]}` : functionName);
       if (functionName === "ownerOf") return ALICE;
       if (functionName === "name") return "DemoPunks";
       throw new Error(`unexpected ${functionName}`);
@@ -86,6 +86,21 @@ describe("identity views", () => {
       views.want(UBID7); // fresh, so a request's interest does not force a re-read either
       await new Promise((r) => setTimeout(r, 30));
       expect(calls.length).toBe(after);
+    } finally {
+      views.stop();
+    }
+  });
+
+  it("reads unread identities newest first, and one a request returned before those", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    for (const [block, token] of [[1, 1n], [2, 2n], [3, 3n], [4, 4n]] as const) store.apply(registered(block, token));
+    const { client, calls } = fakeChain();
+    const views = new ViewCache(store, client, { concurrency: 1, gapMs: 0, tickMs: 5 });
+    views.viewWanted(store.identities.get(computeUbid(CHAIN, ADAPTER, Standard.ERC721, PUNKS, 2n))!); // someone is looking at #2
+    views.start();
+    try {
+      for (let i = 0; i < 100 && views.read < 4; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(calls.filter((c) => c.startsWith("ownerOf"))).toEqual(["ownerOf 2", "ownerOf 4", "ownerOf 3", "ownerOf 1"]);
     } finally {
       views.stop();
     }

@@ -17,8 +17,9 @@ import { SINGLE_OWNER_TOKEN_STANDARDS, Standard, STANDARD_NAMES } from "./ubid.j
  *
  * So the second half is an advisory, read by the worker here on its own budget and merged into
  * the view at request time. A view with no advisory yet reports those facts as unknown (null),
- * the shape the API already used when a probe failed. The worker reads new identities first,
- * then any a request asked about, then the stalest, at a bounded rate. The work is set by the
+ * the shape the API already used when a probe failed. The worker reads what a request asked
+ * about first, then unread identities newest first (the first page of the explorer is the
+ * newest), then the stalest, at a bounded rate. The work is set by the
  * size of the registry, never by what the controlling contracts do - it follows nothing.
  */
 
@@ -50,6 +51,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class ViewCache {
   private advisories = new Map<Hex, Advisory>();
   private wanted = new Set<Hex>();
+  /** The registry newest first, rebuilt when it grows - the order unread identities are taken in. */
+  private newest: IdentityState[] = [];
   private inflight = new Set<Hex>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private firstPassDone = false;
@@ -80,6 +83,12 @@ export class ViewCache {
   /** A request asked about this identity: re-read its advisory ahead of the round robin. */
   want(ubid: Hex) {
     this.wanted.add(ubid);
+  }
+
+  /** The view for something a request is returning: it is on someone's screen, so it goes to the front. */
+  viewWanted(id: IdentityState) {
+    this.wanted.add(id.ubid);
+    return this.view(id);
   }
 
   /** Who holds the controller right now, as far as the worker has read. ACCOUNT needs no read: the address is its own holder. */
@@ -173,9 +182,10 @@ export class ViewCache {
     return advisory;
   }
 
-  /** The next identity worth a read, or nothing: asked-for first, then never-read in registry order, then the stalest. */
+  /** The next identity worth a read, or nothing: asked-for first, then never-read newest first, then the stalest. */
   private next(): IdentityState | undefined {
     const now = Date.now();
+    if (this.newest.length !== this.store.identities.size) this.newest = [...this.store.identities.values()].reverse();
     for (const ubid of this.wanted) {
       this.wanted.delete(ubid);
       const id = this.store.identities.get(ubid);
@@ -185,7 +195,7 @@ export class ViewCache {
     }
     let oldest: IdentityState | undefined;
     let oldestAt = Infinity;
-    for (const id of this.store.identities.values()) {
+    for (const id of this.newest) {
       if (this.inflight.has(id.ubid)) continue;
       const a = this.advisories.get(id.ubid);
       if (!a) return id;
