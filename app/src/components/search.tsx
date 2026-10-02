@@ -1,107 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { isAddress, type Address } from "viem";
-import { api, type Identity } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, type SearchHit } from "../lib/api";
 import { useApp } from "../lib/app-state";
 import { displayName } from "../lib/chain";
 import { Avatar, Badge, StandardBadge } from "./ui";
 
-interface IdentityHit {
-  kind: "identity";
-  id: Identity;
-  /** Why this matched, when it isn't obvious from the name. */
-  note?: string;
-  tone?: string;
-}
-/** A full address gets its own page - everything the address is, holds, operates and said. */
-interface AddressHit {
-  kind: "address";
-  address: Address;
-}
-type Hit = IdentityHit | AddressHit;
-
-const MAX = 8;
-
 /**
  * The one search box, in the header of every page. It answers the product's question - who is
  * this? - for whatever gets pasted: a wallet address (the mutual-pointing lookup), a UBID or a
- * prefix of one, an ERC-8004 id, or part of a name. An address also finds what it holds or
- * controls: the NFTs it owns, the contracts it is owner of. Results are the identities themselves;
- * picking one opens its profile.
+ * prefix of one, an ERC-8004 id, or part of a name. The indexer does the matching
+ * (/api/search) and says why each hit matched; this box asks, debounced, and shows the answer.
+ * Picking a hit opens its page.
  */
 export function SearchBar() {
-  const { identities, navigate } = useApp();
+  const { navigate } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
-  const [walletHit, setWalletHit] = useState<IdentityHit | null>(null);
+  // The hits, with the query they answer: a stale answer stays up while the next one is in flight,
+  // and "nothing matches" only shows once the answer for the current query has arrived.
+  const [result, setResult] = useState<{ q: string; hits: SearchHit[] }>({ q: "", hits: [] });
   const box = useRef<HTMLDivElement | null>(null);
 
-  const query = q.trim().toLowerCase();
-  const asAddress = isAddress(query);
-
-  // Wallet lookups go to the indexer: it holds the reverse index, and the verified flag comes
-  // from the mutual-pointing check, not from anything the wallet says about itself.
+  const query = q.trim();
   useEffect(() => {
-    setWalletHit(null);
-    if (!asAddress) return;
+    if (!query) {
+      setResult({ q: "", hits: [] });
+      return;
+    }
     let cancelled = false;
-    api.wallet(query).then((w) => {
-      if (cancelled || !w) return;
-      const ubid = w.self?.ubid ?? w.designation?.ubid;
-      const id = ubid ? identities.find((i) => i.ubid === ubid) : undefined;
-      if (!id) return;
-      setWalletHit(
-        w.self
-          ? { kind: "identity", id, note: "this address is the agent", tone: "ok" }
-          : { kind: "identity", id, note: w.verified ? "operating wallet, verified both ways" : "claims to operate this, not verified", tone: w.verified ? "ok" : "warn" },
-      );
-    });
+    const t = setTimeout(() => {
+      api.search(query).then((r) => !cancelled && setResult({ q: query, hits: r.hits })).catch(() => {});
+    }, 120);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
-  }, [query, asAddress, identities.length]);
+  }, [query]);
 
-  const hits = useMemo<Hit[]>(() => {
-    if (!query) return [];
-    const out: Hit[] = [];
-    const seen = new Set<string>();
-    const add = (h: Omit<IdentityHit, "kind">) => {
-      if (seen.has(h.id.ubid) || out.length >= MAX) return;
-      seen.add(h.id.ubid);
-      out.push({ kind: "identity", ...h });
-    };
-    const hex = /^0x[0-9a-f]{1,64}$/.test(query);
-    // A complete address leads with its own page. A prefix leads with the pages of the addresses
-    // the indexer knows that start with it - bound addresses, holders, operating wallets.
-    if (asAddress) out.push({ kind: "address", address: query as Address });
-    else if (hex && query.length >= 4) {
-      const known = new Set<string>();
-      for (const id of identities) for (const a of [id.boundAddress, id.currentControllerHolder, id.agentWallet]) if (a && a.startsWith(query)) known.add(a);
-      for (const a of [...known].slice(0, 3)) out.push({ kind: "address", address: a as Address });
-    }
-    if (walletHit) add(walletHit);
-    // Prefixes match from the first character, so results appear while a UBID or address is
-    // still being typed or right after a paste - not only once it is complete.
-    const agentId = /^#?\d+$/.test(query) ? query.replace("#", "") : null;
-    for (const id of identities) {
-      if (hex && id.ubid.startsWith(query)) add({ id, note: "UBID" });
-      else if (hex && id.boundAddress.startsWith(query)) add({ id, note: id.standard === 5 ? "this address is the agent" : "bound to this contract" });
-      else if (hex && id.agentWallet?.startsWith(query)) add({ id, note: "operating wallet" });
-      else if (hex && id.currentControllerHolder?.startsWith(query)) add({ id, note: id.standard <= 4 ? "holds the token" : "controls it" });
-      else if (agentId) {
-        const match = id.agentIds.find((a) => a.startsWith(agentId));
-        if (match) add({ id, note: `ERC-8004 #${match}` });
-      }
-    }
-    if (!hex) {
-      for (const id of identities) {
-        const hay = [displayName(id), id.agentName, id.contractName, id.subjectLabel].filter(Boolean).join(" ").toLowerCase();
-        if (hay.includes(query)) add({ id });
-      }
-    }
-    return out.slice(0, MAX + 3);
-  }, [query, identities, walletHit, asAddress]);
-
+  const hits = result.hits;
   useEffect(() => setCursor(0), [query]);
 
   // Click anywhere else closes the menu; the input keeps whatever was typed.
@@ -113,13 +49,14 @@ export function SearchBar() {
     return () => window.removeEventListener("mousedown", onDown);
   }, []);
 
-  function pick(h: Hit) {
-    navigate(h.kind === "address" ? `/address/${h.address}` : `/identity/${h.id.ubid}`);
+  function pick(h: SearchHit) {
+    navigate(h.kind === "address" ? `/address/${h.address}` : `/identity/${h.identity.ubid}`);
     setQ("");
     setOpen(false);
   }
 
-  const showMenu = open && query.length > 0 && (hits.length > 0 || query.length >= 3);
+  const answered = result.q === query;
+  const showMenu = open && query.length > 0 && (hits.length > 0 || (answered && query.length >= 3));
   const nothing = "Nothing matches. Try a UBID, a name, an address, or an ERC-8004 ID.";
 
   return (
@@ -164,7 +101,7 @@ export function SearchBar() {
               </button>
             ) : (
               <button
-                key={h.id.ubid}
+                key={h.identity.ubid}
                 type="button"
                 role="option"
                 aria-selected={i === cursor}
@@ -172,19 +109,19 @@ export function SearchBar() {
                 onMouseEnter={() => setCursor(i)}
                 onClick={() => pick(h)}
               >
-                <Avatar seed={h.id.ubid} image={h.id.image} size={24} />
+                <Avatar seed={h.identity.ubid} image={h.identity.image} size={24} />
                 <span className="search-item-text">
                   <span className="row" style={{ gap: 8 }}>
-                    <span className="search-item-ubid mono">{h.id.ubid.slice(0, 14)}…{h.id.ubid.slice(-6)}</span>
-                    <StandardBadge name={h.id.standardName} />
+                    <span className="search-item-ubid mono">{h.identity.ubid.slice(0, 14)}…{h.identity.ubid.slice(-6)}</span>
+                    <StandardBadge name={h.identity.standardName} />
                   </span>
-                  <span className="search-item-name t2">{displayName(h.id)}</span>
+                  <span className="search-item-name t2">{displayName(h.identity)}</span>
                 </span>
                 {h.note && <Badge tone={h.tone ?? "outline"}>{h.note}</Badge>}
               </button>
             ),
           )}
-          {hits.length === 0 && query.length >= 3 && <div className="search-empty t2 small">{nothing}</div>}
+          {hits.length === 0 && answered && query.length >= 3 && <div className="search-empty t2 small">{nothing}</div>}
         </div>
       )}
     </div>

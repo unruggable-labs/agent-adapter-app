@@ -82,6 +82,17 @@ export class ViewCache {
     this.wanted.add(ubid);
   }
 
+  /** Who holds the controller right now, as far as the worker has read. ACCOUNT needs no read: the address is its own holder. */
+  holder(id: IdentityState): Address | null {
+    return this.advisories.get(id.ubid)?.currentControllerHolder ?? (id.standard === Standard.ACCOUNT ? id.boundAddress : null);
+  }
+
+  /** The cheap part of a view - labels, holder, card - for listing and searching without folding the reputation. */
+  summary(id: IdentityState) {
+    const a = this.advisories.get(id.ubid);
+    return { ...labelsFrom(a?.contractName ?? null, id), holder: this.holder(id), card: cardIfCached(id) };
+  }
+
   /** The view, now, from memory. Never reads the chain. */
   view(id: IdentityState) {
     const a = this.advisories.get(id.ubid);
@@ -92,8 +103,7 @@ export class ViewCache {
       image: card?.image ?? null,
       card,
       standardName: STANDARD_NAMES[id.standard],
-      // ACCOUNT needs no chain read: the address is its own holder.
-      currentControllerHolder: a?.currentControllerHolder ?? (id.standard === Standard.ACCOUNT ? id.boundAddress : null),
+      currentControllerHolder: this.holder(id),
       reputation: this.store.reputation(id.ubid),
       trustBase: a?.trustBase ?? null,
       flags: {

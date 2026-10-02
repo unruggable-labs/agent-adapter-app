@@ -1,33 +1,34 @@
 import { useEffect, useState } from "react";
 import { Addr, Badge, ControllerCell, Modal, MultiSelect, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
-import { useApp, settle } from "../lib/app-state";
-import { adapterAbi, shortHex, STANDARD_NAMES } from "../lib/chain";
+import { useApp, useLive, settle } from "../lib/app-state";
+import { adapterAbi, STANDARD_NAMES } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
+const PAGE_SIZE = 25;
+
 export function AttestationsPage() {
-  const { signer, overview, identities, navigate, refresh, toast } = useApp();
-  const [rows, setRows] = useState<AttestationRow[] | null>(null);
+  const { signer, overview, navigate, refresh, toast } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
   const [mineOnly, setMineOnly] = useState(false);
   const [types, setTypes] = useState<string[]>([]);
   const [standards, setStandards] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(0);
 
-  const load = () => api.attestations().then(setRows).catch(() => {});
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 4000);
-    return () => clearInterval(t);
-  }, []);
+  // The indexer filters, orders and slices; each row comes with the identity it is about.
+  const attester = mineOnly && signer ? signer.address : undefined;
+  const { data, status } = useLive(
+    () => api.attestations({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, type: types, standard: standards, attester }),
+    [page, types.join(","), standards.join(","), attester],
+  );
+  useEffect(() => setPage(0), [types.join(","), standards.join(","), attester]);
 
-  const loading = !rows || !overview;
-  const standardOf = (ubid: string) => identities.find((i) => i.ubid === ubid)?.standardName ?? null;
-  const shown = (rows ?? [])
-    .filter((r) => !mineOnly || r.attester === signer?.address)
-    .filter((r) => types.length === 0 || types.includes(r.typeName))
-    .filter((r) => standards.length === 0 || standards.includes(standardOf(r.ubid) ?? ""))
-    .sort((a, b) => Number(b.order.blockNumber) - Number(a.order.blockNumber) || b.order.logIndex - a.order.logIndex);
+  const loading = !data && status === "loading";
+  const shown = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
   const active = types.length + standards.length + (mineOnly ? 1 : 0);
 
   return (
@@ -56,7 +57,7 @@ export function AttestationsPage() {
           </thead>
           <tbody>
             {shown.map((a) => {
-              const target = identities.find((i) => i.ubid === a.ubid);
+              const target = a.target ?? null;
               return (
                 <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
                   <td>
@@ -85,7 +86,6 @@ export function AttestationsPage() {
                           const r = await sendTx(signer, overview!.adapter, adapterAbi, "revoke", [a.attestationId]);
                           toast(r.message);
                           await settle(refresh);
-                          await load();
                           setBusy(null);
                         }}
                       >
@@ -97,12 +97,24 @@ export function AttestationsPage() {
               );
             })}
             {loading && <SkeletonRows widths={[0, 40, 50, 60, 55, 70, 35, 30, 20]} />}
-            {!loading && shown.length === 0 && (
+            {!data && status === "error" && (
+              <tr className="is-static"><td colSpan={9}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
+            )}
+            {data && total === 0 && (
               <tr className="is-static"><td colSpan={9}><div className="empty">{active ? "Nothing matches these filters." : "No attestations yet."}</div></td></tr>
             )}
           </tbody>
         </table>
       </div>
+      {pages > 1 && (
+        <div className="row" style={{ marginTop: 10, justifyContent: "flex-end", gap: 8 }}>
+          <span className="hint num">
+            {current * PAGE_SIZE + 1}-{Math.min((current + 1) * PAGE_SIZE, total)} of {total}
+          </span>
+          <button className="btn btn-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>Prev</button>
+          <button className="btn btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
+        </div>
+      )}
 
       {showFilters && (
         <Modal title="Filter attestations" onClose={() => setShowFilters(false)}>

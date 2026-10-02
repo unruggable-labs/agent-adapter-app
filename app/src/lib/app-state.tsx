@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
-import { api, type Identity, type Overview } from "./api";
+import { api, type Overview } from "./api";
 import { ACTORS, NETWORK, shortHex } from "./chain";
 
 /**
@@ -28,8 +28,9 @@ interface AppState {
   setActorIndex: (i: number) => void;
   signer: Signer | null;
   overview: Overview | null;
-  identities: Identity[];
   status: LoadStatus;
+  /** Counts up on every poll and every settle after a write. Pages re-fetch their own data on it - see useLive. */
+  tick: number;
   refresh: () => Promise<void>;
   toast: (msg: string) => void;
 }
@@ -50,7 +51,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [actorIndex, setActorIndex] = useState(0);
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [identities, setIdentities] = useState<Identity[]>([]);
+  const [tick, setTick] = useState(0);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const { address: connectedAddress } = useAccount();
@@ -77,11 +78,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // The poll fetches only the overview - a few hundred bytes - and tells the pages to re-ask
+  // their own questions. Nothing downloads the registry.
   const refresh = useCallback(async () => {
+    setTick((t) => t + 1);
     try {
-      const [ov, ids] = await Promise.all([api.overview(), api.identities()]);
-      setOverview(ov);
-      setIdentities(ids);
+      setOverview(await api.overview());
       setStatus("ready");
     } catch {
       setStatus((s) => (s === "ready" ? s : "error"));
@@ -90,8 +92,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 4000);
-    return () => clearInterval(t);
+    // A hidden tab doesn't poll; it catches up the moment it is looked at again.
+    const t = setInterval(() => !document.hidden && refresh(), 4000);
+    const onShow = () => !document.hidden && refresh();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onShow);
+    };
   }, [refresh]);
 
   const toast = useCallback((msg: string) => {
@@ -114,8 +122,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setActorIndex,
         signer,
         overview,
-        identities,
         status,
+        tick,
         refresh,
         toast,
       }}
@@ -124,6 +132,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {toastMsg && <div className="toast fade-in">{toastMsg}</div>}
     </Ctx.Provider>
   );
+}
+
+/**
+ * Data a page asks the indexer for, kept live: fetched now, again on every tick (the poll, or a
+ * settle after a write), and afresh when its inputs change. The last good value stays on screen
+ * while a later fetch fails; a change of inputs reports loading until the new answer arrives.
+ * `load` returning null means there is nothing to ask yet.
+ */
+export function useLive<T>(load: () => Promise<T> | null, deps: unknown[]): { data: T | null; status: LoadStatus; error: unknown } {
+  const { tick } = useApp();
+  const key = JSON.stringify(deps);
+  const [state, setState] = useState<{ key: string; data: T | null; status: LoadStatus; error: unknown }>({ key: "", data: null, status: "loading", error: null });
+  useEffect(() => {
+    const request = load();
+    if (!request) {
+      setState({ key, data: null, status: "ready", error: null });
+      return;
+    }
+    let cancelled = false;
+    request
+      .then((data) => !cancelled && setState({ key, data, status: "ready", error: null }))
+      .catch((error) => !cancelled && setState((s) => (s.key === key && s.data !== null ? { ...s, error } : { key, data: null, status: "error", error })));
+    return () => {
+      cancelled = true;
+    };
+  }, [key, tick]);
+  if (state.key !== key) return { data: null, status: "loading", error: null };
+  return { data: state.data, status: state.status, error: state.error };
 }
 
 /** Wait until the indexer has caught up with a just-mined write, then refresh app data. */

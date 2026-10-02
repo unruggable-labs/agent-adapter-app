@@ -39,8 +39,12 @@ burn, and the collection re-claiming the reputed identity (surfaced as the
 
 ## API
 
-- `GET /api/overview` — counts, adapter, chain
-- `GET /api/identities` — all identities with reputation and trust flags
+- `GET /api/overview` — counts (identities, projects, registered, attestations), adapter, chain
+- `GET /api/identities` — all identities with reputation and trust flags; with any of
+  `?limit&offset&standard&bound&tokenId&q` a page `{ items, total, offset, limit }`, newest first
 - `GET /api/identity/:ubid` — one identity
+- `GET /api/search?q=` — the header search: `{ hits }` of addresses and identities, with why each matched
+- `GET /api/address/:address` — what an address is, operates, holds, is bound to, and has said
 - `GET /api/wallet/:address` — reverse resolution with the mutual-pointing verdict
-- `GET /api/attestations` — raw attestation records, resolved or not
+- `GET /api/attestations` — raw attestation records, resolved or not; with any of
+  `?limit&offset&type&standard&attester&ubid` a page, each row carrying its `target` identity

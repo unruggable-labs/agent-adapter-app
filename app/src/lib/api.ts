@@ -5,6 +5,10 @@ export interface Overview {
   chainId: string;
   identities: number;
   agents: number;
+  /** Distinct collections and contracts identities are bound to. Older indexers omit it. */
+  projects?: number;
+  /** Identities with an ERC-8004 agent minted. Older indexers omit it. */
+  registered?: number;
   attestations: number;
   dropped: number;
   inertRevocations: number;
@@ -103,6 +107,53 @@ export interface AttestationRow {
   order: Order;
   revoked: boolean;
   resolved: boolean;
+  /** The identity the statement is about, when the registry knows it. Present on paged rows. */
+  target?: Identity | null;
+}
+
+/** One page of a list. */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export type SearchHit =
+  | { kind: "address"; address: Address }
+  | { kind: "identity"; identity: Identity; note?: string; tone?: string };
+
+/** Everything the registry knows about one address. */
+export interface AddressView {
+  address: Address;
+  /** The address is itself an agent: its ACCOUNT identity. */
+  self: Identity | null;
+  /** The agent this address is the operating wallet of, and whether both sides agree. */
+  operates: { identity: Identity; verified: boolean } | null;
+  /** Agents that name this address as their wallet without the wallet pointing back. */
+  namedBy: Identity[];
+  holds: Identity[];
+  boundHere: Identity[];
+  boundHereTotal: number;
+  statements: AttestationRow[];
+}
+
+export interface IdentitiesQuery {
+  limit?: number;
+  offset?: number;
+  standard?: string[];
+  bound?: string;
+  tokenId?: string;
+  q?: string;
+}
+
+export interface AttestationsQuery {
+  limit?: number;
+  offset?: number;
+  type?: string[];
+  standard?: string[];
+  attester?: string;
+  ubid?: string;
 }
 
 import { NETWORK } from "./chain";
@@ -113,12 +164,38 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
+/** Thrown for a 404, so a page can tell "not found" from "not reachable". */
+export class NotFound extends Error {}
+
+async function getOrNotFound<T>(path: string): Promise<T> {
+  const res = await fetch(NETWORK.apiBase + path);
+  if (res.status === 404) throw new NotFound(path);
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return res.json();
+}
+
+/** Query parameters, with arrays comma-joined and empties left out. Always at least one, so the
+ *  server answers with a page rather than the whole list. */
+function qs(params: object): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(params) as [string, string | number | string[] | undefined][]) {
+    if (v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) continue;
+    p.set(k, Array.isArray(v) ? v.join(",") : String(v));
+  }
+  if (!p.has("limit")) p.set("limit", "25");
+  return `?${p.toString()}`;
+}
+
 export const api = {
   overview: () => get<Overview>("/overview"),
-  identities: () => get<Identity[]>("/identities"),
-  identity: (ubid: string) => get<Identity>(`/identity/${ubid}`),
+  /** A page of identities, newest first. */
+  identities: (query: IdentitiesQuery = {}) => get<Page<Identity>>(`/identities${qs(query)}`),
+  identity: (ubid: string) => getOrNotFound<Identity>(`/identity/${ubid}`),
   history: (ubid: string) => get<HistoryEntry[]>(`/history/${ubid}`),
-  attestations: () => get<AttestationRow[]>("/attestations"),
+  /** A page of statements, newest first, each with the identity it is about. */
+  attestations: (query: AttestationsQuery = {}) => get<Page<AttestationRow>>(`/attestations${qs(query)}`),
+  search: (q: string) => get<{ hits: SearchHit[] }>(`/search?q=${encodeURIComponent(q)}`),
+  address: (address: string) => get<AddressView>(`/address/${address}`),
   /** `self` = the address IS an agent (an ACCOUNT record whose controller is the address; its UBID is
    *  derivable from the address, so it needs no designation). `designation` = the address is some
    *  agent's operating wallet, a claim that carries the mutual-pointing check. Both can hold. */

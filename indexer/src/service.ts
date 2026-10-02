@@ -1,12 +1,16 @@
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore } from "./projection.js";
+import { addressView, listAttestations, listIdentities, search } from "./queries.js";
 import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
 import type { ViewCache } from "./views.js";
 
 /** The API core, host-agnostic. Identity views come from the ViewCache, so no request reads the
- *  chain per identity - see views.ts. Subpaths are relative — "overview", "identities", "identity/<ubid>", "history/<ubid>",
- *  "wallet/<addr>", "trustbase/<addr>", "attestations". */
+ *  chain per identity - see views.ts. Subpaths are relative, with their query string:
+ *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
+ *    search?q= · address/<addr> · wallet/<addr> · trustbase/<addr> · attestations[?limit&offset&type&standard&attester&ubid]
+ *  `identities` and `attestations` with no query string return the whole list, as they always
+ *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts. */
 
 export function toJson(value: unknown): string {
   return JSON.stringify(value, (_k, v) =>
@@ -26,7 +30,9 @@ export async function handleApi(
   subpath: string,
   views: ViewCache,
 ): Promise<ApiResponse> {
-  const parts = subpath.replace(/^\/+|\/+$/g, "").split("/");
+  const [path, query = ""] = subpath.split("?");
+  const params = new URLSearchParams(query);
+  const parts = path.replace(/^\/+|\/+$/g, "").split("/");
   const [head, arg] = parts;
 
   if (head === "overview") {
@@ -37,6 +43,10 @@ export async function handleApi(
         chainId: store.chainId.toString(),
         identities: store.identities.size,
         agents: store.agents.size,
+        /** Distinct collections and contracts identities are bound to - one collection with a hundred agents counts once. */
+        projects: new Set([...store.identities.values()].map((i) => i.boundAddress)).size,
+        /** Identities with an ERC-8004 agent minted; the rest are counterfactual claims. */
+        registered: [...store.identities.values()].filter((i) => i.agentIds.length > 0).length,
         attestations: store.attestations.size,
         dropped: store.dropped.length,
         inertRevocations: store.inertRevocations.length,
@@ -44,7 +54,14 @@ export async function handleApi(
     };
   }
   if (head === "identities") {
-    return { status: 200, body: toJson(views.views()) };
+    return { status: 200, body: toJson(params.size > 0 ? listIdentities(store, views, params) : views.views()) };
+  }
+  if (head === "search") {
+    return { status: 200, body: toJson({ hits: search(store, views, params.get("q") ?? "") }) };
+  }
+  if (head === "address" && arg) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(arg)) return { status: 400, body: toJson({ error: "not an address", address: arg }) };
+    return { status: 200, body: toJson(addressView(store, views, arg)) };
   }
   if (head === "identity" && arg) {
     const id = store.identities.get(arg.toLowerCase() as Hex);
@@ -64,6 +81,7 @@ export async function handleApi(
     return { status: 200, body: toJson(await probeTrustBase(client, arg as Address)) };
   }
   if (head === "attestations") {
+    if (params.size > 0) return { status: 200, body: toJson(listAttestations(store, views, params)) };
     return {
       status: 200,
       body: toJson(

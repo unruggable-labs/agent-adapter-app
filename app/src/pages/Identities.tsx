@@ -1,21 +1,19 @@
 import { useState } from "react";
-import { useApp } from "../lib/app-state";
 import { Addr, ControllerCell, registrationOf, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
+import { api } from "../lib/api";
+import { useApp, useLive } from "../lib/app-state";
 
 const PAGE_SIZE = 25;
 
 export function IdentitiesPage() {
-  const { identities, overview, status, navigate } = useApp();
+  const { overview, navigate } = useApp();
   const [page, setPage] = useState(0);
-  // Newest first: the identity created most recently sits at the top.
-  const ordered = [...identities].sort((a, b) => {
-    const ab = BigInt(a.created?.blockNumber ?? 0), bb = BigInt(b.created?.blockNumber ?? 0);
-    if (ab !== bb) return ab > bb ? -1 : 1;
-    return (b.created?.logIndex ?? 0) - (a.created?.logIndex ?? 0);
-  });
-  const pages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  // One page at a time, newest first - the server orders and slices; nothing downloads the registry.
+  const { data, status } = useLive(() => api.identities({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
+  const total = data?.total ?? overview?.identities ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const current = Math.min(page, pages - 1);
-  const visible = ordered.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
+  const visible = data?.items ?? [];
 
   return (
     <div className="page page-wide fade-in">
@@ -55,11 +53,11 @@ export function IdentitiesPage() {
                 <td className="td-center num">{id.reputation.stars || <span className="t3">0</span>}</td>
               </tr>
             ))}
-            {identities.length === 0 && status === "loading" && <SkeletonRows widths={[0, 50, 60, 60, 30, 30]} />}
-            {identities.length === 0 && status === "error" && (
+            {!data && status === "loading" && <SkeletonRows widths={[0, 50, 60, 60, 30, 30]} />}
+            {!data && status === "error" && (
               <tr className="is-static"><td colSpan={6}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
             )}
-            {identities.length === 0 && status === "ready" && (
+            {data && data.total === 0 && (
               <tr className="is-static"><td colSpan={6}><div className="empty">No identities yet.</div></td></tr>
             )}
           </tbody>
@@ -76,7 +74,7 @@ export function IdentitiesPage() {
         {pages > 1 && (
           <span className="row" style={{ gap: 8 }}>
             <span className="hint num">
-              {current * PAGE_SIZE + 1}-{Math.min((current + 1) * PAGE_SIZE, identities.length)} of {identities.length}
+              {current * PAGE_SIZE + 1}-{Math.min((current + 1) * PAGE_SIZE, total)} of {total}
             </span>
             <button className="btn btn-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>Prev</button>
             <button className="btn btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
@@ -89,34 +87,30 @@ export function IdentitiesPage() {
 
 /**
  * The registry at a glance, above the table. A project is a distinct collection or contract that
- * identities are bound to - one collection with a hundred agents is one project. Counts come from
- * the same list the table shows, so they can't disagree with it.
+ * identities are bound to - one collection with a hundred agents is one project. The indexer
+ * counts them over the same state the table pages through, so they can't disagree with it.
  */
 function StatPanels() {
-  const { identities, overview } = useApp();
-  const projects = new Set(identities.map((i) => i.boundAddress)).size;
-  const registered = identities.filter((i) => i.agentIds.length > 0).length;
-  const loading = identities.length === 0 && !overview;
-  const n = (v: number) => (loading ? <Skeleton w={40} /> : v.toLocaleString());
+  const { overview } = useApp();
+  const n = (v: number | undefined) => (v === undefined ? <Skeleton w={40} /> : v.toLocaleString());
   return (
     <div className="stat-panels">
       <div className="stat-panel">
-        <div className="stat-panel-n">{n(identities.length)}</div>
+        <div className="stat-panel-n">{n(overview?.identities)}</div>
         <div className="stat-panel-l"><Tip tip="Every identity the indexer knows on this network - claimed, registered, or referenced by an attestation.">UBIDs</Tip></div>
       </div>
       <div className="stat-panel">
-        <div className="stat-panel-n">{n(projects)}</div>
+        <div className="stat-panel-n">{n(overview?.projects)}</div>
         <div className="stat-panel-l"><Tip tip="Distinct collections and contracts that identities are bound to. A collection with a hundred agents counts once.">Projects</Tip></div>
       </div>
       <div className="stat-panel">
-        <div className="stat-panel-n">{n(registered)}</div>
+        <div className="stat-panel-n">{n(overview?.registered)}</div>
         <div className="stat-panel-l"><Tip tip="Identities with an ERC-8004 agent minted on the shared registry. The rest are counterfactual claims.">Registered on-chain</Tip></div>
       </div>
       <div className="stat-panel">
-        <div className="stat-panel-n">{loading || !overview ? <Skeleton w={40} /> : overview.attestations.toLocaleString()}</div>
+        <div className="stat-panel-n">{n(overview?.attestations)}</div>
         <div className="stat-panel-l"><Tip tip="Stars, ratings, reviews and transaction records, across every identity.">Attestations</Tip></div>
       </div>
     </div>
   );
 }
-

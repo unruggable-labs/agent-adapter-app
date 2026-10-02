@@ -77,7 +77,7 @@ export function startServer(
     try {
       // ---- the API
       if (url.pathname.startsWith("/api/")) {
-        const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length), views);
+        const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length) + url.search, views);
         return send(status, "application/json", body, { "access-control-allow-origin": "*" });
       }
 

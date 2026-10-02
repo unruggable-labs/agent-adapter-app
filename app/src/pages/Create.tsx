@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { encodeFunctionData, isAddress, type Address, type Hex } from "viem";
 import { Addr, Badge, Spinner, Tip } from "../components/ui";
-import { useApp, settle } from "../lib/app-state";
+import { useApp, useLive, settle } from "../lib/app-state";
+import { api } from "../lib/api";
 import { adapterAbi, displayName, publicClient, shortHex } from "../lib/chain";
 import { canSend, revertReason, sendTx } from "../lib/tx";
 import { CodeBlock, CopyButton } from "../components/code";
@@ -153,7 +154,7 @@ export function CreatePage() {
 
 /** Steps 2 to 5 for someone who will sign from the connected wallet. */
 function WalletFlow() {
-  const { signer, overview, identities, navigate, refresh, toast } = useApp();
+  const { signer, overview, navigate, refresh, toast } = useApp();
   const [kind, setKind] = useState<Kind | null>(null);
   const [address, setAddress] = useState("");
   const [tokenIdText, setTokenIdText] = useState("");
@@ -216,13 +217,15 @@ function WalletFlow() {
     };
   }, [adapter, standard, bound, tokenId, signer?.address]);
 
-  // The same coordinates under a different standard are a different identity. Say so before
-  // anyone makes a second one by accident.
-  const siblings = useMemo(
-    () => (bound && tokenId !== null ? identities.filter((i) => i.boundAddress === bound && BigInt(i.tokenId) === tokenId && i.standard !== standard) : []),
-    [identities, bound, tokenId, standard],
+  // The identities already at these coordinates, from the indexer. The same coordinates under a
+  // different standard are a different identity - say so before anyone makes a second one by
+  // accident - and the same standard means this one already exists.
+  const { data: atCoords } = useLive(
+    () => (bound && tokenId !== null ? api.identities({ bound, tokenId: tokenId.toString(), limit: 50 }) : null),
+    [bound, tokenId?.toString()],
   );
-  const existing = useMemo(() => identities.find((i) => i.ubid === ubid) ?? null, [identities, ubid]);
+  const siblings = useMemo(() => (atCoords?.items ?? []).filter((i) => i.standard !== standard), [atCoords, standard]);
+  const existing = useMemo(() => (atCoords?.items ?? []).find((i) => i.ubid === ubid) ?? null, [atCoords, ubid]);
 
   if (!adapter) return <Spinner />;
 

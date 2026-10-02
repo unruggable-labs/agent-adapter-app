@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
 import { Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge } from "../components/ui";
-import { api, type HistoryEntry, type Identity } from "../lib/api";
-import { useApp, settle } from "../lib/app-state";
+import { api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
+import { useApp, useLive, settle } from "../lib/app-state";
 import {
   ATTESTATION_TYPES,
   ZERO32,
@@ -26,17 +26,24 @@ import { ConnectWalletButton } from "../components/connect";
 type Tab = "profile" | "history";
 
 export function IdentityPage({ ubid }: { ubid: string }) {
-  const { identities, overview, status, navigate } = useApp();
-  const id = identities.find((i) => i.ubid === ubid);
+  const { overview, navigate } = useApp();
+  // This one identity, from the indexer, re-fetched on every poll and after every write.
+  const { data: id, status, error } = useLive(() => api.identity(ubid), [ubid]);
   const [tab, setTab] = useState<Tab>("profile");
 
-  // "not found" is only true once the indexer has actually answered — on a deep link the first
-  // render has no identities yet, and claiming the UBID doesn't exist would be a lie.
+  // "not found" is only true once the indexer has actually answered - on a deep link the first
+  // render has nothing yet, and claiming the UBID doesn't exist would be a lie.
   if (!id && status === "loading") return <ProfileSkeleton />;
-  if (!id)
+  if (!id && error instanceof NotFound)
     return (
       <div className="page">
         <p className="t2">Identity not found (yet). <button className="btn btn-ghost" onClick={() => navigate("/identities")}>Back</button></p>
+      </div>
+    );
+  if (!id)
+    return (
+      <div className="page">
+        <p className="t2">Can't reach the indexer - retrying every few seconds. <button className="btn btn-ghost" onClick={() => navigate("/identities")}>Back</button></p>
       </div>
     );
   if (!overview) return <ProfileSkeleton />;

@@ -1,41 +1,32 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { isAddress } from "viem";
 import { Badge, ControllerCell, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
-import { api, type AttestationRow, type Identity } from "../lib/api";
-import { useApp } from "../lib/app-state";
+import { api, type Identity } from "../lib/api";
+import { useApp, useLive } from "../lib/app-state";
 import { displayName, explorerAddressUrl, explorerName, plural, pluralise } from "../lib/chain";
 import { payloadPreview } from "./Attestations";
 
 /**
  * Everything the registry knows about one address: whether it is an agent, which agent it
  * operates (and whether that link is verified both ways), what it holds or controls, what is bound
- * to it, and every statement it has made. Read-only; the actions live on the profiles.
+ * to it, and every statement it has made. One question to the indexer (/api/address), kept live.
+ * Read-only; the actions live on the profiles.
  */
 export function AddressPage({ address }: { address: string }) {
-  const { identities, status, navigate } = useApp();
+  const { navigate } = useApp();
   const addr = address.toLowerCase();
-  const [wallet, setWallet] = useState<Awaited<ReturnType<typeof api.wallet>> | undefined>(undefined);
-  const [rows, setRows] = useState<AttestationRow[] | null>(null);
-
-  useEffect(() => {
-    if (!isAddress(addr)) return;
-    let cancelled = false;
-    api.wallet(addr).then((w) => !cancelled && setWallet(w)).catch(() => !cancelled && setWallet(null));
-    api.attestations().then((r) => !cancelled && setRows(r.filter((a) => a.attester === addr))).catch(() => !cancelled && setRows([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [addr, identities.length]);
+  const { data, status } = useLive(() => (isAddress(addr) ? api.address(addr) : null), [addr]);
 
   if (!isAddress(addr)) return <div className="page"><p className="t2">That's not an address.</p></div>;
 
-  const self = identities.find((i) => i.standard === 5 && i.boundAddress === addr) ?? null;
-  const operates: Identity | null = wallet?.designation ? identities.find((i) => i.ubid === wallet!.designation!.ubid) ?? null : null;
-  const namedBy = identities.filter((i) => i.agentWallet === addr && i.ubid !== operates?.ubid);
-  const holds = identities.filter((i) => i.currentControllerHolder === addr && i.boundAddress !== addr);
-  const boundHere = identities.filter((i) => i.boundAddress === addr && i.standard !== 5);
+  const self = data?.self ?? null;
+  const operates = data?.operates ?? null;
+  const namedBy = data?.namedBy ?? [];
+  const holds = data?.holds ?? [];
+  const boundHere = data?.boundHere ?? [];
+  const rows = data?.statements ?? null;
   const explorer = explorerAddressUrl(addr);
-  const loading = status === "loading" && identities.length === 0;
+  const loading = !data && status === "loading";
 
   return (
     <div className="page fade-in">
@@ -51,11 +42,13 @@ export function AddressPage({ address }: { address: string }) {
       </div>
 
       <div className="stat-row" style={{ marginBottom: 18 }}>
-        <Stat n={self ? "Yes" : "No"} label="is an agent" />
-        <Stat n={operates ? (wallet?.verified ? "Yes" : "Claimed") : "No"} label="operating wallet of an agent" />
-        <Stat n={holds.length} label={(holds.length === 1 ? "identity" : "identities") + " held or controlled"} />
+        <Stat n={loading ? "…" : self ? "Yes" : "No"} label="is an agent" />
+        <Stat n={loading ? "…" : operates ? (operates.verified ? "Yes" : "Claimed") : "No"} label="operating wallet of an agent" />
+        <Stat n={loading ? "…" : holds.length} label={(holds.length === 1 ? "identity" : "identities") + " held or controlled"} />
         <Stat n={rows ? rows.length : "…"} label={pluralise(rows?.length ?? 0, "statement") + " made"} />
       </div>
+
+      {!data && status === "error" && <div className="empty">Can't reach the indexer - retrying every few seconds.</div>}
 
       <div className="stack">
         <Section label="Agent">
@@ -67,12 +60,12 @@ export function AddressPage({ address }: { address: string }) {
         </Section>
 
         <Section label="Operating wallet">
-          {wallet === undefined ? <Spinner /> : !operates && namedBy.length === 0 ? (
+          {loading ? <Spinner /> : !operates && namedBy.length === 0 ? (
             <p className="t2 small" style={{ margin: 0 }}>This address is not the operating wallet for any known agent.</p>
           ) : (
             <IdentityTable
               rows={[
-                ...(operates ? [{ id: operates, link: (wallet?.verified ? "both" : "wallet-only") as LinkState }] : []),
+                ...(operates ? [{ id: operates.identity, link: (operates.verified ? "both" : "wallet-only") as LinkState }] : []),
                 ...namedBy.map((id) => ({ id, link: "agent-only" as LinkState })),
               ]}
             />
@@ -88,10 +81,10 @@ export function AddressPage({ address }: { address: string }) {
         </Section>
 
         {boundHere.length > 0 && (
-          <Section label={`Bound to this address · ${boundHere.length} ${boundHere.length === 1 ? "identity" : "identities"}`}>
+          <Section label={`Bound to this address · ${data!.boundHereTotal} ${data!.boundHereTotal === 1 ? "identity" : "identities"}`}>
             <p className="t2 small" style={{ margin: "0 0 8px" }}>This address is a contract that identities are bound to - a collection, or a contract controlled by its owner or admins.</p>
-            <IdentityTable rows={boundHere.slice(0, 25).map((id) => ({ id }))} />
-            {boundHere.length > 25 && <p className="hint">and {boundHere.length - 25} more</p>}
+            <IdentityTable rows={boundHere.map((id) => ({ id }))} />
+            {data!.boundHereTotal > boundHere.length && <p className="hint">and {data!.boundHereTotal - boundHere.length} more</p>}
           </Section>
         )}
 
@@ -103,8 +96,8 @@ export function AddressPage({ address }: { address: string }) {
               <table className="table clickable">
                 <thead><tr><th>Type</th><th>About</th><th>Payload</th><th className="td-right">Block</th><th>State</th></tr></thead>
                 <tbody>
-                  {[...rows].sort((a, b) => Number(b.order.blockNumber) - Number(a.order.blockNumber) || b.order.logIndex - a.order.logIndex).map((a) => {
-                    const target = identities.find((i) => i.ubid === a.ubid);
+                  {rows.map((a) => {
+                    const target = a.target ?? null;
                     return (
                       <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
                         <td><TypeBadge name={a.typeName} /></td>
