@@ -29,7 +29,7 @@ function NavItem({ to, label, count }: { to: string; label: string; count?: numb
   return (
     <button className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(to)}>
       {label}
-      {count !== undefined && <span className="count">{count}</span>}
+      {count !== undefined && <span className="count">{count.toLocaleString()}</span>}
     </button>
   );
 }
