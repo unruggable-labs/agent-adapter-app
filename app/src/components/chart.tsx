@@ -11,6 +11,8 @@ export interface ChartSeries {
   label: string;
   color: string;
   points: { t: string; v: number }[];
+  /** The whole that the other series are parts of: drawn wider and quieter, under them. */
+  whole?: boolean;
 }
 
 const PAD = { top: 16, right: 16, bottom: 34, left: 48 };
@@ -89,10 +91,10 @@ export function LineChart({ series, height = 280, emptyText = "Nothing in this w
         {dates.map((p, i) => (i % labelEvery === 0 || i === n - 1) && (
           <text key={p.t} x={x(i)} y={H - 10} className="chart-label" textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}>{fmtDate(p.t)}</text>
         ))}
-        {series.map((s, i) => (
+        {series.map((s) => (
           <g key={s.key}>
-            {/* The first series is the whole; its parts draw over it, so it is wider and shows at the edges where they coincide. */}
-            <path d={path(s.points)} fill="none" stroke={s.color} strokeWidth={i === 0 ? 3.5 : 2} strokeOpacity={i === 0 && series.length > 1 ? 0.55 : 1} strokeLinejoin="round" strokeLinecap="round" />
+            {/* The whole draws first, wider and quieter, so its parts sit over it and it still shows where they coincide. */}
+            <path d={path(s.points)} fill="none" stroke={s.color} strokeWidth={s.whole ? 3.5 : 2} strokeOpacity={s.whole && series.length > 1 ? 0.55 : 1} strokeLinejoin="round" strokeLinecap="round" />
             <circle cx={x(n - 1)} cy={y(s.points[n - 1].v)} r={4} fill={s.color} />
           </g>
         ))}

@@ -174,12 +174,12 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     const run = (pts: { t: string; v: number }[]) => (cumulative ? pts.reduce<{ t: string; v: number }[]>((acc, p) => [...acc, { t: p.t, v: (acc[acc.length - 1]?.v ?? 0) + p.v }], []) : pts);
     if (compare.length === 0)
       return [
-        { key: "identities", label: "Identities", color: "var(--accent)", points: run(total) },
+        { key: "identities", label: "Identities", color: "var(--accent)", points: run(total), whole: true },
         { key: "claims", label: "Counterfactual claims", color: "var(--c-amber)", points: run(claims) },
         { key: "registrations", label: "ERC-8004 registrations", color: "var(--c-emerald)", points: run(regs) },
       ];
     // Comparing: the whole as a quiet line (unless hidden, so the scale fits the projects), each project in its own colour, on the same buckets as the total.
-    const lines: ChartSeries[] = withTotal ? [{ key: "identities", label: "All identities", color: "var(--text-3)", points: run(total) }] : [];
+    const lines: ChartSeries[] = withTotal ? [{ key: "identities", label: "All identities", color: "var(--text-3)", points: run(total), whole: true }] : [];
     compare.forEach((c, i) => {
       const sr = compareSeries[pickKey(c)];
       const byT = new Map((sr?.points ?? []).map((p) => [p.t, p.v]));
@@ -250,7 +250,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="row spread wrap" style={{ marginBottom: 8 }}>
           <div className="section-label" style={{ margin: 0 }}>
-            Identities per {bucket}{cumulative ? ", cumulative" : ""}{compare.length > 0 && ` · ${compare.length === 1 ? "one project" : `${compare.length} projects`} against the whole`}
+            Identities per {bucket}{cumulative ? ", cumulative" : ""}{compare.length > 0 && ` · ${compare.length === 1 ? "one project" : `${compare.length} projects`}${withTotal ? " against the whole" : " compared"}`}
           </div>
           <ChartLegend series={chart} />
         </div>
