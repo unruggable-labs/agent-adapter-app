@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge } from "../components/ui";
+import { Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip } from "../components/ui";
 import { api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
 import { useApp, useLive, settle } from "../lib/app-state";
 import {
@@ -9,7 +9,9 @@ import {
   adapterAbi,
   controlLine,
   displayName,
+  explorerAddressUrl,
   explorerBlockUrl,
+  explorerName,
   explorerTxUrl,
   publicClient,
   scanAgentUrl,
@@ -85,6 +87,8 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         )}
         <ConfirmBanner id={id} />
         <WalletLinkBanner id={id} />
+
+        <ControllerSection id={id} />
 
         <Section label="Reputation">
           <div className="stat-row" style={{ marginBottom: 14 }}>
@@ -166,6 +170,72 @@ export function IdentityPage({ ubid }: { ubid: string }) {
         <ManagePanel id={id} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The thing that controls this identity - the collection, contract or address it is bound to -
+ * with the ways to go and look at it: the chain explorer, its own page here, its website. For a
+ * token, whether it exists yet and who holds it. The collection's own card (contractURI) leads
+ * when the contract publishes one.
+ */
+function ControllerSection({ id }: { id: Identity }) {
+  const { navigate } = useApp();
+  const isToken = id.standard <= 4;
+  const col = id.collection ?? null;
+  const explorer = explorerAddressUrl(id.boundAddress);
+  const holder = id.currentControllerHolder;
+  return (
+    <Section label="Controller">
+      {col && (col.name || col.description) && (
+        <div className="row" style={{ gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+          {col.image && <Avatar seed={id.boundAddress} image={col.image} size={44} />}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{col.name ?? id.contractName}</div>
+            {col.description && <p className="t2 small" style={{ margin: "2px 0 0", lineHeight: 1.5 }}>{col.description}</p>}
+          </div>
+        </div>
+      )}
+      <dl className="kv">
+        <dt>{id.standard === 5 ? "Address" : isToken ? "Collection" : "Contract"}</dt>
+        <dd>
+          <span className="row wrap" style={{ gap: 8 }}>
+            {id.contractName && !col?.name && <span style={{ fontWeight: 600 }}>{id.contractName}</span>}
+            <Addr value={id.boundAddress} n={10} />
+            <button className="agent-link small" onClick={() => navigate(`/address/${id.boundAddress}`)}>Everything about this address</button>
+            {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">View on {explorerName()}</a>}
+          </span>
+        </dd>
+        {isToken && (
+          <>
+            <dt>Token</dt>
+            <dd>
+              <span className="row wrap" style={{ gap: 8 }}>
+                <span className="num">#{id.tokenId.length > 12 ? `${id.tokenId.slice(0, 6)}…${id.tokenId.slice(-4)}` : id.tokenId}</span>
+                {id.flags.currentlyOwnerless === true && (
+                  <Badge tone="warn" tip="The collection answers that no one owns this id: the token isn't minted yet, or was burned. A collection can claim an identity ahead of the mint; the first owner inherits it, picture and all.">not minted yet</Badge>
+                )}
+                {holder && <span className="t2 small">held by <AddressLink address={holder} /></span>}
+              </span>
+            </dd>
+          </>
+        )}
+        {!isToken && id.standard !== 5 && holder && (
+          <>
+            <dt>Controlled by</dt>
+            <dd><AddressLink address={holder} /></dd>
+          </>
+        )}
+        {col?.externalLink && (
+          <>
+            <dt>Website</dt>
+            <dd><a className="agent-link small" href={col.externalLink} target="_blank" rel="noopener noreferrer">{col.externalLink.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a></dd>
+          </>
+        )}
+        <dt>Rule</dt>
+        <dd className="t2 small"><Tip tip={`This identity is ${controlLine(id)}.`}><span>{controlLine(id).replace(/^controlled by /, "")[0].toUpperCase() + controlLine(id).replace(/^controlled by /, "").slice(1)}</span></Tip></dd>
+      </dl>
+    </Section>
   );
 }
 

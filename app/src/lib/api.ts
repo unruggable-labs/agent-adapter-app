@@ -59,6 +59,9 @@ export interface Identity {
   /** The token's metadata card (name, description, image), or the agent card's where the token
    *  has none. Resolved in the background like the image. */
   card?: { image: string | null; name: string | null; description: string | null; source: "token" | "agent" } | null;
+  /** What the bound collection or contract says about itself (its contractURI): name, description,
+   *  image, website. Read in the background like the card. Older indexers omit it. */
+  collection?: { name: string | null; description: string | null; image: string | null; externalLink: string | null } | null;
   boundAddress: Address;
   tokenId: string;
   /** Who holds the controller right now, where control is a single nameable address. null means the

@@ -27,6 +27,7 @@ function fakeChain() {
       calls.push(functionName === "ownerOf" ? `ownerOf ${args?.[0]}` : functionName);
       if (functionName === "ownerOf") return ALICE;
       if (functionName === "name") return "DemoPunks";
+      if (functionName === "contractURI") return "data:application/json;base64," + Buffer.from(JSON.stringify({ name: "DemoPunks", description: "Ten punks.", image: "ipfs://bafyimg", external_link: "https://punks.example" })).toString("base64");
       throw new Error(`unexpected ${functionName}`);
     },
     getCode: async () => "0x",
@@ -69,6 +70,9 @@ describe("identity views", () => {
     expect(v.subjectLabel).toBe("DemoPunks #7");
     expect(v.trustBase?.isEoa).toBe(true);
     expect(v.advisoryAt).not.toBeNull();
+    // the collection's own card, and its image standing in for a token that has none
+    expect(v.collection).toEqual({ name: "DemoPunks", description: "Ten punks.", image: "https://ipfs.io/ipfs/bafyimg", externalLink: "https://punks.example" });
+    expect(v.image).toBe("https://ipfs.io/ipfs/bafyimg");
   });
 
   it("the worker reads every identity once, then rests until something is stale or asked for", async () => {

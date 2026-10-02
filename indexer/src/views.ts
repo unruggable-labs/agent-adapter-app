@@ -1,4 +1,5 @@
 import type { Address, Hex, PublicClient } from "viem";
+import { collectionFor, type Collection } from "./collection.js";
 import { cardFor, cardIfCached } from "./images.js";
 import { contractName, labelsFrom } from "./names.js";
 import type { IdentityState, ProjectionStore } from "./projection.js";
@@ -28,6 +29,8 @@ export interface Advisory {
   currentlyOwnerless: boolean | null;
   trustBase: TrustBase | null;
   contractName: string | null;
+  /** The bound contract's contractURI document, when it has one. */
+  collection: Collection | null;
   /** When the chain was read. */
   at: number;
 }
@@ -109,8 +112,10 @@ export class ViewCache {
     return {
       ...id,
       ...labelsFrom(a?.contractName ?? null, id),
-      image: card?.image ?? null,
+      // The token's own picture; the collection's where the token has none (yet).
+      image: card?.image ?? a?.collection?.image ?? null,
       card,
+      collection: a?.collection ?? null,
       standardName: STANDARD_NAMES[id.standard],
       currentControllerHolder: this.holder(id),
       reputation: this.store.reputation(id.ubid),
@@ -173,11 +178,12 @@ export class ViewCache {
         .then((o) => ((o as Address) === ZERO_ADDRESS ? null : ((o as Address).toLowerCase() as Address)))
         .catch(() => null);
     }
-    const [trustBase, name] = await Promise.all([
+    const [trustBase, name, collection] = await Promise.all([
       probeTrustBase(this.client, id.boundAddress).catch(() => null),
       contractName(this.client, id.boundAddress),
+      collectionFor(this.client, id.boundAddress).catch(() => null),
     ]);
-    const advisory: Advisory = { currentControllerHolder, currentlyOwnerless, trustBase, contractName: name, at: Date.now() };
+    const advisory: Advisory = { currentControllerHolder, currentlyOwnerless, trustBase, contractName: name, collection, at: Date.now() };
     this.advisories.set(id.ubid, advisory);
     return advisory;
   }

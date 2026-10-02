@@ -114,7 +114,7 @@ async function cardIn(uri: string, source: Card["source"]): Promise<Card | null>
   return card.image || card.name || card.description ? card : null;
 }
 
-async function readJson(uri: string): Promise<unknown> {
+export async function readJson(uri: string): Promise<unknown> {
   const data = /^data:([^,]*),(.*)$/s.exec(uri);
   if (data) {
     const [, meta, payload] = data;
@@ -133,7 +133,7 @@ async function readJson(uri: string): Promise<unknown> {
 }
 
 /** ipfs:// and ar:// through public gateways; http(s) and data: as they are; anything else dropped. */
-function toBrowserUrl(uri: string): string | null {
+export function toBrowserUrl(uri: string): string | null {
   const u = uri.trim();
   if (/^ipfs:\/\//i.test(u)) return `https://ipfs.io/ipfs/${u.replace(/^ipfs:\/\/(ipfs\/)?/i, "")}`;
   if (/^ar:\/\//i.test(u)) return `https://arweave.net/${u.slice(5)}`;
