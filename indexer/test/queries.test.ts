@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore, type LogEvent } from "../src/projection.js";
-import { addressView, listAttestations, listIdentities, search } from "../src/queries.js";
+import { addressView, attestationView, listAttestations, listIdentities, search } from "../src/queries.js";
 import { AttestationType, computeAttestationId, computeUbid, Standard } from "../src/ubid.js";
 import { ViewCache } from "../src/views.js";
 
@@ -18,10 +18,9 @@ const ZERO32 = `0x${"00".repeat(32)}` as Hex;
 const ev = (block: number, eventName: string, args: Record<string, unknown>): LogEvent => ({ blockNumber: BigInt(block), logIndex: 0, eventName, args });
 const registered = (block: number, ubid: Hex, standard: number, boundAddress: Address, tokenId: bigint, emitter: Address, metadata: { metadataKey: string; metadataValue: Hex }[] = []) =>
   ev(block, "CounterfactualAgentRegistered", { ubid, boundAddress, tokenId, standard, emitter, agentURI: null, metadata });
-const starred = (block: number, attester: Address, ubid: Hex) => {
-  const data = "0x01" as Hex;
+const starred = (block: number, attester: Address, ubid: Hex, data: Hex = "0x01") => {
   const attestationId = computeAttestationId(CHAIN, ADAPTER, attester, ubid, AttestationType.STAR, BigInt(block), ZERO32, data);
-  return ev(block, "Attested", { attester, attestationType: AttestationType.STAR, ubid, attestationId, variant: ZERO32, data });
+  return { ...ev(block, "Attested", { attester, attestationType: AttestationType.STAR, ubid, attestationId, variant: ZERO32, data }), transactionHash: `0x${block.toString(16).padStart(64, "0")}` as Hex, attestationId };
 };
 
 /** A chain that knows PunkBot holds #7 and the collection's name. */
@@ -99,5 +98,33 @@ describe("queries", () => {
     expect(listAttestations(store, views, params({ type: "RATING" })).total).toBe(0);
     expect(listAttestations(store, views, params({ standard: "ERC721" })).total).toBe(1);
     expect(listAttestations(store, views, params({ attester: ALICE })).total).toBe(0);
+  });
+
+  it("one statement in full: its target, its transaction, what replaced or revoked it, and its preimage", () => {
+    const { store, views } = world();
+    const first = [...store.attestations.keys()][0];
+    const v = attestationView(store, views, first)!;
+    expect(v.target?.ubid).toBe(UBID7);
+    expect(v.typeName).toBe("STAR");
+    expect(v.revoked).toBe(false);
+    expect(v.supersededBy).toBeNull();
+    expect(v.transactionHash).toBe(`0x${(4).toString(16).padStart(64, "0")}`);
+    expect(v.preimage).toMatchObject({ chainId: CHAIN, adapter: ADAPTER, attester: BOB, ubid: UBID7, attestationType: AttestationType.STAR, blockNumber: 4n, variant: ZERO32, data: "0x01" });
+    expect(attestationView(store, views, `0x${"ab".repeat(32)}` as Hex)).toBeNull();
+
+    // Bob stars again later (value 0): the first star is replaced, not revoked
+    const second = starred(5, BOB, UBID7, "0x00");
+    store.apply(second);
+    expect(attestationView(store, views, first)!.supersededBy).toEqual({ attestationId: second.attestationId, order: { blockNumber: 5n, logIndex: 0 } });
+    expect(attestationView(store, views, second.attestationId)!.supersededBy).toBeNull();
+
+    // then revokes the second: revoked wins over replaced, and the revocation is on the record
+    store.apply({ ...ev(6, "AttestationRevoked", { attestationId: second.attestationId, revoker: BOB }), transactionHash: `0x${"06".repeat(32)}` as Hex });
+    const revoked = attestationView(store, views, second.attestationId)!;
+    expect(revoked.revoked).toBe(true);
+    expect(revoked.revocation).toEqual({ revoker: BOB, order: { blockNumber: 6n, logIndex: 0 }, transactionHash: `0x${"06".repeat(32)}` });
+    expect(revoked.supersededBy).toBeNull();
+    // with the second gone, the first stands again
+    expect(attestationView(store, views, first)!.supersededBy).toBeNull();
   });
 });

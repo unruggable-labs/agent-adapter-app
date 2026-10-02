@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Addr, Badge, ControllerCell, Modal, MultiSelect, Pager, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
+import type { Hex } from "viem";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, useLive, settle } from "../lib/app-state";
 import { adapterAbi, STANDARD_NAMES } from "../lib/chain";
@@ -57,7 +58,7 @@ export function AttestationsPage() {
             {shown.map((a) => {
               const target = a.target ?? null;
               return (
-                <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
+                <tr key={a.attestationId} onClick={() => navigate(`/attestation/${a.attestationId}`)}>
                   <td>
                     <span className="row" style={{ gap: 6 }}>
                       <UbidCell ubid={a.ubid} image={target?.image} registration={target ? registrationOf(target) : "none"} />
@@ -149,18 +150,47 @@ export function AttestationsPage() {
   );
 }
 
+/** What a statement's payload says, by its type's encoding: a star value, a score with optional
+ *  text, text alone, a score with a transaction hash and text, or nothing (account confirmation). */
+export interface Payload {
+  star?: boolean;
+  score?: number | null;
+  text?: string;
+  /** The transaction the statement is about - INTERACTION carries it in the payload; other types may carry it in the variant slot. */
+  reference?: Hex | null;
+  /** The score is a single byte, 0-100; anything else is an invalid payload at read time. */
+  valid: boolean;
+}
+
+export function decodePayload(a: AttestationRow): Payload {
+  const raw = a.data.slice(2);
+  const byte = raw.length >= 2 ? parseInt(raw.slice(0, 2), 16) : NaN;
+  const ref = a.variant && a.variant !== ZERO32 ? a.variant : null;
+  switch (a.typeName) {
+    case "STAR":
+      return { star: byte === 1, valid: raw.length === 2 && (byte === 0 || byte === 1) };
+    case "RATING":
+      return { score: Number.isNaN(byte) ? null : byte, text: raw.length > 2 ? utf8("0x" + raw.slice(2)) : "", reference: ref, valid: !Number.isNaN(byte) && byte <= 100 };
+    case "REVIEW":
+      return { text: utf8(a.data), reference: ref, valid: raw.length > 0 };
+    case "INTERACTION":
+      return { score: Number.isNaN(byte) ? null : byte, reference: raw.length >= 66 ? (`0x${raw.slice(2, 66)}` as Hex) : ref, text: raw.length > 66 ? utf8("0x" + raw.slice(66)) : "", valid: !Number.isNaN(byte) && byte <= 100 && raw.length >= 66 };
+    case "CONFIRM_ACCOUNT":
+      return { valid: raw.length === 0 };
+    default:
+      return { valid: false };
+  }
+}
+
+const ZERO32 = `0x${"00".repeat(32)}`;
+
 export function payloadPreview(a: AttestationRow): string {
-  if (a.typeName === "STAR") return a.data === "0x01" ? "★ 1" : "0";
-  if (a.typeName === "RATING") {
-    const text = a.data.length > 4 ? utf8("0x" + a.data.slice(4)) : "";
-    return `${parseInt(a.data.slice(2, 4), 16)}/100${text ? ` ${text}` : ""}`;
-  }
+  const p = decodePayload(a);
+  if (a.typeName === "STAR") return p.star ? "★ 1" : "0";
+  if (a.typeName === "RATING") return `${p.score ?? "?"}/100${p.text ? ` ${p.text}` : ""}`;
   if (a.typeName === "CONFIRM_ACCOUNT") return "—";
-  if (a.typeName === "REVIEW") return utf8(a.data);
-  if (a.typeName === "INTERACTION") {
-    const raw = a.data.slice(2);
-    return `${parseInt(raw.slice(0, 2), 16)}/100 ${utf8("0x" + raw.slice(66))}`;
-  }
+  if (a.typeName === "REVIEW") return p.text ?? "";
+  if (a.typeName === "INTERACTION") return `${p.score ?? "?"}/100 ${p.text ?? ""}`;
   return a.data;
 }
 

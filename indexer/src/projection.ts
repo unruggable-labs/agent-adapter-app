@@ -98,7 +98,14 @@ export interface AttestationRecord {
   variant: Hex;
   data: Hex;
   order: OrderKey;
+  /** The transaction that made it, when the source knows. */
+  transactionHash: Hex | null;
+  /** The block number in the id's preimage - the contract's block.number, which on Arbitrum-style
+   *  chains is the parent chain's block, not the log's. */
+  contractBlockNumber: bigint;
   revoked: boolean;
+  /** The revocation that took it down, while it is down. */
+  revocation: { revoker: Address; order: OrderKey; transactionHash: Hex | null } | null;
 }
 
 export interface DroppedEvent {
@@ -398,7 +405,9 @@ export class ProjectionStore {
       // revoked id in log order reactivates it.
       const was = existing.revoked ? "reactivated" : "restated";
       existing.revoked = false;
+      existing.revocation = null;
       existing.order = order;
+      existing.transactionHash = ev.transactionHash ?? null;
       this.record(ubid, ev, order, attester, `${describeAttestation(attestationType, data)} ${was} (same statement, same id).`);
       return;
     }
@@ -410,7 +419,10 @@ export class ProjectionStore {
       variant,
       data,
       order,
+      transactionHash: ev.transactionHash ?? null,
+      contractBlockNumber: ev.contractBlockNumber ?? order.blockNumber,
       revoked: false,
+      revocation: null,
     });
     this.record(ubid, ev, order, attester, `${describeAttestation(attestationType, data)}${variant !== ZERO32 ? ` referencing ${variant}` : ""}.`);
   }
@@ -423,6 +435,7 @@ export class ProjectionStore {
     // Everything else — unknown id, zero id, wrong revoker — is recorded, inert history.
     if (statement && statement.attester === revoker) {
       statement.revoked = true;
+      statement.revocation = { revoker, order, transactionHash: ev.transactionHash ?? null };
       this.record(statement.ubid, ev, order, revoker, `${describeAttestation(statement.attestationType, statement.data)} revoked by its attester.`);
     } else {
       this.inertRevocations.push({ attestationId, revoker, order });

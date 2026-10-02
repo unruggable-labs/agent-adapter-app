@@ -8,6 +8,7 @@ import { addressCard, defaultCard, identityCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import type { ProjectionStore } from "./projection.js";
 import { fetchContent } from "./gateway.js";
+import { attestationView } from "./queries.js";
 import { handleApi } from "./service.js";
 import { ViewCache } from "./views.js";
 
@@ -175,6 +176,20 @@ export function startServer(
             url: pageUrl,
             image: `${origin}/og/identity/${id.ubid}.png`,
             type: "profile",
+          }));
+        }
+      }
+      if ((m = /^\/attestation\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {
+        const v = attestationView(store, views, m[1].toLowerCase() as Hex);
+        if (v) {
+          const about = v.target ? (v.target.agentName ?? v.target.subjectLabel) : `${v.ubid.slice(0, 10)}…`;
+          const kind = v.typeName.toLowerCase().replace("_", " ");
+          return send(200, "text/html", withMeta(html, {
+            title: `A ${kind} about ${about} · Agent Identity on ${chain} · Adapterscan`,
+            description: `${v.revoked ? "Revoked" : "Live"} ${kind} about ${about} on ${chain}, by ${v.attester.slice(0, 10)}…, block ${v.order.blockNumber}. The statement, who made it, and how its id verifies.`,
+            url: pageUrl,
+            image: v.target ? `${origin}/og/identity/${v.ubid}.png` : `${origin}/og/default.png`,
+            type: "website",
           }));
         }
       }

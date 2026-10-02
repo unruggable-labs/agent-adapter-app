@@ -110,8 +110,23 @@ export interface AttestationRow {
   order: Order;
   revoked: boolean;
   resolved: boolean;
+  /** The transaction that made it. Older indexers omit it. */
+  transactionHash?: Hex | null;
+  /** The block number in the id's preimage (the contract's block.number). Older indexers omit it. */
+  contractBlockNumber?: string;
+  /** The revocation that took it down, while it is down. */
+  revocation?: { revoker: Address; order: Order; transactionHash: Hex | null } | null;
   /** The identity the statement is about, when the registry knows it. Present on paged rows. */
   target?: Identity | null;
+}
+
+/** One statement in full - see /api/attestation/:id. */
+export interface AttestationView extends AttestationRow {
+  target: Identity | null;
+  /** For star, rating and account confirmation, the later statement by the same attester that stands instead of this one. */
+  supersededBy: { attestationId: Hex; order: Order } | null;
+  /** What the id is keccak'd from. */
+  preimage: { chainId: string; adapter: Address; attester: Address; ubid: Hex; attestationType: number; blockNumber: string; variant: Hex; data: Hex };
 }
 
 /** One page of a list. */
@@ -198,6 +213,7 @@ export const api = {
   history: (ubid: string) => get<HistoryEntry[]>(`/history/${ubid}`),
   /** A page of statements, newest first, each with the identity it is about. */
   attestations: (query: AttestationsQuery = {}) => get<Page<AttestationRow>>(`/attestations${qs(query)}`),
+  attestation: (id: string) => getOrNotFound<AttestationView>(`/attestation/${id}`),
   search: (q: string) => get<{ hits: SearchHit[] }>(`/search?q=${encodeURIComponent(q)}`),
   address: (address: string) => get<AddressView>(`/address/${address}`),
   /** `self` = the address IS an agent (an ACCOUNT record whose controller is the address; its UBID is

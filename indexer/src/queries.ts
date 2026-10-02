@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { AttestationRecord, IdentityState, OrderKey, ProjectionStore } from "./projection.js";
-import { ATTESTATION_TYPE_NAMES, Standard, STANDARD_NAMES } from "./ubid.js";
+import { ATTESTATION_TYPE_NAMES, AttestationType, Standard, STANDARD_NAMES } from "./ubid.js";
 import type { IdentityView, ViewCache } from "./views.js";
 
 /**
@@ -137,6 +137,37 @@ export function search(store: ProjectionStore, views: ViewCache, raw: string): S
 export function attestationRow(store: ProjectionStore, views: ViewCache, a: AttestationRecord) {
   const target = store.identities.get(a.ubid);
   return { ...a, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? views.viewWanted(target) : null };
+}
+
+/** The statement classes where one live statement per attester stands and the latest wins (spec §6).
+ *  A statement of these kinds that is not the latest is replaced, not wrong. */
+const STATE_CLASSES = new Set([AttestationType.STAR, AttestationType.RATING, AttestationType.CONFIRM_ACCOUNT]);
+
+/**
+ * One statement in full: the row, the identity it is about, the later statement by the same
+ * attester that replaced it if one did, and the fields its id was recomputed from when it was
+ * indexed - the whole case for believing it. Null when the id is unknown (never indexed, or
+ * dropped because its id did not match its fields).
+ */
+export function attestationView(store: ProjectionStore, views: ViewCache, id: Hex) {
+  const a = store.attestations.get(id.toLowerCase() as Hex);
+  if (!a) return null;
+  const live = STATE_CLASSES.has(a.attestationType) ? store.liveStateValue(a.ubid, a.attester, a.attestationType) : null;
+  const supersededBy = live && live.attestationId !== a.attestationId && !a.revoked ? { attestationId: live.attestationId, order: live.order } : null;
+  return {
+    ...attestationRow(store, views, a),
+    supersededBy,
+    preimage: {
+      chainId: store.chainId,
+      adapter: store.adapter,
+      attester: a.attester,
+      ubid: a.ubid,
+      attestationType: a.attestationType,
+      blockNumber: a.contractBlockNumber,
+      variant: a.variant,
+      data: a.data,
+    },
+  };
 }
 
 /** A page of statements, newest first. Filters: type (names), standard (of the identity; hides unresolved), attester, ubid. */

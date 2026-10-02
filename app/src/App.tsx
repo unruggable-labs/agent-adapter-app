@@ -10,6 +10,7 @@ import { AppProvider, useApp } from "./lib/app-state";
 import { ACTORS, DOCS_URL, NETWORK, networkId, shortHex } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
+import { AttestationPage } from "./pages/Attestation";
 import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
 import { IdentitiesPage } from "./pages/Identities";
@@ -131,6 +132,7 @@ function Shell() {
   if (route.startsWith("/identity/")) page = <IdentityPage ubid={route.split("/")[2]} />;
   else if (route.startsWith("/address/")) page = <AddressPage address={route.split("/")[2]} />;
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
+  else if (route.startsWith("/attestation/")) page = <AttestationPage id={route.split("/")[2]} />;
   else if (route.startsWith("/create")) page = <CreatePage />;
 
   return (

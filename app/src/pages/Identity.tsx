@@ -106,13 +106,14 @@ export function IdentityPage({ ubid }: { ubid: string }) {
               <div className="t3 small">
                 — <AddressLink address={r.attester} /> · block {r.order.blockNumber}
                 {r.reference && r.reference !== ZERO32 && <> · ref <TxRef hash={r.reference} /></>}
+                {" · "}<button className="agent-link" onClick={() => navigate(`/attestation/${r.attestationId}`)}>statement</button>
               </div>
             </div>
           ))}
           {id.reputation.interactions.map((x) => (
             <div key={x.attestationId} className="review-item">
               <div><span className="num">{x.score}/100</span> {x.text && <span className="t2">· {x.text}</span>}</div>
-              <div className="t3 small">transaction · ref <TxRef hash={x.reference} /> · by <AddressLink address={x.attester} /></div>
+              <div className="t3 small">transaction · ref <TxRef hash={x.reference} /> · by <AddressLink address={x.attester} /> · <button className="agent-link" onClick={() => navigate(`/attestation/${x.attestationId}`)}>statement</button></div>
             </div>
           ))}
           {id.reputation.confirmedAccounts.length > 0 && (
@@ -312,7 +313,7 @@ function HistoryPanel({ id }: { id: Identity }) {
 }
 
 /** A full address, linking to its page in this explorer. */
-function AddressLink({ address }: { address: string }) {
+export function AddressLink({ address }: { address: string }) {
   const { navigate } = useApp();
   return <button className="agent-link mono" title={address} onClick={() => navigate(`/address/${address}`)}>{shortHex(address, 10)}</button>;
 }
@@ -322,7 +323,7 @@ function AddressLink({ address }: { address: string }) {
  * the chain: a reference is a claim until the transaction is found. Zero means "no reference".
  */
 const txChecks = new Map<string, Promise<"found" | "missing">>();
-function TxRef({ hash }: { hash: string }) {
+export function TxRef({ hash }: { hash: string }) {
   const [state, setState] = useState<"checking" | "found" | "missing">("checking");
   useEffect(() => {
     if (hash === ZERO32) return;

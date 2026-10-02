@@ -1,6 +1,6 @@
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore } from "./projection.js";
-import { addressView, listAttestations, listIdentities, search } from "./queries.js";
+import { addressView, attestationView, listAttestations, listIdentities, search } from "./queries.js";
 import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
 import type { ViewCache } from "./views.js";
@@ -9,6 +9,7 @@ import type { ViewCache } from "./views.js";
  *  chain per identity - see views.ts. Subpaths are relative, with their query string:
  *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
  *    search?q= · address/<addr> · wallet/<addr> · trustbase/<addr> · attestations[?limit&offset&type&standard&attester&ubid]
+ *    attestation/<id>
  *  `identities` and `attestations` with no query string return the whole list, as they always
  *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts. */
 
@@ -79,6 +80,11 @@ export async function handleApi(
   }
   if (head === "trustbase" && arg) {
     return { status: 200, body: toJson(await probeTrustBase(client, arg as Address)) };
+  }
+  if (head === "attestation" && arg) {
+    const v = attestationView(store, views, arg as Hex);
+    if (!v) return { status: 404, body: toJson({ error: "unknown attestation", attestationId: arg }) };
+    return { status: 200, body: toJson(v) };
   }
   if (head === "attestations") {
     if (params.size > 0) return { status: 200, body: toJson(listAttestations(store, views, params)) };

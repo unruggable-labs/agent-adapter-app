@@ -111,7 +111,7 @@ export function AddressPage({ address }: { address: string }) {
                   {rows.map((a) => {
                     const target = a.target ?? null;
                     return (
-                      <tr key={a.attestationId} className={target ? undefined : "is-static"} onClick={target ? () => navigate(`/identity/${a.ubid}`) : undefined}>
+                      <tr key={a.attestationId} onClick={() => navigate(`/attestation/${a.attestationId}`)}>
                         <td><TypeBadge name={a.typeName} /></td>
                         <td>{target ? <span className="row" style={{ gap: 8 }}><UbidCell ubid={a.ubid} image={target.image} registration={registrationOf(target)} /><span className="t2 small">{displayName(target)}</span></span> : <span className="mono t3">{a.ubid.slice(0, 12)}…</span>}</td>
                         <td className="mono t2" style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{payloadPreview(a)}</td>

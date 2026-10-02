@@ -48,5 +48,7 @@ burn, and the collection re-claiming the reputed identity (surfaced as the
 - `GET /api/wallet/:address` — reverse resolution with the mutual-pointing verdict
 - `GET /ipfs/:path`, `GET /ar/:path` — content-addressed images, fetched through several public
   gateways with rotation on 429/5xx and kept on disk under `data/cache/` (images only, immutable)
+- `GET /api/attestation/:id` — one statement in full: its target, the later statement that replaced it
+  if any, its transaction and revocation, and the fields its id is recomputed from
 - `GET /api/attestations` — raw attestation records, resolved or not; with any of
   `?limit&offset&type&standard&attester&ubid` a page, each row carrying its `target` identity
