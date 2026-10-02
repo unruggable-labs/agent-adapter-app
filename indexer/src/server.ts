@@ -5,11 +5,12 @@ import { fileURLToPath } from "node:url";
 import { isAddress, type Address, type Hex, type PublicClient } from "viem";
 import type { EventLog } from "./eventlog.js";
 import type { Ingester } from "./ingest.js";
-import { addressCard, defaultCard, identityCard } from "./og.js";
+import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import type { ProjectionStore } from "./projection.js";
 import { fetchContent } from "./gateway.js";
 import { attestationView } from "./queries.js";
+import { overview as statsOverview, series as statsSeries } from "./stats.js";
 import { handleApi } from "./service.js";
 import { ViewCache } from "./views.js";
 
@@ -42,6 +43,13 @@ function asset(pathname: string): { body: Buffer; type: string } | null {
 const TAGLINE = "Identity, profiles, and reviews for AI agents. Discover reputable AI agents and the wallets they operate.";
 const CARD_TTL_MS = 5 * 60 * 1000;
 const cards = new Map<string, { png: Buffer; at: number }>();
+
+/** The live public sites, for the stats host's card, which adds every chain up the way the page
+ *  does. The same list the app keeps in chain.ts; a new chain goes in both. */
+const PUBLIC_SITES = [
+  { slug: "robinhood", chain: { id: 4663, label: "Robinhood Chain" }, host: "robinhood.adapterscan.com", testnet: false },
+  { slug: "sepolia", chain: { id: 11155111, label: "Sepolia" }, host: "testnet.adapterscan.com", testnet: true },
+];
 
 export function startServer(
   store: ProjectionStore,
@@ -137,6 +145,51 @@ export function startServer(
         );
         return send(200, "image/png", png, pngHeaders);
       }
+      if (url.pathname === "/og/stats.png") {
+        // The last 90 days, by week. On the stats host every selected chain is added up: this
+        // chain from its own log, the others from their public APIs. Elsewhere, this chain alone.
+        const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
+        const window = { from: now - 90 * 86400, to: now };
+        const onStatsHost = host.startsWith("stats.");
+        const wanted = onStatsHost
+          ? PUBLIC_SITES.filter((s) => (url.searchParams.get("chains") ? url.searchParams.get("chains")!.split(",").includes(s.slug) : !s.testnet))
+          : PUBLIC_SITES.filter((s) => s.chain.id === Number(store.chainId));
+        const sites = wanted.length ? wanted : PUBLIC_SITES.filter((s) => s.chain.id === Number(store.chainId));
+        const key = `stats:${onStatsHost ? sites.map((s) => s.slug).join(",") : "local"}:${now}`;
+        const png = await cached(key, async () => {
+          const parts = await Promise.all(
+            sites.map(async (s) => {
+              if (s.chain.id === Number(store.chainId) && opts.log) {
+                const o = statsOverview(opts.log.connection, store, window);
+                const w = statsSeries(opts.log.connection, "identities", "week", window).series[0].points;
+                return { identities: o.figures.identities.value, projects: o.figures.projects.value, attestations: o.figures.attestations.value, weekly: w };
+              }
+              try {
+                const q = `from=${window.from}&to=${window.to}`;
+                const [o, w] = await Promise.all([
+                  fetch(`https://${s.host}/api/stats/overview?${q}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.json()),
+                  fetch(`https://${s.host}/api/stats/series?metric=identities&bucket=week&${q}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.json()),
+                ]);
+                return { identities: o.figures.identities.value as number, projects: o.figures.projects.value as number, attestations: o.figures.attestations.value as number, weekly: w.series[0].points as { t: string; v: number }[] };
+              } catch {
+                return null;
+              }
+            }),
+          );
+          const got = parts.filter((p): p is NonNullable<typeof p> => p !== null);
+          const byWeek = new Map<string, number>();
+          for (const p of got) for (const pt of p.weekly) byWeek.set(pt.t, (byWeek.get(pt.t) ?? 0) + pt.v);
+          const chainsShown = sites.filter((_, i) => parts[i] !== null).map((s) => s.chain);
+          return statsCard(host, chainsShown.length ? chainsShown : [chainCard], {
+            identities: got.reduce((a, p) => a + p.identities, 0),
+            projects: got.reduce((a, p) => a + p.projects, 0),
+            attestations: got.reduce((a, p) => a + p.attestations, 0),
+            weekly: [...byWeek].sort(([a], [b]) => (a < b ? -1 : 1)).map(([t, v]) => ({ t, v })),
+            windowLabel: `Last 90 days${chainsShown.length > 1 ? ` across ${chainsShown.length} chains` : chainsShown.length === 1 ? ` on ${chainsShown[0].label}` : ""}`,
+          });
+        });
+        return send(200, "image/png", png, pngHeaders);
+      }
       if (url.pathname === "/og/default.png") {
         const png = await cached(`default:${store.identities.size}:${store.attestations.size}`, () =>
           defaultCard(host, chainCard, { identities: store.identities.size, attestations: store.attestations.size }),
@@ -181,12 +234,14 @@ export function startServer(
         }
       }
       if (url.pathname === "/stats" || host.startsWith("stats.")) {
-        const where = host.startsWith("stats.") ? "" : ` on ${chain}`;
+        const onStatsHost = host.startsWith("stats.");
+        const where = onStatsHost ? "" : ` on ${chain}`;
+        const chainsParam = onStatsHost && url.searchParams.get("chains") ? `?chains=${encodeURIComponent(url.searchParams.get("chains")!)}` : "";
         return send(200, "text/html", withMeta(html, {
           title: `Adapter usage${where} · Adapterscan`,
           description: `How used the adapter is${where}: identities created, ERC-8004 registrations, counterfactual claims, attestations and attesters over time, and the projects behind them.`,
           url: pageUrl,
-          image: `${origin}/og/default.png`,
+          image: `${origin}/og/stats.png${chainsParam}`,
         }));
       }
       if ((m = /^\/attestation\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {

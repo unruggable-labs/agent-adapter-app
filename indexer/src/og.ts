@@ -120,11 +120,12 @@ async function imageData(url: string | null): Promise<string | null> {
   }
 }
 
-function frame(host: string, chain: Chain, body: unknown) {
+function frame(host: string, chain: Chain | Chain[], body: unknown) {
+  const chains = Array.isArray(chain) ? chain : [chain];
   return col({ width: W, height: H, backgroundColor: C.bg, padding: 56, fontFamily: "Inter", color: C.t1 }, [
     row({ justifyContent: "space-between", marginBottom: 40 }, [
       text("adapterscan", { ...mono, fontSize: 30, fontWeight: 500 }),
-      chainPill(chain),
+      row({ gap: 10 }, chains.map(chainPill)),
     ]),
     body,
     row({ justifyContent: "space-between", marginTop: "auto" }, [
@@ -198,4 +199,60 @@ export async function defaultCard(host: string, chain: Chain, counts: { identiti
     row({ gap: 72, marginTop: 36 }, [stat(String(counts.identities), "identities"), stat(String(counts.attestations), "attestations")]),
   ]);
   return png(frame(host, chain, body));
+}
+
+export interface StatsCard {
+  /** Over the window, the figures the page leads with. */
+  identities: number;
+  projects: number;
+  attestations: number;
+  /** Identities per week across the window, oldest first. */
+  weekly: { t: string; v: number }[];
+  windowLabel: string;
+}
+
+/** The usage page's card: the figures and the shape of the last weeks, so the link says how used the adapter is before anyone clicks. */
+export async function statsCard(host: string, chains: Chain[], c: StatsCard): Promise<Buffer> {
+  const cw = 680, ch = 186, gap = 6;
+  const n = Math.max(1, c.weekly.length);
+  const max = Math.max(1, ...c.weekly.map((p) => p.v));
+  const bw = (cw - gap * (n - 1)) / n;
+  const bars = c.weekly.map((p, i) => {
+    const h = Math.max(p.v > 0 ? 4 : 2, Math.round((p.v / max) * (ch - 8)));
+    const last = i === n - 1;
+    return el("rect", {}, undefined, { x: Math.round(i * (bw + gap)), y: ch - h, width: Math.max(2, Math.round(bw)), height: h, rx: 4, fill: p.v > 0 ? (last ? C.accent : "#a5a1f0") : C.border });
+  });
+  const peak = c.weekly.reduce((best, p) => (p.v > best.v ? p : best), { t: "", v: 0 });
+  const date = (t: string) => (t ? new Date(`${t}T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+  const body = col({ flex: 1 }, [
+    // lineHeight above 1 so the descenders of "Adapter usage" don't reach the line below
+    text("Adapter usage", { fontSize: 64, fontWeight: 700, letterSpacing: -2, lineHeight: 1.15 }),
+    text(c.windowLabel, { fontSize: 26, color: C.t2, marginTop: 2 }),
+    row({ gap: 40, marginTop: 22, alignItems: "flex-start" }, [
+      col({ gap: 10, width: 280 }, [
+        bigStat(c.identities, c.identities === 1 ? "identity created" : "identities created"),
+        bigStat(c.projects, c.projects === 1 ? "project" : "projects"),
+        bigStat(c.attestations, c.attestations === 1 ? "attestation" : "attestations"),
+      ]),
+      col({ gap: 8 }, [
+        row({ justifyContent: "space-between", width: cw }, [
+          text("Identities per week", { fontSize: 22, color: C.t3 }),
+          text(peak.v > 0 ? `peak ${peak.v.toLocaleString()} · week of ${date(peak.t)}` : "", { fontSize: 22, color: C.t3 }),
+        ]),
+        el("svg", { width: cw, height: ch }, bars, { viewBox: `0 0 ${cw} ${ch}`, width: cw, height: ch }),
+        row({ justifyContent: "space-between", width: cw }, [
+          text(date(c.weekly[0]?.t ?? ""), { fontSize: 20, color: C.t3 }),
+          text(date(c.weekly[n - 1]?.t ?? ""), { fontSize: 20, color: C.t3 }),
+        ]),
+      ]),
+    ]),
+  ]);
+  return png(frame(host, chains, body));
+}
+
+function bigStat(n: number, label: string) {
+  return col({}, [
+    text(n.toLocaleString(), { fontSize: 44, fontWeight: 700, letterSpacing: -1.5, lineHeight: 1.1 }),
+    text(label, { fontSize: 20, color: C.t3 }),
+  ]);
 }
