@@ -99,6 +99,11 @@ export class ViewCache {
     return this.advisories.get(id.ubid)?.currentControllerHolder ?? (id.standard === Standard.ACCOUNT ? id.boundAddress : null);
   }
 
+  /** What the worker has read about this identity's chain facts, or null before it gets there. */
+  advisoryOf(ubid: Hex): Advisory | null {
+    return this.advisories.get(ubid) ?? null;
+  }
+
   /** The cheap part of a view - labels, holder, card - for listing and searching without folding the reputation. */
   summary(id: IdentityState) {
     const a = this.advisories.get(id.ubid);

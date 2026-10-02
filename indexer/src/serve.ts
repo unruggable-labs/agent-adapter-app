@@ -136,7 +136,7 @@ async function main() {
     console.warn("Backfill verification skipped: RPC rejected the full-range query.");
   }
 
-  startServer(store, client, net.adapter, net.port, ingester, net.pollMs, { networkLabel: net.chain.name });
+  startServer(store, client, net.adapter, net.port, ingester, net.pollMs, { networkLabel: net.chain.name, log });
   console.log(`API + UI on http://127.0.0.1:${net.port} (polling every ${net.pollMs / 1000}s)`);
   // Blocks stored before timestamps were kept get theirs now, in the background.
   ingester.backfillTimestamps().then((n) => n > 0 && console.log(`Timestamps: filled ${n} blocks stored before they were kept`)).catch(() => {});

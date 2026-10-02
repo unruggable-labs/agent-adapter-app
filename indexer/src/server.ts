@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, type Address, type Hex, type PublicClient } from "viem";
+import type { EventLog } from "./eventlog.js";
 import type { Ingester } from "./ingest.js";
 import { addressCard, defaultCard, identityCard } from "./og.js";
 import { withMeta } from "./meta.js";
@@ -49,7 +50,7 @@ export function startServer(
   port: number,
   ingester?: Ingester,
   pollMs = 2000,
-  opts: { networkLabel?: string } = {},
+  opts: { networkLabel?: string; log?: EventLog } = {},
 ) {
   if (ingester) setInterval(() => ingester.sync().catch(() => {}), pollMs);
   // Chain facts around each identity are read by this worker, never on a request.
@@ -79,8 +80,8 @@ export function startServer(
     try {
       // ---- the API
       if (url.pathname.startsWith("/api/")) {
-        const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length) + url.search, views);
-        return send(status, "application/json", body, { "access-control-allow-origin": "*" });
+        const { status, body, type } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length) + url.search, views, opts.log);
+        return send(status, type ?? "application/json", body, { "access-control-allow-origin": "*" });
       }
 
       // ---- content-addressed images, from our gateway cache (see gateway.ts). Immutable by

@@ -1,6 +1,8 @@
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore } from "./projection.js";
+import type { EventLog } from "./eventlog.js";
 import { addressView, attestationView, listAttestations, listIdentities, search } from "./queries.js";
+import { BUCKETS, METRICS, overview as statsOverview, projects as statsProjects, projectsCsv, series as statsSeries, windowFrom, type Bucket, type Metric, type ProjectRow } from "./stats.js";
 import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
 import type { ViewCache } from "./views.js";
@@ -9,7 +11,7 @@ import type { ViewCache } from "./views.js";
  *  chain per identity - see views.ts. Subpaths are relative, with their query string:
  *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
  *    search?q= · address/<addr> · wallet/<addr> · trustbase/<addr> · attestations[?limit&offset&type&standard&attester&ubid]
- *    attestation/<id>
+ *    attestation/<id> · stats/overview?from&to · stats/series?metric&bucket&from&to&by&project · stats/projects?...[&format=csv]
  *  `identities` and `attestations` with no query string return the whole list, as they always
  *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts. */
 
@@ -21,7 +23,8 @@ export function toJson(value: unknown): string {
 
 export interface ApiResponse {
   status: number;
-  body: string; // JSON
+  body: string; // JSON unless `type` says otherwise
+  type?: string;
 }
 
 export async function handleApi(
@@ -30,6 +33,7 @@ export async function handleApi(
   adapter: Address,
   subpath: string,
   views: ViewCache,
+  log?: EventLog,
 ): Promise<ApiResponse> {
   const [path, query = ""] = subpath.split("?");
   const params = new URLSearchParams(query);
@@ -80,6 +84,38 @@ export async function handleApi(
   }
   if (head === "trustbase" && arg) {
     return { status: 200, body: toJson(await probeTrustBase(client, arg as Address)) };
+  }
+  if (head === "stats") {
+    if (!log) return { status: 503, body: toJson({ error: "stats need the event log; this indexer runs without one" }) };
+    const db = log.connection;
+    const window = windowFrom(params);
+    if (arg === "overview") return { status: 200, body: toJson(statsOverview(db, store, window)) };
+    if (arg === "series") {
+      const metric = (params.get("metric") ?? "identities") as Metric;
+      const bucket = (params.get("bucket") ?? "day") as Bucket;
+      if (!METRICS.includes(metric)) return { status: 400, body: toJson({ error: "unknown metric", metrics: METRICS }) };
+      if (!BUCKETS.includes(bucket)) return { status: 400, body: toJson({ error: "unknown bucket", buckets: BUCKETS }) };
+      const projects = params.get("project")?.split(",").filter((a) => /^0x[0-9a-fA-F]{40}$/.test(a)) as Address[] | undefined;
+      const by = params.get("by") === "type" ? ({ type: true } as const) : projects?.length ? { projects: projects.slice(0, 8) } : undefined;
+      return { status: 200, body: toJson(statsSeries(db, metric, bucket, window, by)) };
+    }
+    if (arg === "projects") {
+      const limit = Math.min(500, Math.max(1, Number(params.get("limit")) || 50));
+      const page = statsProjects(db, store, views, {
+        window,
+        standard: params.get("standard")?.split(",").filter(Boolean),
+        registration: (params.get("registration") as "registered" | "counterfactual" | null) ?? undefined,
+        active: params.get("active") === "1",
+        q: params.get("q") ?? undefined,
+        sort: (params.get("sort") as keyof ProjectRow | null) ?? undefined,
+        dir: (params.get("dir") as "asc" | "desc" | null) ?? undefined,
+        limit: params.get("format") === "csv" ? 10_000 : limit,
+        offset: params.get("format") === "csv" ? 0 : Math.max(0, Number(params.get("offset")) || 0),
+      });
+      if (params.get("format") === "csv") return { status: 200, body: projectsCsv(page.items), type: "text/csv; charset=utf-8" };
+      return { status: 200, body: toJson(page) };
+    }
+    return { status: 404, body: toJson({ error: "not found" }) };
   }
   if (head === "attestation" && arg) {
     const v = attestationView(store, views, arg as Hex);
