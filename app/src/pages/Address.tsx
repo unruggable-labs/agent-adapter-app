@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import { Badge, ControllerCell, Pager, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
 import { api, type Identity } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
+import { usePageParam } from "../lib/url";
 import { displayName, explorerAddressUrl, explorerName, plural, pluralise, STANDARD_NAMES } from "../lib/chain";
 
 const BOUND_PAGE = 25;
@@ -21,7 +22,8 @@ export function AddressPage({ address }: { address: string }) {
   const addr = address.toLowerCase();
   const { data, status } = useLive(() => (isAddress(addr) ? api.address(addr) : null), [addr]);
   // What is bound to this address can be a whole collection, so it pages through the identities endpoint.
-  const [boundOffset, setBoundOffset] = useState(0);
+  const [boundPage, setBoundPage] = usePageParam("bound"); // ?bound=3 pages what is bound here
+  const boundOffset = boundPage * BOUND_PAGE;
   const { data: bound } = useLive(
     () => (isAddress(addr) && data && data.boundHereTotal > 0 ? api.identities({ bound: addr, standard: BOUND_STANDARDS, limit: BOUND_PAGE, offset: boundOffset }) : null),
     [addr, boundOffset, (data?.boundHereTotal ?? 0) > 0],
@@ -95,7 +97,7 @@ export function AddressPage({ address }: { address: string }) {
             <p className="t2 small" style={{ margin: "0 0 8px" }}>This address is a contract that identities are bound to - a collection, or a contract controlled by its owner or admins.</p>
             {bound ? <IdentityTable rows={bound.items.map((id) => ({ id }))} /> : <Spinner />}
             <div className="row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-              <Pager offset={boundOffset} limit={BOUND_PAGE} total={boundTotal} onChange={setBoundOffset} />
+              <Pager offset={boundOffset} limit={BOUND_PAGE} total={boundTotal} onChange={(o) => setBoundPage(o / BOUND_PAGE)} />
             </div>
           </Section>
         )}

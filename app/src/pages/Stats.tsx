@@ -3,6 +3,7 @@ import { ChartLegend, LineChart, type ChartSeries } from "../components/chart";
 import { MultiSelect, Pager, Skeleton, StandardBadge, Tip } from "../components/ui";
 import { statsApi, type ProjectRow, type StatsBucket, type StatsOverview, type StatsSeries } from "../lib/api";
 import { apiBaseFor, explorerOriginFor, NETWORKS, STANDARD_NAMES, type NetworkId } from "../lib/chain";
+import { usePageParam } from "../lib/url";
 
 /**
  * How used is the adapter. On a chain's explorer this shows that chain; on stats.adapterscan.com it
@@ -50,7 +51,8 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
 
   // Keep the view in the URL.
   useEffect(() => {
-    const p = new URLSearchParams();
+    const p = new URLSearchParams(location.search);
+    for (const k of ["range", "bucket", "cumulative", "chains"]) p.delete(k);
     if (range !== "30d") p.set("range", range);
     if (bucketChoice !== "auto") p.set("bucket", bucketChoice);
     if (cumulative) p.set("cumulative", "1");
@@ -245,8 +247,10 @@ function ProjectsTable({ rows, allChains, window }: { rows: (ProjectRow & { chai
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("lastEvent");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(0);
-  useEffect(() => setPage(0), [standards.join(","), registration, active, q, sort, dir, rows?.length]);
+  const [page, setPage] = usePageParam(); // ?page=2 in the address bar, with the rest of the view
+  useEffect(() => {
+    if (page > 0) setPage(0, "replace");
+  }, [standards.join(","), registration, active, q, sort, dir]);
 
   const shown = useMemo(() => {
     let list = rows ?? [];

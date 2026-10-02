@@ -3,6 +3,7 @@ import { Addr, Badge, ControllerCell, Modal, MultiSelect, Pager, registrationOf,
 import type { Hex } from "viem";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, useLive, settle } from "../lib/app-state";
+import { usePageParam } from "../lib/url";
 import { adapterAbi, STANDARD_NAMES } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
@@ -15,7 +16,7 @@ export function AttestationsPage() {
   const [types, setTypes] = useState<string[]>([]);
   const [standards, setStandards] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = usePageParam();
 
   // The indexer filters, orders and slices; each row comes with the identity it is about.
   const attester = mineOnly && signer ? signer.address : undefined;
@@ -23,7 +24,10 @@ export function AttestationsPage() {
     () => api.attestations({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, type: types, standard: standards, attester }),
     [page, types.join(","), standards.join(","), attester],
   );
-  useEffect(() => setPage(0), [types.join(","), standards.join(","), attester]);
+  // A change of filters goes back to the first page without leaving a history entry.
+  useEffect(() => {
+    if (page > 0) setPage(0, "replace");
+  }, [types.join(","), standards.join(","), attester]);
 
   const loading = !data && status === "loading";
   const shown = data?.items ?? [];

@@ -1,13 +1,13 @@
-import { useState } from "react";
 import { Addr, ControllerCell, Pager, registrationOf, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
+import { usePageParam } from "../lib/url";
 
 const PAGE_SIZE = 25;
 
 export function IdentitiesPage() {
   const { overview, navigate } = useApp();
-  const [page, setPage] = useState(0);
+  const [page, setPage] = usePageParam(); // ?page=2 in the address bar, so a page can be shared
   // One page at a time, newest first - the server orders and slices; nothing downloads the registry.
   const { data, status } = useLive(() => api.identities({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
   const total = data?.total ?? overview?.identities ?? 0;
