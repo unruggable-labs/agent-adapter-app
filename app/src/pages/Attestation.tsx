@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Addr, Badge, Section, Spinner, StandardBadge, StatusBadge, Tip, TypeBadge, UbidCell, registrationOf } from "../components/ui";
+import { Addr, Badge, Modal, Section, Spinner, StandardBadge, StatusBadge, Tip, TypeBadge, UbidCell, registrationOf } from "../components/ui";
 import { api, NotFound, type AttestationView } from "../lib/api";
 import { useApp, useLive, settle } from "../lib/app-state";
-import { adapterAbi, displayName, explorerBlockUrl, explorerTxUrl, STANDARD_NAMES, ZERO32 } from "../lib/chain";
+import { adapterAbi, displayName, explorerBlockUrl, explorerTxUrl, ZERO32 } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 import { decodePayload } from "./Attestations";
 import { AddressLink, TxRef } from "./Identity";
@@ -23,6 +23,7 @@ const TYPE_WORD: Record<string, string> = {
 export function AttestationPage({ id }: { id: string }) {
   const { navigate } = useApp();
   const { data: a, status, error } = useLive(() => api.attestation(id), [id]);
+  const [showPreimage, setShowPreimage] = useState(false);
 
   if (!a && status === "loading") return <div className="page"><Spinner /></div>;
   if (!a && error instanceof NotFound)
@@ -115,7 +116,9 @@ export function AttestationPage({ id }: { id: string }) {
         <Section label="On the record">
           <dl className="kv">
             <dt>Attestation id</dt>
-            <dd className="mono">{a.attestationId}</dd>
+            <dd>
+              <button className="agent-link mono" style={{ overflowWrap: "anywhere", textAlign: "left" }} title="What this id is a hash of" onClick={() => setShowPreimage(true)}>{a.attestationId}</button>
+            </dd>
             <dt>Made in</dt>
             <dd className="small">
               {explorerBlockUrl(a.order.blockNumber) ? <a className="agent-link num" href={explorerBlockUrl(a.order.blockNumber)!} target="_blank" rel="noopener noreferrer">block {a.order.blockNumber}</a> : <span className="num">block {a.order.blockNumber}</span>}
@@ -147,15 +150,18 @@ export function AttestationPage({ id }: { id: string }) {
           </dl>
         </Section>
 
-        <Section label="How it verifies">
-          <p className="t2 small" style={{ margin: "0 0 10px" }}>
-            The id is a hash of everything below. The indexer recomputes it from the event's own fields before letting a statement in; one that doesn't match is dropped and never shown. So a statement on this page is one whose id checks out.
+      </div>
+
+      {showPreimage && (
+        <Modal title="What the id is a hash of" onClose={() => setShowPreimage(false)}>
+          <p className="t2 small" style={{ margin: "0 0 12px" }}>
+            The indexer recomputes the id from the event's own fields before letting a statement in; one that doesn't match is dropped and never shown. So a statement on this page is one whose id checks out.
           </p>
           <dl className="kv small">
             <dt>Chain</dt><dd className="num">{a.preimage.chainId}</dd>
             <dt>Adapter</dt><dd><Addr value={a.preimage.adapter} n={42} /></dd>
             <dt>Attester</dt><dd><Addr value={a.preimage.attester} n={42} /></dd>
-            <dt>UBID</dt><dd className="mono">{a.preimage.ubid}</dd>
+            <dt>UBID</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.ubid}</dd>
             <dt>Type</dt><dd className="num">{a.preimage.attestationType} <span className="t3">({a.typeName})</span></dd>
             <dt>Block</dt>
             <dd className="num">
@@ -164,19 +170,10 @@ export function AttestationPage({ id }: { id: string }) {
             </dd>
             <dt><Tip tip="The reference slot, as hashed - zero when the statement is about no particular transaction.">Variant</Tip></dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.variant}</dd>
             <dt>Data</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.data}</dd>
+            <dt>Id</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.attestationId}</dd>
           </dl>
-        </Section>
-
-        {a.target && (
-          <Section label="Also on this profile">
-            <p className="t2 small" style={{ margin: 0 }}>
-              <button className="agent-link" onClick={() => navigate(`/identity/${a.ubid}`)}>{displayName(a.target)}</button> is a {STANDARD_NAMES[a.target.standard]} identity
-              {a.target.reputation.ratingAverage !== null && <> rated {Math.round(a.target.reputation.ratingAverage)}/100 by {a.target.reputation.ratings.length}</>}
-              {" · "}{a.target.reputation.stars} {a.target.reputation.stars === 1 ? "star" : "stars"} · {a.target.reputation.reviews.length} {a.target.reputation.reviews.length === 1 ? "review" : "reviews"} · {a.target.reputation.interactions.length} {a.target.reputation.interactions.length === 1 ? "transaction" : "transactions"}.
-            </p>
-          </Section>
-        )}
-      </div>
+        </Modal>
+      )}
     </div>
   );
 }
