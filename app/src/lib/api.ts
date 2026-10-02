@@ -205,6 +205,74 @@ function qs(params: object): string {
   return `?${p.toString()}`;
 }
 
+// ---- stats (see indexer/src/stats.ts)
+export type StatsBucket = "day" | "week" | "month";
+export type StatsMetric = "identities" | "registrations" | "claims" | "attestations" | "revocations" | "attesters" | "wallets" | "active";
+export interface StatsFigure {
+  value: number;
+  prior: number;
+}
+export interface StatsOverview {
+  from: number;
+  to: number;
+  figures: Record<StatsMetric | "projects", StatsFigure>;
+  totals: { identities: number; registered: number; projects: number; attestations: number; events: number; firstEvent: number | null; lastEvent: number | null; blocksWithoutTimestamp: number };
+}
+export interface StatsPoint {
+  t: string;
+  v: number;
+}
+export interface StatsSeries {
+  metric: StatsMetric;
+  bucket: StatsBucket;
+  from: number;
+  to: number;
+  series: { key: string; points: StatsPoint[] }[];
+}
+export interface ProjectRow {
+  address: Address;
+  name: string | null;
+  image: string | null;
+  website: string | null;
+  standards: string[];
+  identities: number;
+  registered: number;
+  attestations: number;
+  attesters: number;
+  ratingAverage: number | null;
+  ratings: number;
+  stars: number;
+  firstSeen: number | null;
+  lastEvent: number | null;
+  trustVerdict: string | null;
+}
+export interface ProjectsQuery {
+  from: number;
+  to: number;
+  standard?: string[];
+  registration?: "registered" | "counterfactual";
+  active?: boolean;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** The stats endpoints of one indexer, by its API base, since the page asks several chains. */
+export function statsApi(base: string) {
+  const getAt = async <T,>(path: string): Promise<T> => {
+    const res = await fetch(base + path);
+    if (!res.ok) throw new Error(`${path}: ${res.status}`);
+    return res.json();
+  };
+  return {
+    overview: (w: { from: number; to: number }) => getAt<StatsOverview>(`/stats/overview${qs({ from: w.from, to: w.to })}`),
+    series: (metric: StatsMetric, bucket: StatsBucket, w: { from: number; to: number }, by?: { type?: boolean; projects?: string[] }) =>
+      getAt<StatsSeries>(`/stats/series${qs({ metric, bucket, from: w.from, to: w.to, by: by?.type ? "type" : undefined, project: by?.projects })}`),
+    projects: (q: ProjectsQuery) =>
+      getAt<Page<ProjectRow>>(`/stats/projects${qs({ from: q.from, to: q.to, standard: q.standard, registration: q.registration, active: q.active ? 1 : undefined, q: q.q, limit: q.limit ?? 500, offset: q.offset })}`),
+  };
+}
+
 export const api = {
   overview: () => get<Overview>("/overview"),
   /** A page of identities, newest first. */

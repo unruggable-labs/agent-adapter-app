@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 // Two entries, one build: index.html is the explorer, docs.html the documentation site. Caddy
 // serves the same dist to both hostnames and picks the entry by host.
 /** Each network's local indexer port, as serve.ts assigns them. */
-const DEV_PORT: Record<string, number> = { local: 8787, sepolia: 8788, mainnet: 8789, base: 8790, robinhood: 8791 };
+const DEV_PORT: Record<string, number> = { local: 8787, sepolia: 8788, mainnet: 8789, base: 8790, robinhood: 8791, stats: 8788 };
 
 export default defineConfig({
   plugins: [react()],

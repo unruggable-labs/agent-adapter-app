@@ -180,6 +180,15 @@ export function startServer(
           }));
         }
       }
+      if (url.pathname === "/stats" || host.startsWith("stats.")) {
+        const where = host.startsWith("stats.") ? "" : ` on ${chain}`;
+        return send(200, "text/html", withMeta(html, {
+          title: `Adapter usage${where} · Adapterscan`,
+          description: `How used the adapter is${where}: identities created, ERC-8004 registrations, counterfactual claims, attestations and attesters over time, and the projects behind them.`,
+          url: pageUrl,
+          image: `${origin}/og/default.png`,
+        }));
+      }
       if ((m = /^\/attestation\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {
         const v = attestationView(store, views, m[1].toLowerCase() as Hex);
         if (v) {

@@ -96,20 +96,23 @@ export type NetworkId = string;
  * there is no hostname to go by, so VITE_NETWORK picks (local | sepolia | robinhood | base |
  * mainnet | select), Sepolia by default.
  */
-const HOST_NETWORK: Record<string, NetworkId | "select"> = {
+const HOST_NETWORK: Record<string, NetworkId | "select" | "stats"> = {
   "adapterscan.com": "select",
   "www.adapterscan.com": "select",
+  "stats.adapterscan.com": "stats",
   "testnet.adapterscan.com": "sepolia",
   "robinhood.adapterscan.com": "robinhood",
   "base.adapterscan.com": "base",
 };
 const devChoice = import.meta.env.VITE_NETWORK as string | undefined;
-const chosen: NetworkId | "select" = import.meta.env.DEV
-  ? devChoice === "select" ? "select" : devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
+const chosen: NetworkId | "select" | "stats" = import.meta.env.DEV
+  ? devChoice === "select" || devChoice === "stats" ? devChoice : devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
   : (HOST_NETWORK[location.hostname] ?? "sepolia");
 /** True on the apex: show the chain picker, not an explorer. */
 export const IS_CHAIN_SELECT = chosen === "select";
-export const networkId: NetworkId = chosen === "select" ? "sepolia" : chosen;
+/** True on stats.adapterscan.com: the usage page across every chain, no explorer around it. */
+export const IS_STATS_HOST = chosen === "stats";
+export const networkId: NetworkId = chosen === "select" || chosen === "stats" ? "sepolia" : chosen;
 export const NETWORK = NETWORKS[networkId];
 /** The networks the picker offers: Robinhood first, then the rest live-before-pending, in declaration order. */
 const PICKER_ORDER = ["robinhood", "sepolia", "base", "mainnet"];
@@ -118,6 +121,20 @@ export const PUBLIC_NETWORKS = Object.entries(NETWORKS)
   .sort(([a], [b]) => PICKER_ORDER.indexOf(a) - PICKER_ORDER.indexOf(b));
 
 export const RPC_URL = NETWORK.rpcUrl;
+
+/** A network's API from any host: its own hostname in production, its dev port locally. The
+ *  stats page asks every chain this way and merges the answers. */
+export function apiBaseFor(id: NetworkId): string {
+  const n = NETWORKS[id];
+  return import.meta.env.DEV || n.personaWrites ? n.apiBase : `https://${n.host}/api`;
+}
+/** The explorer for a network, for links out of the cross-chain stats page. */
+export function explorerOriginFor(id: NetworkId): string {
+  const n = NETWORKS[id];
+  return import.meta.env.DEV ? "" : `https://${n.host}`;
+}
+/** The chains the stats page can show: every live public network. */
+export const STATS_NETWORKS: NetworkId[] = PUBLIC_NETWORKS.filter(([, n]) => n.status === "live").map(([id]) => id);
 
 /** Anvil's funded demo accounts — the app's persona switcher. A real deployment swaps this
  *  for an injected-wallet connector; every write path goes through the same `actor` object. */

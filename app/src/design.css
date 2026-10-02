@@ -768,6 +768,30 @@ input, textarea, select { font: inherit; color: inherit; }
 .chain-blurb { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
 .chain-host { font-size: 11px; color: var(--text-3); }
 
+/* ------------------------------------------------------------------ stats */
+.stats-tiles { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 960px) { .stats-tiles { grid-template-columns: repeat(2, 1fr); } }
+.stats-bar { display: flex; height: 50px; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.chart-grid { stroke: var(--border); stroke-width: 1; }
+.chart-cursor { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-label { fill: var(--text-3); font-size: 11px; font-family: var(--font); font-variant-numeric: tabular-nums; }
+.chart-empty { display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 12.5px; }
+.chart-tip {
+  position: absolute; top: 8px; transform: translateX(-50%); pointer-events: none; z-index: 2;
+  background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+  padding: 6px 10px; font-size: 11.5px; box-shadow: var(--shadow-1); white-space: nowrap;
+}
+.chart-tip-date { color: var(--text-3); margin-bottom: 2px; }
+.chart-tip-row { display: flex; align-items: center; gap: 6px; }
+.chart-tip-row b { margin-left: auto; padding-left: 12px; }
+.chart-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
+.chart-legend { gap: 12px; font-size: 11.5px; color: var(--text-2); }
+.chart-legend-item { gap: 6px; }
+.th-sort { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; }
+.th-sort.is-on, .th-sort:hover { color: var(--text-1); }
+
 /* ------------------------------------------------------------------ wordmark */
 .wordmark { font-family: var(--mono); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-1); }
 .wordmark-suffix { color: var(--text-3); }
@@ -858,6 +882,8 @@ input, textarea, select { font: inherit; color: inherit; }
   .tip-bubble { max-width: min(320px, calc(100vw - 16px)); }
 
   .docs-page { font-size: 14px; }
+  .stats-tiles { grid-template-columns: 1fr 1fr; }
+  .stats-bar { height: auto; flex-wrap: wrap; padding: 8px 12px; }
   .docs-pager { flex-direction: column; gap: 8px; }
   .chains-card { padding: 20px 16px; }
 }

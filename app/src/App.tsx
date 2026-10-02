@@ -15,6 +15,7 @@ import { AttestationsPage } from "./pages/Attestations";
 import { CreatePage } from "./pages/Create";
 import { IdentitiesPage } from "./pages/Identities";
 import { IdentityPage } from "./pages/Identity";
+import { StatsPage } from "./pages/Stats";
 
 function NavItem({ to, label, count }: { to: string; label: string; count?: number }) {
   const { route, navigate } = useApp();
@@ -136,6 +137,7 @@ function Shell() {
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/attestation/")) page = <AttestationPage id={route.split("/")[2]} />;
   else if (route.startsWith("/create")) page = <CreatePage />;
+  else if (route.startsWith("/stats")) page = <StatsPage chains={[networkId]} />;
 
   return (
     <div className={`shell${navOpen ? " nav-open" : ""}`}>
@@ -159,6 +161,9 @@ function Shell() {
         <div className="nav-label">Registry</div>
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
+
+        <div className="nav-label">Usage</div>
+        <NavItem to="/stats" label="Stats" />
 
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>

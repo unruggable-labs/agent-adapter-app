@@ -24,6 +24,9 @@ What runs where:
   log at the fork point and refolds. The file is only a copy of the chain: delete it
   to re-index from the cutover block. `/etc/adapter.env` is optional
   (`SEPOLIA_RPC_URL=` to use a dedicated RPC).
+- `stats.adapterscan.com` is the usage page across every chain: an A record to the box, the
+  Caddy block in `Caddyfile.adapter` (applied by `setup.sh`), nothing else - the page asks each
+  chain's API itself.
 - Wallet connection is Reown AppKit (the WalletConnect modal). It needs a project id
   from https://cloud.reown.com, free. Put it in `/srv/adapter/app/.env.production.local`
   as `VITE_WC_PROJECT_ID=…` once; Vite reads that file at build time, the deploy leaves it

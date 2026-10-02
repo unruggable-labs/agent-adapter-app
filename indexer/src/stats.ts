@@ -274,7 +274,10 @@ export function projects(db: DatabaseSync, store: ProjectionStore, views: ViewCa
 
   let rows: ProjectRow[] = counts.map((c) => {
     const p = byProject.get(c.address);
-    const sample = p ? store.identities.get(p.sample) : undefined;
+    // Name, picture and trust base are per address, so any identity of the project whose chain
+    // facts the worker has read will do - right after a boot that is the newest, not the oldest.
+    const read = p?.ubids.find((u) => views.advisoryOf(u) !== null) ?? p?.sample;
+    const sample = read ? store.identities.get(read) : undefined;
     const summary = sample ? views.summary(sample) : null;
     const advisory = sample ? views.advisoryOf(sample.ubid) : null;
     let ratingSum = 0;

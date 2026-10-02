@@ -21,7 +21,9 @@ tooltips kept to the fewest sentences that do the job.
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
   API core; `views.ts` = identity views served from memory, with a worker that reads the chain
   facts around each identity (holder, name, trust base) on its own budget - no request reads the
-  chain per identity. `server.ts` also serves the built
+  chain per identity; `stats.ts` = usage over the event log's fact columns and block timestamps for
+  `/api/stats/*` and the `/stats` page (stats.adapterscan.com shows every chain combined, the page
+  fanning out to each chain's API). `server.ts` also serves the built
   app's HTML for page paths with title/description/social-card tags filled in (`meta.ts`), the
   card PNGs at `/og/*` (`og.ts`, satori + resvg), `robots.txt` and `sitemap.xml` - Caddy sends
   non-file paths to it. The app uses path routes (`/identity/<ubid>`), not hash routes.
