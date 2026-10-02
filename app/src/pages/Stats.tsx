@@ -338,7 +338,7 @@ type SortKey = "name" | "identities" | "registered" | "attestations" | "ratingAv
 /** The two ways an identity exists. A tick means the project has identities of that kind; both ticked means it has both. */
 type RegistrationKind = "counterfactual" | "registered";
 const REGISTRATION_KINDS: RegistrationKind[] = ["counterfactual", "registered"];
-const REGISTRATION_LABEL: Record<RegistrationKind, string> = { counterfactual: "Counterfactual", registered: "On-chain (ERC-8004)" };
+const REGISTRATION_LABEL: Record<RegistrationKind, string> = { counterfactual: "Counterfactual", registered: "On-chain" };
 const hasKind = (r: ProjectRow, k: RegistrationKind) => (k === "registered" ? r.registered > 0 : r.registered < r.identities);
 
 function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { rows: (ProjectRow & { chain: NetworkId })[] | null; allChains: boolean; window: { from: number; to: number }; compare: Pick[]; onToggleCompare: (p: Pick) => void }) {
