@@ -397,7 +397,7 @@ function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { 
         <div className="row wrap" style={{ gap: 8 }}>
           <input className="input" style={{ width: 200 }} placeholder="Name or address" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search projects" />
           <div style={{ width: 180 }}>
-            <MultiSelect options={STANDARD_NAMES} values={standards} onChange={setStandards} placeholder="Any standard" render={(n) => <StandardBadge name={n} />} />
+            <MultiSelect options={STANDARD_NAMES} values={standards} onChange={setStandards} placeholder="Any standard" render={(n) => <StandardBadge name={n} />} floating />
           </div>
           <select className="select" style={{ width: "auto" }} value={registration} onChange={(e) => setRegistration(e.target.value as typeof registration)} aria-label="Registration">
             <option value="">Any registration</option>

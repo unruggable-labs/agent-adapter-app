@@ -284,8 +284,10 @@ export function StatusBadge({ id }: { id: Identity }) {
 
 /**
  * A multi-select dropdown. The trigger reads as a select and summarises the choice; opening it
- * unfolds a checklist in flow, so it works inside a scrolling dialog without being clipped.
- * An empty selection means "no filter" and the caller words that via `placeholder`.
+ * unfolds a checklist. In flow by default, so it works inside a scrolling dialog without being
+ * clipped; `floating` drops the list over whatever is below instead, for a filter row above a
+ * table, and closes it on a click anywhere else. An empty selection means "no filter" and the
+ * caller words that via `placeholder`.
  */
 export function MultiSelect<T extends string>({
   options,
@@ -293,6 +295,7 @@ export function MultiSelect<T extends string>({
   onChange,
   placeholder,
   render,
+  floating = false,
 }: {
   options: T[];
   values: T[];
@@ -300,12 +303,27 @@ export function MultiSelect<T extends string>({
   placeholder: string;
   /** How one option looks, in the list and in the summary. Defaults to the plain value. */
   render?: (v: T) => ReactNode;
+  floating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!floating || !open) return;
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [floating, open]);
   const show = render ?? ((v: T) => v);
   const toggle = (v: T) => onChange(values.includes(v) ? values.filter((x) => x !== v) : options.filter((o) => o === v || values.includes(o)));
   return (
-    <div className={`ms${open ? " is-open" : ""}`}>
+    <div className={`ms${open ? " is-open" : ""}${floating ? " ms-floating" : ""}`} ref={box}>
       <button type="button" className="select ms-trigger" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="row wrap" style={{ gap: 4, minWidth: 0 }}>
           {values.length === 0 ? <span className="t3">{placeholder}</span> : values.map((v) => <span key={v}>{show(v)}</span>)}

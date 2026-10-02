@@ -726,6 +726,9 @@ input, textarea, select { font: inherit; color: inherit; }
 .ms-option { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
 .ms-option:hover { background: var(--surface-2); }
 .ms-option input { margin: 0; accent-color: var(--accent); }
+/* Floating: the list drops over the page instead of pushing it down - for a filter row above a table. */
+.ms-floating { position: relative; }
+.ms-floating .ms-list { position: absolute; top: calc(100% + 4px); left: 0; min-width: 100%; z-index: 150; border-color: var(--border-strong); box-shadow: 0 12px 36px rgba(10, 12, 18, 0.18); }
 
 
 /* ------------------------------------------------------------------ docs site */
