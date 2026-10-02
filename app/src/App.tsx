@@ -7,7 +7,7 @@ import { SearchBar } from "./components/search";
 import { MenuButton, NavBackdrop, NavClose, useNavDrawer } from "./components/shell";
 import { Modal } from "./components/ui";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, DOCS_URL, NETWORK, networkId, shortHex } from "./lib/chain";
+import { ACTORS, DOCS_URL, NETWORK, networkId, shortHex, STATS_URL } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
 import { AttestationPage } from "./pages/Attestation";
@@ -162,14 +162,12 @@ function Shell() {
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
 
-        <div className="nav-label">Usage</div>
-        <NavItem to="/stats" label="Stats" />
-
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
             {theme === "light" ? "◐ Dark mode" : "◑ Light mode"}
           </button>
           <a className="sidebar-link" href={DOCS_URL}>Documentation ↗</a>
+          <a className="sidebar-link" href={STATS_URL}>Stats ↗</a>
         </div>
       </aside>
       <main className="main">
