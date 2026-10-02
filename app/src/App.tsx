@@ -18,10 +18,12 @@ import { IdentityPage } from "./pages/Identity";
 
 function NavItem({ to, label, count }: { to: string; label: string; count?: number }) {
   const { route, navigate } = useApp();
-  // Identities is home: "/" and every profile page light it up.
+  // Identities is home: "/" and every profile page light it up. A statement's page lights up
+  // Attestations, the list it was opened from.
   const active =
     route === to ||
     (to === "/identities" && (route === "/" || route.startsWith("/identity"))) ||
+    (to === "/attestations" && route.startsWith("/attestation")) ||
     (to !== "/identities" && route.startsWith(to));
   return (
     <button className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(to)}>
