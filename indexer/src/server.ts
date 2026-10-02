@@ -7,7 +7,8 @@ import type { Ingester } from "./ingest.js";
 import { addressCard, defaultCard, identityCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import type { ProjectionStore } from "./projection.js";
-import { handleApi, identityView } from "./service.js";
+import { handleApi } from "./service.js";
+import { ViewCache } from "./views.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const legacyUi = join(here, "..", "ui", "index.html");
@@ -49,6 +50,9 @@ export function startServer(
   opts: { networkLabel?: string } = {},
 ) {
   if (ingester) setInterval(() => ingester.sync().catch(() => {}), pollMs);
+  // Chain facts around each identity are read by this worker, never on a request.
+  const views = new ViewCache(store, client, { log: (line) => console.log(line) });
+  views.start();
   const chain = opts.networkLabel ?? `chain ${store.chainId}`;
   const chainCard = { id: Number(store.chainId), label: chain };
 
@@ -73,7 +77,7 @@ export function startServer(
     try {
       // ---- the API
       if (url.pathname.startsWith("/api/")) {
-        const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length));
+        const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length), views);
         return send(status, "application/json", body, { "access-control-allow-origin": "*" });
       }
 
@@ -86,7 +90,7 @@ export function startServer(
       if ((m = /^\/og\/identity\/(0x[0-9a-fA-F]{64})\.png$/.exec(url.pathname))) {
         const id = store.identities.get(m[1].toLowerCase() as Hex);
         if (!id) return send(404, "text/plain", "no such identity");
-        const v = await identityView(store, client, id);
+        const v = views.view(id);
         const png = await cached(`identity:${id.ubid}:${id.lastEvent?.blockNumber ?? 0}:${v.reputation.stars}:${v.reputation.ratings.length}:${v.reputation.reviews.length}:${v.reputation.interactions.length}`, () =>
           identityCard(host, chainCard, {
             name: v.agentName ?? v.subjectLabel,
@@ -145,7 +149,7 @@ export function startServer(
       if ((m = /^\/identity\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {
         const id = store.identities.get(m[1].toLowerCase() as Hex);
         if (id) {
-          const v = await identityView(store, client, id);
+          const v = views.view(id);
           const name = v.agentName ?? v.subjectLabel;
           const rep = v.reputation;
           const bits = [

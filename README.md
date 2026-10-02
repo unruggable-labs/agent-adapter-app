@@ -8,7 +8,7 @@ adapter's on-chain identity, wallet-resolution, and attestation surfaces.
 
 - **`indexer/`** — the projection engine (the adapter is emit-only, so the indexer is the
   database), REST API, local anvil demo, and `SPEC.md` documenting the projection rules.
-  Runs as a Node service (`serve.ts`) or as the Vercel function in `app/api/`.
+  Runs as a Node service (`serve.ts`), one per chain - see `deploy/`.
 - **`app/`** — the UI: landing, explorer, profiles, create wizard, wallet page. Static
   Vite build; dev-only persona flows for the local devnet.
 - **`deploy/`** — production config for the ens8004 Hetzner box (systemd + Caddy + the

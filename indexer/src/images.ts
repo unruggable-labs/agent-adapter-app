@@ -37,8 +37,18 @@ export function imageFor(client: PublicClient, id: IdentityState): string | null
   return cardFor(client, id)?.image ?? null;
 }
 
+/** The card as last resolved, stale or not, and nothing started if it hasn't been: the read for a
+ *  request path. The view worker calls `cardFor` to resolve and refresh. */
+export function cardIfCached(id: IdentityState): Card | null {
+  return cache.get(cardKey(id))?.value ?? null;
+}
+
+function cardKey(id: IdentityState): string {
+  return `${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
+}
+
 export function cardFor(client: PublicClient, id: IdentityState): Card | null {
-  const key = `${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
+  const key = cardKey(id);
   const hit = cache.get(key);
   const fresh = hit && Date.now() - hit.at < (hit.value ? HIT_TTL_MS : MISS_TTL_MS);
   if (fresh) return hit.value;

@@ -12,7 +12,8 @@ import { ACCOUNT_STANDARDS } from "./ubid.js";
 
 const nameCache = new Map<Address, string | null>();
 
-async function contractName(client: PublicClient, address: Address): Promise<string | null> {
+/** The collection or contract's `name()`, read once per address and kept for the life of the process. */
+export async function contractName(client: PublicClient, address: Address): Promise<string | null> {
   const key = address.toLowerCase() as Address;
   if (nameCache.has(key)) return nameCache.get(key)!;
   let name: string | null = null;
@@ -55,11 +56,12 @@ function decodeUtf8Metadata(value: `0x${string}` | undefined): string | null {
   }
 }
 
-export async function labelsFor(
-  client: PublicClient,
+/** The labels, given the contract's name (or null while it is unknown). No chain reads: callers
+ *  pass the name the worker fetched, so a request never waits on one. */
+export function labelsFrom(
+  name: string | null,
   id: IdentityState,
-): Promise<{ subjectLabel: string; agentName: string | null; contractName: string | null }> {
-  const name = await contractName(client, id.boundAddress);
+): { subjectLabel: string; agentName: string | null; contractName: string | null } {
   const subjectLabel = ACCOUNT_STANDARDS.has(id.standard)
     ? (name ?? `Account ${short(id.boundAddress)}`)
     : `${name ?? short(id.boundAddress)} #${shortTokenId(id.tokenId)}`;

@@ -16,7 +16,9 @@ tooltips kept to the fewest sentences that do the job.
   emit-only; the indexer IS the database — state replays from chain events, no persistence).
   `SPEC.md` documents the projection rules. `serve.ts` = standalone chain indexer;
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
-  API core, also used by the Vercel function in `app/api/`. `server.ts` also serves the built
+  API core; `views.ts` = identity views served from memory, with a worker that reads the chain
+  facts around each identity (holder, name, trust base) on its own budget - no request reads the
+  chain per identity. `server.ts` also serves the built
   app's HTML for page paths with title/description/social-card tags filled in (`meta.ts`), the
   card PNGs at `/og/*` (`og.ts`, satori + resvg), `robots.txt` and `sitemap.xml` - Caddy sends
   non-file paths to it. The app uses path routes (`/identity/<ubid>`), not hash routes.
