@@ -62,8 +62,10 @@ export function LineChart({ series, height = 280, emptyText = "Nothing in this w
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(W / 110))));
   const dates = series[0]?.points ?? [];
 
+  // The measured wrapper is always rendered, empty state included, so the width is known by the
+  // time the first data arrives.
   if (n === 0 || max === 0) {
-    return <div className="chart-empty" style={{ height }}>{emptyText}</div>;
+    return <div className="chart" style={{ height }} ref={box}><div className="chart-empty" style={{ height }}>{emptyText}</div></div>;
   }
 
   return (
