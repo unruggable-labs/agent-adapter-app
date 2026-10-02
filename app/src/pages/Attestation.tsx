@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Addr, Badge, Section, Spinner, StandardBadge, StatusBadge, TypeBadge, UbidCell, registrationOf } from "../components/ui";
+import { Addr, Badge, Section, Spinner, StandardBadge, StatusBadge, Tip, TypeBadge, UbidCell, registrationOf } from "../components/ui";
 import { api, NotFound, type AttestationView } from "../lib/api";
 import { useApp, useLive, settle } from "../lib/app-state";
-import { adapterAbi, displayName, explorerBlockUrl, explorerTxUrl, STANDARD_NAMES } from "../lib/chain";
+import { adapterAbi, displayName, explorerBlockUrl, explorerTxUrl, STANDARD_NAMES, ZERO32 } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 import { decodePayload } from "./Attestations";
 import { AddressLink, TxRef } from "./Identity";
@@ -142,8 +142,8 @@ export function AttestationPage({ id }: { id: string }) {
             </dd>
             <dt>Raw payload</dt>
             <dd className="mono small" style={{ overflowWrap: "anywhere" }}>{a.data === "0x" ? <span className="t3">empty</span> : a.data}</dd>
-            <dt>Variant slot</dt>
-            <dd className="mono small" style={{ overflowWrap: "anywhere" }}>{a.variant}</dd>
+            <dt><Tip tip="The contract's 32-byte variant slot: hashed into the id, never interpreted by the contract. The explorer uses it for the transaction a statement is about. All zeros means none.">Reference</Tip></dt>
+            <dd className="mono small" style={{ overflowWrap: "anywhere" }}>{a.variant === ZERO32 ? <span className="t3">none</span> : a.variant}</dd>
           </dl>
         </Section>
 
@@ -162,7 +162,7 @@ export function AttestationPage({ id }: { id: string }) {
               {a.preimage.blockNumber}
               {a.preimage.blockNumber !== a.order.blockNumber && <span className="t3"> · the contract's block.number here is the parent chain's block, not the log's ({a.order.blockNumber})</span>}
             </dd>
-            <dt>Variant</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.variant}</dd>
+            <dt><Tip tip="The reference slot, as hashed - zero when the statement is about no particular transaction.">Variant</Tip></dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.variant}</dd>
             <dt>Data</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.data}</dd>
           </dl>
         </Section>
