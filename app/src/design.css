@@ -791,6 +791,9 @@ input, textarea, select { font: inherit; color: inherit; }
 .chart-legend-item { gap: 6px; }
 .th-sort { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; }
 .th-sort.is-on, .th-sort:hover { color: var(--text-1); }
+.compare-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.compare-toggle input { margin: 0; accent-color: var(--accent); }
+.table tr.is-compared td { background: var(--accent-bg); }
 
 /* ------------------------------------------------------------------ wordmark */
 .wordmark { font-family: var(--mono); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-1); }

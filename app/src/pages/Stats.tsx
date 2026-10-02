@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChartLegend, LineChart, type ChartSeries } from "../components/chart";
+import { ChainIcon } from "../components/chains";
 import { MultiSelect, Pager, Skeleton, StandardBadge, Tip } from "../components/ui";
 import { statsApi, type ProjectRow, type StatsBucket, type StatsOverview, type StatsSeries } from "../lib/api";
 import { apiBaseFor, explorerOriginFor, NETWORKS, STANDARD_NAMES, type NetworkId } from "../lib/chain";
@@ -26,6 +27,16 @@ interface Loaded {
   failed: NetworkId[];
 }
 
+/** A project picked for the chart: which chain it is on and its bound address. In the URL as chain:address. */
+interface Pick {
+  chain: NetworkId;
+  address: string;
+}
+const MAX_COMPARE = 6;
+/** One hue per compared project, the app's named palette, in an order that stays apart on a chart. */
+const COMPARE_COLORS = ["var(--c-blue)", "var(--c-pink)", "var(--c-orange)", "var(--c-violet)", "var(--c-teal)", "var(--c-amber)"];
+const pickKey = (p: Pick) => `${p.chain}:${p.address}`;
+
 function readUrl() {
   const p = new URLSearchParams(location.search);
   return {
@@ -33,6 +44,12 @@ function readUrl() {
     bucket: (["day", "week", "month"].includes(p.get("bucket") ?? "") ? p.get("bucket") : "auto") as StatsBucket | "auto",
     chains: p.get("chains")?.split(",").filter(Boolean) ?? null,
     cumulative: p.get("cumulative") === "1",
+    compare: (p.get("project")?.split(",") ?? [])
+      .map((s) => {
+        const [chain, address] = s.includes(":") ? s.split(":") : [null, s];
+        return { chain, address: address?.toLowerCase() };
+      })
+      .filter((x): x is { chain: string | null; address: string } => !!x.address && /^0x[0-9a-f]{40}$/.test(x.address)),
   };
 }
 
@@ -45,6 +62,11 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
   const [chains, setChains] = useState<NetworkId[]>(() =>
     allChains ? (initial.chains?.filter((c) => offered.includes(c)) ?? offered.filter((c) => !NETWORKS[c].chain.testnet)) : offered,
   );
+  // Projects on the chart. On a single chain's page the URL carries just the address.
+  const [compare, setCompare] = useState<Pick[]>(() =>
+    initial.compare.map((c) => ({ chain: (c.chain && offered.includes(c.chain) ? c.chain : offered[0]) as NetworkId, address: c.address })).slice(0, MAX_COMPARE),
+  );
+  const [compareSeries, setCompareSeries] = useState<Record<string, StatsSeries["series"][number]>>({});
   const [data, setData] = useState<Loaded | null>(null);
   const [firstEvent, setFirstEvent] = useState<number | null>(null);
   const [error, setError] = useState(false);
@@ -52,14 +74,15 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
   // Keep the view in the URL.
   useEffect(() => {
     const p = new URLSearchParams(location.search);
-    for (const k of ["range", "bucket", "cumulative", "chains"]) p.delete(k);
+    for (const k of ["range", "bucket", "cumulative", "chains", "project"]) p.delete(k);
     if (range !== "30d") p.set("range", range);
     if (bucketChoice !== "auto") p.set("bucket", bucketChoice);
     if (cumulative) p.set("cumulative", "1");
     if (allChains) p.set("chains", chains.join(","));
+    if (compare.length) p.set("project", compare.map((c) => (allChains ? pickKey(c) : c.address)).join(","));
     const qs = p.toString();
     history.replaceState(null, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [range, bucketChoice, cumulative, chains, allChains]);
+  }, [range, bucketChoice, cumulative, chains, allChains, compare]);
 
   const now = Math.floor(Date.now() / 1000 / 3600) * 3600; // to the hour, so the URL and the cache stay stable for a while
   const from = range === "7d" ? now - 7 * DAY : range === "30d" ? now - 30 * DAY : range === "90d" ? now - 90 * DAY : firstEvent ?? now - 365 * DAY;
@@ -113,6 +136,30 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     };
   }, [chains.join(","), bucket, from, now]);
 
+  // One identities series per compared project, from its own chain.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const out: Record<string, StatsSeries["series"][number]> = {};
+      const byChain = new Map<NetworkId, string[]>();
+      for (const c of compare) byChain.set(c.chain, [...(byChain.get(c.chain) ?? []), c.address]);
+      await Promise.all(
+        [...byChain].map(async ([chain, addrs]) => {
+          try {
+            const r = await statsApi(apiBaseFor(chain)).series("identities", bucket, window, { projects: addrs });
+            for (const sr of r.series) if (sr.key !== "total") out[`${chain}:${sr.key}`] = sr;
+          } catch {
+            // the chain didn't answer; its lines stay off until the next change of view
+          }
+        }),
+      );
+      if (!cancelled) setCompareSeries(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [compare.map(pickKey).join(","), bucket, from, now]);
+
   const figures = useMemo(() => sumFigures(data ? Object.values(data.overview) : []), [data]);
   const chart = useMemo<ChartSeries[]>(() => {
     if (!data) return [];
@@ -121,12 +168,26 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     const claims = sum(data.claims);
     const regs = sum(data.registrations);
     const run = (pts: { t: string; v: number }[]) => (cumulative ? pts.reduce<{ t: string; v: number }[]>((acc, p) => [...acc, { t: p.t, v: (acc[acc.length - 1]?.v ?? 0) + p.v }], []) : pts);
-    return [
-      { key: "identities", label: "Identities", color: "var(--accent)", points: run(total) },
-      { key: "claims", label: "Counterfactual claims", color: "var(--c-amber)", points: run(claims) },
-      { key: "registrations", label: "ERC-8004 registrations", color: "var(--c-emerald)", points: run(regs) },
-    ];
-  }, [data, cumulative]);
+    if (compare.length === 0)
+      return [
+        { key: "identities", label: "Identities", color: "var(--accent)", points: run(total) },
+        { key: "claims", label: "Counterfactual claims", color: "var(--c-amber)", points: run(claims) },
+        { key: "registrations", label: "ERC-8004 registrations", color: "var(--c-emerald)", points: run(regs) },
+      ];
+    // Comparing: the whole as a quiet line, each project in its own colour, on the same buckets as the total.
+    const lines: ChartSeries[] = [{ key: "identities", label: "All identities", color: "var(--text-3)", points: run(total) }];
+    compare.forEach((c, i) => {
+      const sr = compareSeries[pickKey(c)];
+      const byT = new Map((sr?.points ?? []).map((p) => [p.t, p.v]));
+      const row = data.projects.find((r) => r.chain === c.chain && r.address === c.address);
+      const label = `${row?.name ?? `${c.address.slice(0, 8)}…${c.address.slice(-4)}`}${allChains ? ` · ${NETWORKS[c.chain].label}` : ""}`;
+      lines.push({ key: pickKey(c), label, color: COMPARE_COLORS[i % COMPARE_COLORS.length], points: run(total.map((p) => ({ t: p.t, v: byT.get(p.t) ?? 0 }))) });
+    });
+    return lines;
+  }, [data, cumulative, compare, compareSeries, allChains]);
+
+  const toggleCompare = (pick: Pick) =>
+    setCompare((cur) => (cur.some((c) => pickKey(c) === pickKey(pick)) ? cur.filter((c) => pickKey(c) !== pickKey(pick)) : cur.length >= MAX_COMPARE ? cur : [...cur, pick]));
 
   return (
     <div className="page page-wide fade-in">
@@ -159,7 +220,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
             const on = chains.includes(c);
             return (
               <button key={c} className={`btn btn-sm${on ? " is-active" : ""}`} onClick={() => setChains(on ? chains.filter((x) => x !== c) : [...chains, c])}>
-                {NETWORKS[c].label}{NETWORKS[c].chain.testnet && <span className="t3"> · testnet</span>}
+                <ChainIcon id={c} size={14} />{NETWORKS[c].label}{NETWORKS[c].chain.testnet && <span className="t3"> · testnet</span>}
               </button>
             );
           })}
@@ -184,16 +245,29 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="row spread wrap" style={{ marginBottom: 8 }}>
-          <div className="section-label" style={{ margin: 0 }}>Identities per {bucket}{cumulative ? ", cumulative" : ""}</div>
+          <div className="section-label" style={{ margin: 0 }}>
+            Identities per {bucket}{cumulative ? ", cumulative" : ""}{compare.length > 0 && ` · ${compare.length === 1 ? "one project" : `${compare.length} projects`} against the whole`}
+          </div>
           <ChartLegend series={chart} />
         </div>
+        {compare.length > 0 && (
+          <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+            {chart.slice(1).map((line, i) => (
+              <span key={line.key} className="badge badge-outline" style={{ height: 24, gap: 6 }}>
+                <span className="chart-swatch" style={{ background: line.color }} />{line.label}
+                <button className="t3" aria-label={`Stop comparing ${line.label}`} title="Remove from the chart" onClick={() => toggleCompare(compare[i])}>✕</button>
+              </span>
+            ))}
+            <button className="btn btn-ghost btn-sm" onClick={() => setCompare([])}>Clear</button>
+          </div>
+        )}
         {data ? <LineChart series={chart} /> : <div className="chart-empty" style={{ height: 280 }}><Skeleton w="40%" /></div>}
         {data && Object.values(data.overview).some((o) => o.totals.blocksWithoutTimestamp > 0) && (
           <p className="hint" style={{ margin: "8px 0 0" }}>Some older blocks are still being dated by the indexer; they join the chart as that finishes.</p>
         )}
       </div>
 
-      <ProjectsTable rows={data?.projects ?? null} allChains={allChains} window={window} />
+      <ProjectsTable rows={data?.projects ?? null} allChains={allChains} window={window} compare={compare} onToggleCompare={toggleCompare} />
 
       {data && (
         <p className="hint" style={{ marginTop: 12 }}>
@@ -240,7 +314,9 @@ function Tile({ label, tip, figure, loading }: { label: string; tip: string; fig
 
 type SortKey = "name" | "identities" | "registered" | "attestations" | "ratingAverage" | "stars" | "firstSeen" | "lastEvent";
 
-function ProjectsTable({ rows, allChains, window }: { rows: (ProjectRow & { chain: NetworkId })[] | null; allChains: boolean; window: { from: number; to: number } }) {
+function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { rows: (ProjectRow & { chain: NetworkId })[] | null; allChains: boolean; window: { from: number; to: number }; compare: Pick[]; onToggleCompare: (p: Pick) => void }) {
+  const compared = new Set(compare.map(pickKey));
+  const full = compare.length >= MAX_COMPARE;
   const [standards, setStandards] = useState<string[]>([]);
   const [registration, setRegistration] = useState<"" | "registered" | "counterfactual">("");
   const [active, setActive] = useState(false);
@@ -315,6 +391,7 @@ function ProjectsTable({ rows, allChains, window }: { rows: (ProjectRow & { chai
         <table className="table">
           <thead>
             <tr>
+              <th><Tip tip={`Tick projects to draw them on the chart above, up to ${MAX_COMPARE} at once. One shows its growth against the whole; two or more compare.`}>Chart</Tip></th>
               {head("name", "Project")}
               {allChains && <th>Chain</th>}
               <th>Standard</th>
@@ -325,14 +402,22 @@ function ProjectsTable({ rows, allChains, window }: { rows: (ProjectRow & { chai
               {head("stars", "Stars", "td-right")}
               {head("firstSeen", "First seen")}
               {head("lastEvent", "Last event")}
-              <th>Trust base</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((r) => {
               const href = `${explorerOriginFor(r.chain)}/address/${r.address}`;
+              const key = `${r.chain}:${r.address}`;
+              const on = compared.has(key);
+              const color = on ? COMPARE_COLORS[compare.findIndex((c) => pickKey(c) === key) % COMPARE_COLORS.length] : undefined;
               return (
-                <tr key={`${r.chain}:${r.address}`}>
+                <tr key={key} className={on ? "is-compared" : undefined}>
+                  <td>
+                    <label className="compare-toggle" title={!on && full ? `Up to ${MAX_COMPARE} projects on the chart - remove one first` : on ? "On the chart" : "Draw on the chart"}>
+                      <input type="checkbox" checked={on} disabled={!on && full} onChange={() => onToggleCompare({ chain: r.chain, address: r.address })} aria-label={`Compare ${r.name ?? r.address}`} />
+                      {on && <span className="chart-swatch" style={{ background: color }} />}
+                    </label>
+                  </td>
                   <td>
                     <a className="row" style={{ gap: 8 }} href={href}>
                       {r.image ? <img className="avatar-img" src={r.image} alt="" width={24} height={24} style={{ width: 24, height: 24 }} /> : <span className="search-item-addr" aria-hidden>@</span>}
@@ -342,7 +427,7 @@ function ProjectsTable({ rows, allChains, window }: { rows: (ProjectRow & { chai
                       </span>
                     </a>
                   </td>
-                  {allChains && <td><span className="badge badge-outline">{NETWORKS[r.chain].label}</span></td>}
+                  {allChains && <td><span className="badge badge-outline" style={{ gap: 5 }}><ChainIcon id={r.chain} size={13} />{NETWORKS[r.chain].label}</span></td>}
                   <td><span className="row wrap" style={{ gap: 4 }}>{r.standards.map((s) => <StandardBadge key={s} name={s} />)}</span></td>
                   <td className="td-right num">{r.identities.toLocaleString()}</td>
                   <td className="td-right num">{r.registered.toLocaleString()}{r.identities > 0 && <span className="t3 small"> · {Math.round((r.registered / r.identities) * 100)}%</span>}</td>
@@ -351,7 +436,6 @@ function ProjectsTable({ rows, allChains, window }: { rows: (ProjectRow & { chai
                   <td className="td-right num">{r.stars || <span className="t3">0</span>}</td>
                   <td className="small t2">{r.firstSeen ? fmtDay(r.firstSeen) : "—"}</td>
                   <td className="small t2" title={r.lastEvent ? new Date(r.lastEvent * 1000).toUTCString() : ""}>{r.lastEvent ? ago(r.lastEvent) : "—"}</td>
-                  <td>{r.trustVerdict ? <span className={`badge ${r.trustVerdict === "solid" || r.trustVerdict === "eoa" ? "badge-ok" : r.trustVerdict === "ruggable" ? "badge-danger" : "badge-warn"}`}>{r.trustVerdict}</span> : <span className="t3">—</span>}</td>
                 </tr>
               );
             })}
