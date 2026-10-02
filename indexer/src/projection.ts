@@ -138,6 +138,19 @@ export class ProjectionStore {
     this.adapter = adapter.toLowerCase() as Address;
   }
 
+  /** Back to empty, in place - the first step of a reorg rewind, before the log is folded again.
+   *  In place because the server, the view cache and the cards all hold this one store. */
+  reset(): void {
+    this.identities.clear();
+    this.agents.clear();
+    this.walletUbid.clear();
+    this.attestations.clear();
+    this.inertRevocations.length = 0;
+    this.dropped.length = 0;
+    this.history.clear();
+    this.lastApplied = null;
+  }
+
   apply(ev: LogEvent): void {
     const order = { blockNumber: ev.blockNumber, logIndex: ev.logIndex };
     if (this.lastApplied && !later(order, this.lastApplied)) {

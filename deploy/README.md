@@ -17,8 +17,12 @@ What runs where:
   routes `/api/*` to the Sepolia indexer; `adapterscan.com` is Ethereum, and
   redirects to testnet until the mainnet indexer exists. The app reads its
   network from the hostname, so there is no network switch in production.
-- No database: the indexer's state is derived from chain events and rebuilt on
-  restart (seconds at current volume). `/etc/adapter.env` is optional
+- The indexer's state is a fold over chain events. The event log is kept in
+  `/srv/adapter/indexer/data/<network>.sqlite` (ignored by git, so it survives the
+  deploy's `git reset --hard`; `ADAPTER_DATA_DIR=` in `/etc/adapter.env` moves it).
+  A restart folds from the file and syncs from its checkpoint; a reorg truncates the
+  log at the fork point and refolds. The file is only a copy of the chain: delete it
+  to re-index from the cutover block. `/etc/adapter.env` is optional
   (`SEPOLIA_RPC_URL=` to use a dedicated RPC).
 - Wallet connection is Reown AppKit (the WalletConnect modal). It needs a project id
   from https://cloud.reown.com, free. Put it in `/srv/adapter/app/.env.production.local`

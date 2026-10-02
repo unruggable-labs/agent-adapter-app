@@ -27,6 +27,9 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
 - **O-1 (contract).** Total order by `(blockNumber, logIndex)`. Nothing else — not tx position,
   not timestamps.
 - **O-2 (policy).** Reorg handling is replay: discard the store and re-apply the canonical log.
+  In the running indexer the canonical log is the SQLite event log truncated at the fork point
+  (the newest stored block whose hash the chain still has); the store is reset and folded again
+  from it. The stored log is a copy of the chain, never a source.
   Equivalent-to-fresh-replay is the conformance requirement.
 - **I-1 (contract).** Every counterfactual event and `WalletUBIDSet` carries its full coordinates,
   so a single log line is self-verifying. Recompute the UBID from the event's own

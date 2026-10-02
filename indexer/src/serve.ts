@@ -1,5 +1,9 @@
-import { createPublicClient, http, type Address } from "viem";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createPublicClient, http, type Address, type PublicClient } from "viem";
 import { base, mainnet, robinhood, sepolia } from "viem/chains";
+import { EventLog } from "./eventlog.js";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
 import { startServer } from "./server.js";
@@ -15,6 +19,10 @@ import { startServer } from "./server.js";
  *
  * Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791. Caddy routes each hostname's /api
  * to its port.
+ *
+ * The adapter's event log is kept in `data/<network>.sqlite` (ADAPTER_DATA_DIR overrides the
+ * directory), so a restart folds from the file and asks the chain only for what came after. The
+ * file is a copy of the chain: delete it to re-index.
  */
 const NETWORKS = {
   sepolia: {
@@ -76,33 +84,44 @@ async function main() {
     throw new Error(`${name}: no cutover block. Set ${name.toUpperCase()}_FROM_BLOCK to the block the v0.0.17 upgrade landed in; older events must not be indexed.`);
 
   console.log(`Indexing ${name}: adapter ${net.adapter} from block ${net.fromBlock} via ${net.rpcUrl}`);
-  const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) });
+  const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) }) as PublicClient;
   await preflight(client, net.rpcUrl, net.chainId, net.fromBlock);
   const store = new ProjectionStore(net.chainId, net.adapter);
-  const ingester = new Ingester(client, store, net.adapter, net.fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2");
 
-  let syncedTo = net.fromBlock;
-  const count = await ingester.sync((from, to, head) => {
-    syncedTo = to;
-    console.log(`  backfill ${from} … ${to} (head ${head})`);
+  const dataDir = process.env.ADAPTER_DATA_DIR ?? fileURLToPath(new URL("../data", import.meta.url));
+  mkdirSync(dataDir, { recursive: true });
+  const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock: net.fromBlock });
+  const ingester = new Ingester(client, store, net.adapter, net.fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2", {
+    log,
+    onReorg: (r) => console.warn(`Reorg: the chain dropped block ${r.previousHead}; rewound to ${r.fork}, ${r.droppedEvents} events refolded away`),
   });
+  const replayed = ingester.replay();
+  if (replayed > 0 || log.checkpoint()) console.log(`Loaded ${replayed} events from ${log.path}, synced to block ${log.checkpoint()?.number}`);
+
+  let syncedTo = ingester.next - 1n;
+  const fresh = await ingester.sync((from, to, head) => {
+    syncedTo = to;
+    if (head - from > 10_000n) console.log(`  backfill ${from} … ${to} (head ${head})`);
+  });
+  const count = log.count();
   console.log(
-    `Synced: ${count} events → ${store.identities.size} identities, ${store.agents.size} agents, ` +
+    `Synced: ${count} events (${fresh} new) → ${store.identities.size} identities, ${store.agents.size} agents, ` +
       `${store.attestations.size} attestations, ${store.dropped.length} dropped`,
   );
 
   // Load-balanced public RPCs can silently return incomplete logs for a chunk — observed in
   // the wild (a backfill came back one AgentBound short with no error). Cross-check the
-  // chunked backfill against one full-range query; on mismatch, exit nonzero so systemd (or
-  // the operator) restarts into a fresh, hopefully-honest replay. Skipped if the RPC caps
+  // log against one full-range query; on mismatch, forget the log and exit nonzero so systemd
+  // (or the operator) restarts into a fresh, hopefully-honest backfill. Skipped if the RPC caps
   // full-range queries.
   try {
     const fullRange = await client.getLogs({ address: net.adapter, fromBlock: net.fromBlock, toBlock: syncedTo });
     if (fullRange.length > count) {
       console.error(
-        `BACKFILL MISMATCH: chunked backfill applied ${count} events but a full-range query ` +
-          `returned ${fullRange.length} — the RPC returned incomplete logs. Exiting to retry.`,
+        `BACKFILL MISMATCH: the event log holds ${count} events but a full-range query ` +
+          `returned ${fullRange.length} — the RPC returned incomplete logs. Forgetting the log and exiting to retry.`,
       );
+      log.reset();
       process.exit(1);
     }
     if (fullRange.length < count) {

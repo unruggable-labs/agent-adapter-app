@@ -13,7 +13,10 @@ tooltips kept to the fewest sentences that do the job.
 ## Map
 
 - `indexer/` — event-sourced projection engine over the Adapter contracts (the adapter is
-  emit-only; the indexer IS the database — state replays from chain events, no persistence).
+  emit-only; the indexer IS the database — state is a fold over chain events). The event log is
+  kept in SQLite (`eventlog.ts`, `data/<network>.sqlite`, `node:sqlite`, no native deps): a
+  restart folds from the file and syncs from its checkpoint; a reorg truncates the log at the
+  fork point and refolds (`ingest.ts`). The file is a copy of the chain - delete it to re-index.
   `SPEC.md` documents the projection rules. `serve.ts` = standalone chain indexer;
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
   API core; `views.ts` = identity views served from memory, with a worker that reads the chain
