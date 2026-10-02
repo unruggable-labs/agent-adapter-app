@@ -153,9 +153,9 @@ export function AttestationPage({ id }: { id: string }) {
       </div>
 
       {showPreimage && (
-        <Modal title="What the id is a hash of" onClose={() => setShowPreimage(false)}>
+        <Modal title="How the Attestation ID is calculated" width={760} onClose={() => setShowPreimage(false)}>
           <p className="t2 small" style={{ margin: "0 0 12px" }}>
-            The indexer recomputes the id from the event's own fields before letting a statement in; one that doesn't match is dropped and never shown. So a statement on this page is one whose id checks out.
+            The ID is a hash of the eight fields below. The indexer recomputes it from the event's own fields before letting a statement in; one that doesn't match is dropped and never shown. So a statement on this page is one whose ID checks out.
           </p>
           <dl className="kv small">
             <dt>Chain</dt><dd className="num">{a.preimage.chainId}</dd>
@@ -164,14 +164,16 @@ export function AttestationPage({ id }: { id: string }) {
             <dt>UBID</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.ubid}</dd>
             <dt>Type</dt><dd className="num">{a.preimage.attestationType} <span className="t3">({a.typeName})</span></dd>
             <dt>Block</dt>
-            <dd className="num">
-              {a.preimage.blockNumber}
-              {a.preimage.blockNumber !== a.order.blockNumber && <span className="t3"> · the contract's block.number here is the parent chain's block, not the log's ({a.order.blockNumber})</span>}
-            </dd>
+            <dd className="num">{a.preimage.blockNumber}</dd>
             <dt><Tip tip="The reference slot, as hashed - zero when the statement is about no particular transaction.">Variant</Tip></dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.variant}</dd>
             <dt>Data</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.data}</dd>
-            <dt>Id</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.attestationId}</dd>
+            <dt>Attestation ID</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.attestationId}</dd>
           </dl>
+          {a.preimage.blockNumber !== a.order.blockNumber && (
+            <p className="hint" style={{ margin: "12px 0 0" }}>
+              The block in the hash is the contract's block.number, which on this chain is the parent chain's block. The log itself is in block {a.order.blockNumber}.
+            </p>
+          )}
         </Modal>
       )}
     </div>
