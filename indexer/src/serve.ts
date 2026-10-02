@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createPublicClient, http, type Address, type PublicClient } from "viem";
 import { base, mainnet, robinhood, sepolia } from "viem/chains";
 import { EventLog } from "./eventlog.js";
+import { configureGatewayCache } from "./gateway.js";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
 import { startServer } from "./server.js";
@@ -90,6 +91,7 @@ async function main() {
 
   const dataDir = process.env.ADAPTER_DATA_DIR ?? fileURLToPath(new URL("../data", import.meta.url));
   mkdirSync(dataDir, { recursive: true });
+  configureGatewayCache(join(dataDir, "cache")); // ipfs/ar content, under its address
   const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock: net.fromBlock });
   const ingester = new Ingester(client, store, net.adapter, net.fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2", {
     log,

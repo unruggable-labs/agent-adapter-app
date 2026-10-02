@@ -1,4 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
+import { fetchContent } from "./gateway.js";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import satori from "satori";
@@ -96,13 +97,23 @@ function gradientFor(seed: string): string {
 async function imageData(url: string | null): Promise<string | null> {
   if (!url) return null;
   if (url.startsWith("data:image/png") || url.startsWith("data:image/jpeg")) return url;
-  if (!/^https?:/.test(url)) return null;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    const type = res.headers.get("content-type") ?? "";
-    if (!res.ok || !/^image\/(png|jpeg)/.test(type)) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > 2_000_000) return null;
+    // Our own /ipfs and /ar paths come straight from the gateway cache; http(s) is fetched.
+    const own = /^\/(ipfs|ar)\/(.+)$/.exec(url);
+    let type: string;
+    let buf: Buffer;
+    if (own) {
+      const got = await fetchContent(own[1] as "ipfs" | "ar", own[2]);
+      if (!got) return null;
+      ({ type, body: buf } = got);
+    } else {
+      if (!/^https?:/.test(url)) return null;
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      type = res.headers.get("content-type") ?? "";
+      if (!res.ok) return null;
+      buf = Buffer.from(await res.arrayBuffer());
+    }
+    if (!/^image\/(png|jpeg)/.test(type) || buf.length > 2_000_000) return null;
     return `data:${type.split(";")[0]};base64,${buf.toString("base64")}`;
   } catch {
     return null;

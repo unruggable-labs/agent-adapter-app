@@ -71,8 +71,8 @@ describe("identity views", () => {
     expect(v.trustBase?.isEoa).toBe(true);
     expect(v.advisoryAt).not.toBeNull();
     // the collection's own card, and its image standing in for a token that has none
-    expect(v.collection).toEqual({ name: "DemoPunks", description: "Ten punks.", image: "https://ipfs.io/ipfs/bafyimg", externalLink: "https://punks.example" });
-    expect(v.image).toBe("https://ipfs.io/ipfs/bafyimg");
+    expect(v.collection).toEqual({ name: "DemoPunks", description: "Ten punks.", image: "/ipfs/bafyimg", externalLink: "https://punks.example" });
+    expect(v.image).toBe("/ipfs/bafyimg");
   });
 
   it("the worker reads every identity once, then rests until something is stale or asked for", async () => {

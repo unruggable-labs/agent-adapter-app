@@ -1,4 +1,5 @@
 import type { Address, PublicClient } from "viem";
+import { fetchContent, parseContentUri, proxyPath } from "./gateway.js";
 import type { IdentityState } from "./projection.js";
 import { Standard } from "./ubid.js";
 
@@ -121,8 +122,15 @@ export async function readJson(uri: string): Promise<unknown> {
     const text = /;base64$/i.test(meta) ? Buffer.from(payload, "base64").toString("utf8") : decodeURIComponent(payload);
     return JSON.parse(text);
   }
-  const url = toBrowserUrl(uri);
-  if (!url || !/^https?:/.test(url)) return null;
+  // Content-addressed documents come through the gateway module: its gateways, its cache.
+  const content = parseContentUri(uri);
+  if (content) {
+    const got = await fetchContent(content.scheme, content.path);
+    if (!got || got.body.length > MAX_JSON_BYTES) return null;
+    return JSON.parse(got.body.toString("utf8"));
+  }
+  const url = uri.trim();
+  if (!/^https?:/.test(url)) return null;
   const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { accept: "application/json" } });
   if (!res.ok) return null;
   const length = Number(res.headers.get("content-length") ?? 0);
@@ -132,11 +140,12 @@ export async function readJson(uri: string): Promise<unknown> {
   return JSON.parse(text);
 }
 
-/** ipfs:// and ar:// through public gateways; http(s) and data: as they are; anything else dropped. */
+/** What the browser loads: content-addressed images through our own /ipfs and /ar routes (see
+ *  gateway.ts), http(s) and data: images as they are, anything else dropped. */
 export function toBrowserUrl(uri: string): string | null {
+  const proxied = proxyPath(uri);
+  if (proxied) return proxied;
   const u = uri.trim();
-  if (/^ipfs:\/\//i.test(u)) return `https://ipfs.io/ipfs/${u.replace(/^ipfs:\/\/(ipfs\/)?/i, "")}`;
-  if (/^ar:\/\//i.test(u)) return `https://arweave.net/${u.slice(5)}`;
   if (/^(https?:|data:image\/)/i.test(u)) return u;
   return null;
 }

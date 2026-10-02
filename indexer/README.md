@@ -46,5 +46,7 @@ burn, and the collection re-claiming the reputed identity (surfaced as the
 - `GET /api/search?q=` — the header search: `{ hits }` of addresses and identities, with why each matched
 - `GET /api/address/:address` — what an address is, operates, holds, is bound to, and has said
 - `GET /api/wallet/:address` — reverse resolution with the mutual-pointing verdict
+- `GET /ipfs/:path`, `GET /ar/:path` — content-addressed images, fetched through several public
+  gateways with rotation on 429/5xx and kept on disk under `data/cache/` (images only, immutable)
 - `GET /api/attestations` — raw attestation records, resolved or not; with any of
   `?limit&offset&type&standard&attester&ubid` a page, each row carrying its `target` identity

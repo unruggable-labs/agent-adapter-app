@@ -38,9 +38,9 @@ async function resolved(c: PublicClient, id: IdentityState) {
 }
 
 describe("identity images", () => {
-  it("takes an ERC-721 token's metadata image and routes ipfs through a gateway", async () => {
+  it("takes an ERC-721 token's metadata image and serves ipfs through our own route", async () => {
     const c = client({ tokenURI: () => json({ name: "Punk", image: "ipfs://bafyfoo/7.png" }) });
-    expect(await resolved(c, identity({}))).toBe("https://ipfs.io/ipfs/bafyfoo/7.png");
+    expect(await resolved(c, identity({}))).toBe("/ipfs/bafyfoo/7.png");
   });
 
   it("fills the ERC-1155 {id} slot with the 64-hex token id", async () => {
@@ -77,7 +77,7 @@ describe("identity images", () => {
     expect(cardFor(c, id)).toBeNull();
     await new Promise((r) => setTimeout(r, 20));
     expect(cardFor(c, id)).toEqual({
-      image: "https://ipfs.io/ipfs/bafy/7.png",
+      image: "/ipfs/bafy/7.png",
       name: "Punk #7",
       description: "Trades punks, politely.",
       source: "token",

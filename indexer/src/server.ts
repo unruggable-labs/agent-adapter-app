@@ -7,6 +7,7 @@ import type { Ingester } from "./ingest.js";
 import { addressCard, defaultCard, identityCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import type { ProjectionStore } from "./projection.js";
+import { fetchContent } from "./gateway.js";
 import { handleApi } from "./service.js";
 import { ViewCache } from "./views.js";
 
@@ -79,6 +80,16 @@ export function startServer(
       if (url.pathname.startsWith("/api/")) {
         const { status, body } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length) + url.search, views);
         return send(status, "application/json", body, { "access-control-allow-origin": "*" });
+      }
+
+      // ---- content-addressed images, from our gateway cache (see gateway.ts). Immutable by
+      // construction, so the browser may keep them forever. Images only: this is not an open proxy.
+      let c: RegExpExecArray | null;
+      if ((c = /^\/(ipfs|ar)\/([A-Za-z0-9._~!$&'()*+,;=:@%\/-]+)$/.exec(url.pathname)) && !c[2].includes("..")) {
+        const got = await fetchContent(c[1] as "ipfs" | "ar", c[2]);
+        if (!got) return send(404, "text/plain", "not available from any gateway right now");
+        if (!/^image\//.test(got.type)) return send(415, "text/plain", "not an image");
+        return send(200, got.type, got.body, { "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" });
       }
 
       // ---- built assets (production: Caddy serves these; here for a complete local preview)
