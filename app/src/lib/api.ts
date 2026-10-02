@@ -136,7 +136,8 @@ export interface AddressView {
   /** Agents that name this address as their wallet without the wallet pointing back. */
   namedBy: Identity[];
   holds: Identity[];
-  boundHere: Identity[];
+  /** How many identities are bound to this address (a collection's tokens, say). Page them with
+   *  identities({ bound }). */
   boundHereTotal: number;
   statements: AttestationRow[];
 }

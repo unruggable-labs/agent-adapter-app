@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { isAddress } from "viem";
-import { Badge, ControllerCell, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
+import { Badge, ControllerCell, Pager, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
 import { api, type Identity } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
-import { displayName, explorerAddressUrl, explorerName, plural, pluralise } from "../lib/chain";
+import { displayName, explorerAddressUrl, explorerName, plural, pluralise, STANDARD_NAMES } from "../lib/chain";
+
+const BOUND_PAGE = 25;
+/** Everything but ACCOUNT: an address's own identity is shown under Agent, not among what is bound to it. */
+const BOUND_STANDARDS = STANDARD_NAMES.filter((n) => n !== "ACCOUNT");
 import { payloadPreview } from "./Attestations";
 
 /**
@@ -16,6 +20,12 @@ export function AddressPage({ address }: { address: string }) {
   const { navigate } = useApp();
   const addr = address.toLowerCase();
   const { data, status } = useLive(() => (isAddress(addr) ? api.address(addr) : null), [addr]);
+  // What is bound to this address can be a whole collection, so it pages through the identities endpoint.
+  const [boundOffset, setBoundOffset] = useState(0);
+  const { data: bound } = useLive(
+    () => (isAddress(addr) && data && data.boundHereTotal > 0 ? api.identities({ bound: addr, standard: BOUND_STANDARDS, limit: BOUND_PAGE, offset: boundOffset }) : null),
+    [addr, boundOffset, (data?.boundHereTotal ?? 0) > 0],
+  );
 
   if (!isAddress(addr)) return <div className="page"><p className="t2">That's not an address.</p></div>;
 
@@ -23,7 +33,7 @@ export function AddressPage({ address }: { address: string }) {
   const operates = data?.operates ?? null;
   const namedBy = data?.namedBy ?? [];
   const holds = data?.holds ?? [];
-  const boundHere = data?.boundHere ?? [];
+  const boundTotal = bound?.total ?? data?.boundHereTotal ?? 0;
   const rows = data?.statements ?? null;
   const explorer = explorerAddressUrl(addr);
   const loading = !data && status === "loading";
@@ -80,11 +90,13 @@ export function AddressPage({ address }: { address: string }) {
           )}
         </Section>
 
-        {boundHere.length > 0 && (
-          <Section label={`Bound to this address · ${data!.boundHereTotal} ${data!.boundHereTotal === 1 ? "identity" : "identities"}`}>
+        {boundTotal > 0 && (
+          <Section label={`Bound to this address · ${boundTotal} ${boundTotal === 1 ? "identity" : "identities"}`}>
             <p className="t2 small" style={{ margin: "0 0 8px" }}>This address is a contract that identities are bound to - a collection, or a contract controlled by its owner or admins.</p>
-            <IdentityTable rows={boundHere.map((id) => ({ id }))} />
-            {data!.boundHereTotal > boundHere.length && <p className="hint">and {data!.boundHereTotal - boundHere.length} more</p>}
+            {bound ? <IdentityTable rows={bound.items.map((id) => ({ id }))} /> : <Spinner />}
+            <div className="row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
+              <Pager offset={boundOffset} limit={BOUND_PAGE} total={boundTotal} onChange={setBoundOffset} />
+            </div>
           </Section>
         )}
 

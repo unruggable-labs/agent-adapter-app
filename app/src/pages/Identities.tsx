@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Addr, ControllerCell, registrationOf, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
+import { Addr, ControllerCell, Pager, registrationOf, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
 
@@ -11,8 +11,6 @@ export function IdentitiesPage() {
   // One page at a time, newest first - the server orders and slices; nothing downloads the registry.
   const { data, status } = useLive(() => api.identities({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
   const total = data?.total ?? overview?.identities ?? 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const current = Math.min(page, pages - 1);
   const visible = data?.items ?? [];
 
   return (
@@ -71,15 +69,7 @@ export function IdentitiesPage() {
         ) : (
           <span />
         )}
-        {pages > 1 && (
-          <span className="row" style={{ gap: 8 }}>
-            <span className="hint num">
-              {current * PAGE_SIZE + 1}-{Math.min((current + 1) * PAGE_SIZE, total)} of {total}
-            </span>
-            <button className="btn btn-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>Prev</button>
-            <button className="btn btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
-          </span>
-        )}
+        <Pager offset={page * PAGE_SIZE} limit={PAGE_SIZE} total={total} onChange={(o) => setPage(o / PAGE_SIZE)} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Addr, Badge, ControllerCell, Modal, MultiSelect, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
+import { Addr, Badge, ControllerCell, Modal, MultiSelect, Pager, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import { api, type AttestationRow } from "../lib/api";
 import { useApp, useLive, settle } from "../lib/app-state";
 import { adapterAbi, STANDARD_NAMES } from "../lib/chain";
@@ -27,8 +27,6 @@ export function AttestationsPage() {
   const loading = !data && status === "loading";
   const shown = data?.items ?? [];
   const total = data?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const current = Math.min(page, pages - 1);
   const active = types.length + standards.length + (mineOnly ? 1 : 0);
 
   return (
@@ -106,15 +104,9 @@ export function AttestationsPage() {
           </tbody>
         </table>
       </div>
-      {pages > 1 && (
-        <div className="row" style={{ marginTop: 10, justifyContent: "flex-end", gap: 8 }}>
-          <span className="hint num">
-            {current * PAGE_SIZE + 1}-{Math.min((current + 1) * PAGE_SIZE, total)} of {total}
-          </span>
-          <button className="btn btn-sm" disabled={current === 0} onClick={() => setPage(current - 1)}>Prev</button>
-          <button className="btn btn-sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
-        </div>
-      )}
+      <div className="row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
+        <Pager offset={page * PAGE_SIZE} limit={PAGE_SIZE} total={total} onChange={(o) => setPage(o / PAGE_SIZE)} />
+      </div>
 
       {showFilters && (
         <Modal title="Filter attestations" onClose={() => setShowFilters(false)}>

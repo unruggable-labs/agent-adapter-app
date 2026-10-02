@@ -159,19 +159,18 @@ export function listAttestations(store: ProjectionStore, views: ViewCache, p: UR
   return { items: rows.slice(offset, offset + limit).map((a) => attestationRow(store, views, a)), total: rows.length, offset, limit };
 }
 
-const BOUND_HERE_LIMIT = 25;
-
 /**
  * Everything the registry knows about one address: whether it is an agent, which agent it
- * operates and whether that link is verified both ways, what it holds or controls, what is bound
- * to it, and every statement it has made.
+ * operates and whether that link is verified both ways, what it holds or controls, how many
+ * identities are bound to it (paged separately via listIdentities with `bound`, since a collection
+ * can bind thousands), and every statement it has made.
  */
 export function addressView(store: ProjectionStore, views: ViewCache, raw: string) {
   const a = raw.toLowerCase() as Address;
   const ids = [...store.identities.values()];
   const w = store.resolveWallet(a);
   const operatesId = w?.identity ?? null;
-  const boundHere = ids.filter((i) => i.boundAddress === a && i.standard !== Standard.ACCOUNT);
+  const boundHereTotal = ids.filter((i) => i.boundAddress === a && i.standard !== Standard.ACCOUNT).length;
   const statements = [...store.attestations.values()].filter((s) => s.attester === a).sort((x, y) => newestFirst(x.order, y.order));
   return {
     address: a,
@@ -179,8 +178,7 @@ export function addressView(store: ProjectionStore, views: ViewCache, raw: strin
     operates: operatesId ? { identity: views.viewWanted(operatesId), verified: w!.verified } : null,
     namedBy: ids.filter((i) => i.agentWallet === a && i.ubid !== operatesId?.ubid).map((i) => views.viewWanted(i)),
     holds: ids.filter((i) => views.holder(i) === a && i.boundAddress !== a).map((i) => views.viewWanted(i)),
-    boundHere: boundHere.slice(0, BOUND_HERE_LIMIT).map((i) => views.viewWanted(i)),
-    boundHereTotal: boundHere.length,
+    boundHereTotal,
     statements: statements.map((s) => attestationRow(store, views, s)),
   };
 }

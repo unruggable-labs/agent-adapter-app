@@ -200,6 +200,22 @@ export function ControllerCell({ id }: { id: Identity }) {
   );
 }
 
+/** Prev/Next over a server-side page: "26-50 of 999". Renders nothing when everything fits on one page. */
+export function Pager({ offset, limit, total, onChange }: { offset: number; limit: number; total: number; onChange: (offset: number) => void }) {
+  if (total <= limit) return null;
+  const last = Math.max(0, Math.ceil(total / limit) - 1) * limit;
+  const at = Math.min(offset, last);
+  return (
+    <span className="row" style={{ gap: 8 }}>
+      <span className="hint num">
+        {at + 1}-{Math.min(at + limit, total)} of {total}
+      </span>
+      <button className="btn btn-sm" disabled={at === 0} onClick={() => onChange(Math.max(0, at - limit))}>Prev</button>
+      <button className="btn btn-sm" disabled={at >= last} onClick={() => onChange(at + limit)}>Next</button>
+    </span>
+  );
+}
+
 export function Stat({ n, label }: { n: ReactNode; label: string }) {
   return (
     <div className="stat">
