@@ -335,11 +335,17 @@ function Tile({ label, tip, figure, loading }: { label: string; tip: string; fig
 
 type SortKey = "name" | "identities" | "registered" | "attestations" | "ratingAverage" | "stars" | "firstSeen" | "lastEvent";
 
+type RegistrationKind = "counterfactual" | "registered" | "mixed";
+const REGISTRATION_KINDS: RegistrationKind[] = ["counterfactual", "registered", "mixed"];
+const REGISTRATION_LABEL: Record<RegistrationKind, string> = { counterfactual: "Counterfactual only", registered: "On-chain only", mixed: "Both kinds" };
+const registrationKind = (r: ProjectRow): RegistrationKind => (r.registered === 0 ? "counterfactual" : r.registered >= r.identities ? "registered" : "mixed");
+
 function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { rows: (ProjectRow & { chain: NetworkId })[] | null; allChains: boolean; window: { from: number; to: number }; compare: Pick[]; onToggleCompare: (p: Pick) => void }) {
   const compared = new Set(compare.map(pickKey));
   const full = compare.length >= MAX_COMPARE;
   const [standards, setStandards] = useState<string[]>([]);
-  const [registration, setRegistration] = useState<"" | "registered" | "counterfactual">("");
+  // How a project's identities exist: all counterfactual, all registered on ERC-8004, or some of each. Any mix of these; none means any.
+  const [registration, setRegistration] = useState<RegistrationKind[]>([]);
   const [active, setActive] = useState(false);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("lastEvent");
@@ -347,13 +353,12 @@ function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { 
   const [page, setPage] = usePageParam(); // ?page=2 in the address bar, with the rest of the view
   useEffect(() => {
     if (page > 0) setPage(0, "replace");
-  }, [standards.join(","), registration, active, q, sort, dir]);
+  }, [standards.join(","), registration.join(","), active, q, sort, dir]);
 
   const shown = useMemo(() => {
     let list = rows ?? [];
     if (standards.length) list = list.filter((r) => r.standards.some((s) => standards.includes(s)));
-    if (registration === "registered") list = list.filter((r) => r.registered > 0);
-    if (registration === "counterfactual") list = list.filter((r) => r.registered === 0);
+    if (registration.length) list = list.filter((r) => registration.includes(registrationKind(r)));
     if (active) list = list.filter((r) => r.lastEvent !== null && r.lastEvent >= window.from);
     const needle = q.trim().toLowerCase();
     if (needle) list = list.filter((r) => r.address.includes(needle) || (r.name ?? "").toLowerCase().includes(needle));
@@ -362,7 +367,7 @@ function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { 
       const cmp = x === null ? 1 : y === null ? -1 : typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
       return dir === "asc" ? cmp : -cmp;
     });
-  }, [rows, standards, registration, active, q, sort, dir, window.from]);
+  }, [rows, standards, registration.join(","), active, q, sort, dir, window.from]);
 
   const head = (key: SortKey, label: string, cls = "") => (
     <th className={cls}>
@@ -399,11 +404,9 @@ function ProjectsTable({ rows, allChains, window, compare, onToggleCompare }: { 
           <div style={{ width: 180 }}>
             <MultiSelect options={STANDARD_NAMES} values={standards} onChange={setStandards} placeholder="Any standard" render={(n) => <StandardBadge name={n} />} floating />
           </div>
-          <select className="select" style={{ width: "auto" }} value={registration} onChange={(e) => setRegistration(e.target.value as typeof registration)} aria-label="Registration">
-            <option value="">Any registration</option>
-            <option value="registered">Has ERC-8004 registrations</option>
-            <option value="counterfactual">Counterfactual only</option>
-          </select>
+          <div style={{ width: 200 }}>
+            <MultiSelect options={REGISTRATION_KINDS} values={registration} onChange={setRegistration} placeholder="Any registration" render={(k) => REGISTRATION_LABEL[k]} floating />
+          </div>
           <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active in window</label>
           <button className="btn btn-sm" disabled={!rows || shown.length === 0} onClick={exportCsv}>Export CSV</button>
         </div>
