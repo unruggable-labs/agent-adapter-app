@@ -38,6 +38,8 @@ const SCHEMA = "1";
 
 /** How many blocks' hashes to keep beyond the ones that carry events: the reorg window. */
 const HASH_WINDOW = 100_000n;
+/** Rows per replay chunk. */
+const REPLAY_CHUNK = 2000;
 
 export class EventLog {
   private readonly db: DatabaseSync;
@@ -98,30 +100,44 @@ export class EventLog {
     return (this.db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }).n;
   }
 
-  /** Every stored event, in (block, log index) order - the input to the fold. */
+  /** Every stored event, in (block, log index) order - the input to the fold.
+   *  Read in keyed chunks rather than through `iterate()`: node:sqlite's iterator does not keep
+   *  its statement alive, and a garbage collection mid-replay finalises it under the loop
+   *  ("statement has been finalized"). Chunks hold nothing across yields. */
   *events(): IterableIterator<StoredEvent> {
-    const rows = this.db
-      .prepare("SELECT block_number, log_index, block_hash, tx_hash, event_name, args, contract_block FROM events ORDER BY block_number, log_index")
-      .iterate() as IterableIterator<{
-      block_number: number;
-      log_index: number;
-      block_hash: string;
-      tx_hash: string | null;
-      event_name: string;
-      args: string;
-      contract_block: number | null;
-    }>;
-    for (const r of rows) {
-      const ev: StoredEvent = {
-        blockNumber: BigInt(r.block_number),
-        logIndex: r.log_index,
-        blockHash: r.block_hash as Hex,
-        eventName: r.event_name,
-        args: decodeArgs(r.args),
-      };
-      if (r.tx_hash) ev.transactionHash = r.tx_hash as Hex;
-      if (r.contract_block !== null) ev.contractBlockNumber = BigInt(r.contract_block);
-      yield ev;
+    const page = this.db.prepare(
+      `SELECT block_number, log_index, block_hash, tx_hash, event_name, args, contract_block FROM events
+       WHERE block_number > ? OR (block_number = ? AND log_index > ?)
+       ORDER BY block_number, log_index LIMIT ?`,
+    );
+    let afterBlock = -1;
+    let afterIndex = -1;
+    for (;;) {
+      const rows = page.all(afterBlock, afterBlock, afterIndex, REPLAY_CHUNK) as {
+        block_number: number;
+        log_index: number;
+        block_hash: string;
+        tx_hash: string | null;
+        event_name: string;
+        args: string;
+        contract_block: number | null;
+      }[];
+      for (const r of rows) {
+        const ev: StoredEvent = {
+          blockNumber: BigInt(r.block_number),
+          logIndex: r.log_index,
+          blockHash: r.block_hash as Hex,
+          eventName: r.event_name,
+          args: decodeArgs(r.args),
+        };
+        if (r.tx_hash) ev.transactionHash = r.tx_hash as Hex;
+        if (r.contract_block !== null) ev.contractBlockNumber = BigInt(r.contract_block);
+        yield ev;
+      }
+      if (rows.length < REPLAY_CHUNK) return;
+      const last = rows[rows.length - 1];
+      afterBlock = last.block_number;
+      afterIndex = last.log_index;
     }
   }
 

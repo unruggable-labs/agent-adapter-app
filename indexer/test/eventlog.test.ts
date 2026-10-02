@@ -52,6 +52,22 @@ describe("event log", () => {
     expect(() => new EventLog(path, { ...identity, chainId: 1n })).toThrow(/chainId/);
   });
 
+  it("replays a log larger than one chunk, in order, with several events per block", () => {
+    const log = new EventLog(":memory:", identity);
+    const batch: StoredEvent[] = [];
+    for (let b = 100; b < 100 + 2500; b++) for (let i = 0; i < 2; i++) batch.push(ev(b, i));
+    log.append(batch, { number: 3000n, hash: h(3000) });
+    const back = [...log.events()];
+    expect(back).toHaveLength(5000);
+    expect(back[0]).toMatchObject({ blockNumber: 100n, logIndex: 0 });
+    expect(back[1]).toMatchObject({ blockNumber: 100n, logIndex: 1 });
+    expect(back[4999]).toMatchObject({ blockNumber: 2599n, logIndex: 1 });
+    for (let k = 1; k < back.length; k++) {
+      const a = back[k - 1], b = back[k];
+      expect(a.blockNumber < b.blockNumber || (a.blockNumber === b.blockNumber && a.logIndex < b.logIndex)).toBe(true);
+    }
+  });
+
   it("encodes args losslessly", () => {
     const args = { a: 1n, b: [2n, { c: 3n }], d: "0x01", e: 4, f: null, g: { $big: 5 } };
     expect(decodeArgs(encodeArgs(args))).toEqual(args);
