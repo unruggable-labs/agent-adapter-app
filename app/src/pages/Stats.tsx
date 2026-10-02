@@ -27,15 +27,18 @@ interface Loaded {
   failed: NetworkId[];
 }
 
-/** A project picked for the chart: which chain it is on and its bound address. In the URL as chain:address. */
+/** A project picked for the chart: its bound address, and which chain it is on. In the URL as the
+ *  address alone when that names one project among the selected chains, chain:address when the
+ *  same address is a project on more than one of them. A pick from a link may wait for the
+ *  projects to load before it knows its chain. */
 interface Pick {
-  chain: NetworkId;
+  chain: NetworkId | null;
   address: string;
 }
 const MAX_COMPARE = 6;
 /** One hue per compared project, the app's named palette, in an order that stays apart on a chart. */
 const COMPARE_COLORS = ["var(--c-blue)", "var(--c-pink)", "var(--c-orange)", "var(--c-violet)", "var(--c-teal)", "var(--c-amber)"];
-const pickKey = (p: Pick) => `${p.chain}:${p.address}`;
+const pickKey = (p: Pick) => `${p.chain ?? "?"}:${p.address}`;
 
 function readUrl() {
   const p = new URLSearchParams(location.search);
@@ -65,7 +68,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
   );
   // Projects on the chart. On a single chain's page the URL carries just the address.
   const [compare, setCompare] = useState<Pick[]>(() =>
-    initial.compare.map((c) => ({ chain: (c.chain && offered.includes(c.chain) ? c.chain : offered[0]) as NetworkId, address: c.address })).slice(0, MAX_COMPARE),
+    initial.compare.map((c) => ({ chain: c.chain && offered.includes(c.chain) ? c.chain : allChains ? null : offered[0], address: c.address })).slice(0, MAX_COMPARE),
   );
   const [compareSeries, setCompareSeries] = useState<Record<string, StatsSeries["series"][number]>>({});
   // Whether the whole stays on the chart while comparing. Off, the scale fits the compared projects alone.
@@ -82,11 +85,25 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     if (bucketChoice !== "auto") p.set("bucket", bucketChoice);
     if (cumulative) p.set("cumulative", "1");
     if (allChains) p.set("chains", chains.join(","));
-    if (compare.length) p.set("project", compare.map((c) => (allChains ? pickKey(c) : c.address)).join(","));
+    // A pick is just its address unless that address is a project on more than one selected chain.
+    const ambiguous = (c: Pick) => (data?.projects.filter((r) => r.address === c.address && chains.includes(r.chain)).length ?? 0) > 1;
+    if (compare.length) p.set("project", compare.map((c) => (allChains && c.chain && ambiguous(c) ? pickKey(c) : c.address)).join(","));
     if (compare.length && !withTotal) p.set("total", "0");
     const qs = p.toString();
     history.replaceState(null, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [range, bucketChoice, cumulative, chains, allChains, compare, withTotal]);
+  }, [range, bucketChoice, cumulative, chains, allChains, compare, withTotal, data]);
+
+  // Picks from a link without a chain: the first selected chain that has the project.
+  useEffect(() => {
+    if (!data || !compare.some((c) => c.chain === null)) return;
+    setCompare((cur) =>
+      cur.flatMap((c) => {
+        if (c.chain !== null) return [c];
+        const found = data.projects.find((r) => r.address === c.address && chains.includes(r.chain));
+        return found ? [{ chain: found.chain, address: c.address }] : [];
+      }),
+    );
+  }, [data, compare, chains]);
 
   const now = Math.floor(Date.now() / 1000 / 3600) * 3600; // to the hour, so the URL and the cache stay stable for a while
   const from = range === "7d" ? now - 7 * DAY : range === "30d" ? now - 30 * DAY : range === "90d" ? now - 90 * DAY : firstEvent ?? now - 365 * DAY;
@@ -146,7 +163,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     (async () => {
       const out: Record<string, StatsSeries["series"][number]> = {};
       const byChain = new Map<NetworkId, string[]>();
-      for (const c of compare) byChain.set(c.chain, [...(byChain.get(c.chain) ?? []), c.address]);
+      for (const c of compare) if (c.chain) byChain.set(c.chain, [...(byChain.get(c.chain) ?? []), c.address]);
       await Promise.all(
         [...byChain].map(async ([chain, addrs]) => {
           try {
@@ -184,7 +201,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
       const sr = compareSeries[pickKey(c)];
       const byT = new Map((sr?.points ?? []).map((p) => [p.t, p.v]));
       const row = data.projects.find((r) => r.chain === c.chain && r.address === c.address);
-      const label = `${row?.name ?? `${c.address.slice(0, 8)}…${c.address.slice(-4)}`}${allChains ? ` · ${NETWORKS[c.chain].label}` : ""}`;
+      const label = `${row?.name ?? `${c.address.slice(0, 8)}…${c.address.slice(-4)}`}${allChains && c.chain ? ` · ${NETWORKS[c.chain].label}` : ""}`;
       lines.push({ key: pickKey(c), label, color: COMPARE_COLORS[i % COMPARE_COLORS.length], points: run(total.map((p) => ({ t: p.t, v: byT.get(p.t) ?? 0 }))) });
     });
     return lines;
@@ -252,7 +269,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
           <div className="section-label" style={{ margin: 0 }}>
             Identities per {bucket}{cumulative ? ", cumulative" : ""}{compare.length > 0 && ` · ${compare.length === 1 ? "one project" : `${compare.length} projects`}${withTotal ? " against the whole" : " compared"}`}
           </div>
-          <ChartLegend series={chart} />
+          <ChartLegend series={chart} whole={compare.length > 0 ? { label: "All identities", color: "var(--text-3)", checked: withTotal, onToggle: setWithTotal } : undefined} />
         </div>
         {compare.length > 0 && (
           <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
@@ -263,9 +280,6 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
               </span>
             ))}
             <button className="btn btn-ghost btn-sm" onClick={() => setCompare([])}>Clear</button>
-            <label className="row" style={{ gap: 6, fontSize: 12.5, marginLeft: "auto" }} title="Off, the scale fits the compared projects alone">
-              <input type="checkbox" checked={withTotal} onChange={(e) => setWithTotal(e.target.checked)} /> Against all identities
-            </label>
           </div>
         )}
         {data ? <LineChart series={chart} /> : <div className="chart-empty" style={{ height: 280 }}><Skeleton w="40%" /></div>}

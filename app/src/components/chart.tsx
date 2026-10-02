@@ -117,10 +117,17 @@ export function LineChart({ series, height = 280, emptyText = "Nothing in this w
   );
 }
 
-export function ChartLegend({ series }: { series: ChartSeries[] }) {
+/** The legend. `whole`, when given, is drawn first as a checkbox: the whole can be taken off the chart so the parts get a scale of their own. */
+export function ChartLegend({ series, whole }: { series: ChartSeries[]; whole?: { label: string; color: string; checked: boolean; onToggle: (on: boolean) => void } }) {
   return (
     <div className="row wrap chart-legend">
-      {series.map((s) => (
+      {whole && (
+        <label className="row chart-legend-item" title={whole.checked ? "Take the whole off the chart, so the scale fits the compared projects" : "Put the whole back on the chart"} style={{ cursor: "pointer" }}>
+          <input type="checkbox" checked={whole.checked} onChange={(e) => whole.onToggle(e.target.checked)} style={{ margin: 0, accentColor: whole.color }} />
+          <span className="chart-swatch" style={{ background: whole.color, opacity: whole.checked ? 1 : 0.35 }} />{whole.label}
+        </label>
+      )}
+      {series.filter((s) => !(whole && s.whole)).map((s) => (
         <span key={s.key} className="row chart-legend-item"><span className="chart-swatch" style={{ background: s.color }} />{s.label}</span>
       ))}
     </div>
