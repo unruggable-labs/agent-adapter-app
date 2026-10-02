@@ -197,13 +197,17 @@ input, textarea, select { font: inherit; color: inherit; }
   padding: 16px 18px;
 }
 .card + .card, .stack > * + * { margin-top: 14px; }
-/* A card that is only a table: tighter padding so the rows own the width. */
-.card-table { padding: 4px 14px; }
+/* A card that is only a table: no side padding, so a highlighted or hovered row reaches the card's edges;
+   the first and last cells carry the inset instead. */
+.card-table { padding: 2px 0; }
+.card-table .table th:first-child, .card-table .table td:first-child { padding-left: 18px; }
+.card-table .table th:last-child, .card-table .table td:last-child { padding-right: 18px; }
+.card-table .empty { padding: 24px 18px; }
 
 .table { width: 100%; border-collapse: collapse; }
 .table th {
   text-align: left; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--text-3); padding: 0 12px 8px; border-bottom: 1px solid var(--border);
+  color: var(--text-3); padding: 10px 12px; border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 .table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
@@ -852,7 +856,6 @@ input, textarea, select { font: inherit; color: inherit; }
   .page-sub { margin-bottom: 16px; }
   .card { padding: 14px; }
   .how-page .card { padding: 16px; }
-  .card-table { padding: 2px 0; }
   .card-table .table th:first-child, .card-table .table td:first-child { padding-left: 14px; }
   .card-table .table th:last-child, .card-table .table td:last-child { padding-right: 14px; }
   .card-table .empty { padding: 24px 14px; }
