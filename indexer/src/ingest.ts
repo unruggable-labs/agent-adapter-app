@@ -31,10 +31,15 @@ export interface IngestOptions {
 }
 
 interface Header {
+  number?: Hex;
   hash?: Hex;
   l1BlockNumber?: Hex;
   timestamp?: Hex;
 }
+
+/** The headers read during one sync, so a block that is the checkpoint, carries events, and is
+ *  the contract's block-number source is fetched once, not three times. */
+type Headers = Map<bigint, Header | null>;
 
 export class Ingester {
   private nextBlock: bigint;
@@ -80,23 +85,24 @@ export class Ingester {
   }
 
   /** The contract's view of block.number for a block, per the chain's semantics. */
-  private async contractBlockNumber(blockNumber: bigint, cache: Map<bigint, bigint>): Promise<bigint | undefined> {
+  private async contractBlockNumber(blockNumber: bigint, headers: Headers): Promise<bigint | undefined> {
     if (this.blockNumbers !== "arbitrum") return undefined;
-    const hit = cache.get(blockNumber);
-    if (hit !== undefined) return hit;
-    const raw = await this.block(blockNumber);
+    const raw = await this.header(blockNumber, headers);
     if (!raw?.l1BlockNumber) throw new Error(`block ${blockNumber} has no l1BlockNumber; is this really an Arbitrum-style chain?`);
-    const l1 = BigInt(raw.l1BlockNumber);
-    cache.set(blockNumber, l1);
-    return l1;
+    return BigInt(raw.l1BlockNumber);
   }
 
   /** The raw block header, so chains with extra fields (Arbitrum's l1BlockNumber) need no formatter. */
-  private async block(blockNumber: bigint): Promise<Header | null> {
+  private async block(blockNumber: bigint | "latest"): Promise<Header | null> {
     return (await this.client.request({
       method: "eth_getBlockByNumber",
-      params: [`0x${blockNumber.toString(16)}`, false],
+      params: [blockNumber === "latest" ? "latest" : `0x${blockNumber.toString(16)}`, false],
     } as never)) as Header | null;
+  }
+
+  private async header(blockNumber: bigint, headers: Headers): Promise<Header | null> {
+    if (!headers.has(blockNumber)) headers.set(blockNumber, await this.block(blockNumber).catch(() => null));
+    return headers.get(blockNumber) ?? null;
   }
 
   private async blockHash(blockNumber: bigint): Promise<Hex | null> {
@@ -124,16 +130,26 @@ export class Ingester {
     }
   }
 
+  /**
+   * One poll. A single `latest` header read says where the chain is; when nothing came after
+   * the checkpoint that is the poll's only RPC call. Otherwise: the reorg check (the checkpoint
+   * block's hash), then one eth_getLogs per 10,000-block chunk. The head's own header is reused
+   * as the new checkpoint rather than read again - three header reads per poll became one.
+   */
   async sync(onProgress?: (from: bigint, to: bigint, head: bigint) => void): Promise<number> {
+    const latest = await this.block("latest");
+    if (!latest?.number || !latest.hash) throw new Error("the RPC returned no latest block");
+    const head = BigInt(latest.number);
+    if (head < this.nextBlock) return 0;
     await this.rewindIfReorged();
-    const head = await this.client.getBlockNumber();
     let applied = 0;
     while (this.nextBlock <= head) {
       const to = this.nextBlock + this.maxRange - 1n > head ? head : this.nextBlock + this.maxRange - 1n;
       onProgress?.(this.nextBlock, to, head);
+      const headers: Headers = new Map([[head, latest]]);
       // The checkpoint header is read before the logs. If the chain reorganises between the two
       // reads, the stored hash is the old chain's and the next poll notices.
-      const toHeader = this.log ? await this.block(to).catch(() => null) : null;
+      const toHeader = this.log ? await this.header(to, headers) : null;
       if (this.log && !toHeader?.hash) throw new Error(`block ${to} not found while syncing; head was ${head}`);
       const logs = await this.client.getLogs({
         address: this.adapter,
@@ -141,14 +157,11 @@ export class Ingester {
         toBlock: to,
       });
       const events = decodeAdapterLogs(logs);
-      const cache = new Map<bigint, bigint>();
-      for (const ev of events) ev.contractBlockNumber = await this.contractBlockNumber(ev.blockNumber, cache);
+      for (const ev of events) ev.contractBlockNumber = await this.contractBlockNumber(ev.blockNumber, headers);
       if (this.log) {
         // Each event block's header, once per block: the timestamp the stats page buckets by.
-        const headers = new Map<bigint, Header | null>();
         for (const ev of events) {
-          if (!headers.has(ev.blockNumber)) headers.set(ev.blockNumber, ev.blockNumber === to ? toHeader : await this.block(ev.blockNumber).catch(() => null));
-          const h = headers.get(ev.blockNumber);
+          const h = await this.header(ev.blockNumber, headers);
           if (h?.timestamp) ev.blockTimestamp = Number(BigInt(h.timestamp));
         }
         this.log.append(events, { number: to, hash: toHeader!.hash!, timestamp: toHeader!.timestamp ? Number(BigInt(toHeader!.timestamp)) : undefined });

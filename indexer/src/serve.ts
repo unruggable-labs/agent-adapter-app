@@ -70,7 +70,9 @@ const NETWORKS = {
     // Fresh v0.0.17 deployment: the block the proxy's code first appeared in is the start.
     fromBlock: 75_810_067n,
     port: 8791,
-    pollMs: 6_000, // 100 ms blocks: a poll covers ~60 blocks
+    // 100 ms blocks, so a poll covers ~300 of them. The dedicated RPC is metered: a poll is
+    // three calls (latest header, checkpoint check, logs), and 30 s keeps that under 10k a day.
+    pollMs: 30_000,
     // Arbitrum Orbit: block.number inside a contract is the parent chain's block. Attestation
     // ids are hashed with it, so the ingester reads each block's l1BlockNumber.
     blockNumbers: "arbitrum" as const,

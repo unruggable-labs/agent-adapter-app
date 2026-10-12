@@ -22,11 +22,11 @@ describe("arbitrum block numbers", () => {
       address: ADAPTER, blockNumber: l2Block, logIndex: 0, transactionHash: "0x" + "ab".repeat(32), topics,
       data: encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes" }], [attestationId, variant, data]),
     };
+    const header = { number: `0x${l2Block.toString(16)}`, hash: "0x" + "cd".repeat(32), l1BlockNumber: `0x${l1Block.toString(16)}` };
     const client = {
-      getBlockNumber: async () => l2Block,
       getLogs: async () => [log],
       request: async ({ method, params }: { method: string; params: unknown[] }) => {
-        if (method === "eth_getBlockByNumber" && params[0] === `0x${l2Block.toString(16)}`) return { l1BlockNumber: `0x${l1Block.toString(16)}` };
+        if (method === "eth_getBlockByNumber" && (params[0] === "latest" || params[0] === `0x${l2Block.toString(16)}`)) return header;
         throw new Error("unexpected " + method);
       },
     } as unknown as PublicClient;
@@ -59,8 +59,8 @@ describe("event log write-through and reorgs", () => {
     const setBlock = (n: bigint, fork: number, data?: `0x${string}`) => blocks.set(n, { hash: hash(n, fork), data });
     const idOf = (block: bigint, data: `0x${string}`) => computeAttestationId(chainId, ADAPTER, attester, ubid, 2, block, variant, data);
     const calls: string[] = [];
+    const headOf = () => [...blocks.keys()].reduce((a, b) => (b > a ? b : a), 0n);
     const client = {
-      getBlockNumber: async () => [...blocks.keys()].reduce((a, b) => (b > a ? b : a), 0n),
       getLogs: async ({ fromBlock, toBlock }: { fromBlock: bigint; toBlock: bigint }) => {
         calls.push(`logs ${fromBlock}-${toBlock}`);
         const out = [];
@@ -77,8 +77,10 @@ describe("event log write-through and reorgs", () => {
       },
       request: async ({ method, params }: { method: string; params: unknown[] }) => {
         if (method !== "eth_getBlockByNumber") throw new Error("unexpected " + method);
-        const b = blocks.get(BigInt(params[0] as string));
-        return b ? { hash: b.hash } : null;
+        const n = params[0] === "latest" ? headOf() : BigInt(params[0] as string);
+        calls.push(`header ${params[0] === "latest" ? "latest" : n}`);
+        const b = blocks.get(n);
+        return b ? { number: `0x${n.toString(16)}`, hash: b.hash } : null;
       },
     } as unknown as PublicClient;
     return { chainId, client, calls, setBlock, idOf, blocks };
@@ -109,7 +111,14 @@ describe("event log write-through and reorgs", () => {
     expect(store2.attestations.size).toBe(2);
     chain.setBlock(111n, 0);
     await ing2.sync();
-    expect(chain.calls).toEqual(["logs 111-111"]);
+    // A poll with new blocks is three calls: where the chain is, is the checkpoint still there, the logs.
+    expect(chain.calls).toEqual(["header latest", "header 110", "logs 111-111"]);
+
+    // A poll with nothing new is one call. The dedicated RPCs are metered.
+    chain.calls.length = 0;
+    await ing2.sync();
+    expect(chain.calls).toEqual(["header latest"]);
+    chain.calls.length = 0;
 
     // the chain reorganises from block 108: the statement there is replaced, blocks after it change hash
     for (let n = 108n; n <= 112n; n++) chain.setBlock(n, 1);
