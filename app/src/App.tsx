@@ -7,7 +7,8 @@ import { SearchBar } from "./components/search";
 import { MenuButton, NavBackdrop, NavClose, useNavDrawer } from "./components/shell";
 import { Modal } from "./components/ui";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, DOCS_URL, NETWORK, networkId, shortHex, STATS_URL } from "./lib/chain";
+import { ACTORS, chainLabel, DOCS_URL, HOME, HOME_ID, IS_HUB, MAINNETS, NETWORKS, PERSONA_WRITES, shortHex, STATS_URL } from "./lib/chain";
+import { useSearchParams } from "./lib/url";
 import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
 import { AttestationPage } from "./pages/Attestation";
@@ -35,21 +36,23 @@ function NavItem({ to, label, count }: { to: string; label: string; count?: numb
 }
 
 /** The account, in the header: who is connected, whether they are on the right chain, and the
- *  way in or out. On the devnet the "account" is a persona picked from a list instead. */
+ *  way in or out. On the devnet the "account" is a persona picked from a list instead. On the
+ *  multichain explorer there is no one right chain: a write switches the wallet to the chain of
+ *  the record it is about (lib/tx.ts), so the header only says which chain the wallet is on. */
 function WalletControl() {
   const { signer, actorIndex, setActorIndex } = useApp();
   const { connectors, connect, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { chain } = useAccount();
   const { switchChain } = useSwitchChain();
-  const wrongChain = signer !== null && chain?.id !== NETWORK.chain.id;
+  const wrongChain = signer !== null && HOME !== null && chain?.id !== HOME.chain.id;
 
-  // nudge the wallet onto this network's chain as soon as it connects
+  // a chain's own site: nudge the wallet onto its chain as soon as it connects
   useEffect(() => {
-    if (wrongChain) switchChain({ chainId: NETWORK.chain.id });
+    if (wrongChain && HOME) switchChain({ chainId: HOME.chain.id });
   }, [signer?.address]);
 
-  if (NETWORK.personaWrites)
+  if (PERSONA_WRITES)
     return (
       <label className="row" style={{ gap: 8 }}>
         <span className="hint">Acting as</span>
@@ -69,8 +72,8 @@ function WalletControl() {
     return (
       <div className="row" style={{ gap: 8 }}>
         {wrongChain ? (
-          <button className="btn btn-sm" style={{ color: "var(--warn)" }} onClick={() => switchChain({ chainId: NETWORK.chain.id })}>
-            Switch to {NETWORK.chain.name}
+          <button className="btn btn-sm" style={{ color: "var(--warn)" }} onClick={() => HOME && switchChain({ chainId: HOME.chain.id })}>
+            Switch to {HOME?.label}
           </button>
         ) : (
           <span className="account-dot" title={`on ${chain?.name}`} />
@@ -102,7 +105,7 @@ function AppKitControl({ wrongChain, chainName }: { wrongChain: boolean; chainNa
     <span className="row" style={{ gap: 8 }}>
       {wrongChain && (
         <button className="btn btn-sm" style={{ color: "var(--warn)" }} onClick={() => open({ view: "Networks" })}>
-          Switch to {NETWORK.chain.name}
+          Switch to {HOME?.label}
         </button>
       )}
       <button className="btn btn-sm btn-account" title={`${address}${chainName ? ` · on ${chainName}` : ""}`} onClick={() => open({ view: "Account" })}>
@@ -137,7 +140,7 @@ function Shell() {
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
   else if (route.startsWith("/attestation/")) page = <AttestationPage id={route.split("/")[2]} />;
   else if (route.startsWith("/create")) page = <CreatePage />;
-  else if (route.startsWith("/stats")) page = <StatsPage chains={[networkId]} />;
+  else if (route.startsWith("/stats")) page = HOME_ID ? <StatsPage chains={[HOME_ID]} /> : <StatsPage chains={liveMainnets(overview)} allChains />;
 
   return (
     <div className={`shell${navOpen ? " nav-open" : ""}`}>
@@ -161,6 +164,7 @@ function Shell() {
         <div className="nav-label">Registry</div>
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
+        {IS_HUB && <ChainNav />}
 
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
@@ -177,15 +181,53 @@ function Shell() {
           <span className="topbar-spacer" />
           <SearchBar />
           <div className="topbar-right">
-            <button className="chain-btn" title={`${NETWORK.label} - switch chain`} aria-label="Switch chain" onClick={() => setPickChain(true)}>
-              <ChainIcon id={networkId} size={22} />
-            </button>
+            {HOME_ID ? (
+              <button className="chain-btn" title={`${HOME!.label} - switch chain`} aria-label="Switch chain" onClick={() => setPickChain(true)}>
+                <ChainIcon id={HOME_ID} size={22} />
+              </button>
+            ) : (
+              <button className="chain-btn chain-btn-wide" title="Every mainnet - the testnet is a separate site" aria-label="Chains" onClick={() => setPickChain(true)}>
+                <span className="chain-stack">{liveMainnets(overview).map((id) => <ChainIcon key={id} id={id} size={20} />)}</span>
+              </button>
+            )}
             <WalletControl />
           </div>
         </header>
         <div className="main-scroll">{page}</div>
       </main>
     </div>
+  );
+}
+
+/** The mainnets the hub has records for: its overview says which it follows; before that loads, the ones marked live. */
+function liveMainnets(overview: ReturnType<typeof useApp>["overview"]): string[] {
+  const indexed = overview?.chains?.map((c) => c.chain);
+  return indexed?.length ? indexed : MAINNETS.filter((id) => NETWORKS[id]?.status === "live");
+}
+
+/**
+ * The hub's chains in the sidebar: each with its count, opening the identities on it alone. A
+ * chain still catching up, or one whose indexer has stopped hearing from its RPC, says so - its
+ * records are still shown, as of the last block it read.
+ */
+function ChainNav() {
+  const { overview, route, navigate } = useApp();
+  const params = useSearchParams();
+  const chains = overview?.chains ?? [];
+  if (chains.length < 2) return null;
+  const on = route === "/identities" || route === "/" ? params.get("chain") : null;
+  return (
+    <>
+      <div className="nav-label">Chains</div>
+      {chains.map((c) => (
+        <button key={c.chain} className={`nav-item ${on === c.chain ? "active" : ""}`} onClick={() => navigate(`/identities?chain=${c.chain}`)}>
+          <ChainIcon id={c.chain} size={16} />
+          {chainLabel(c.chain)}
+          {c.state !== "live" && <span className="chain-state" title={c.state === "stalled" ? "The indexer hasn't heard from this chain's RPC for a while. Its records are as of the last block it read." : "Still catching up with the chain."}>{c.state}</span>}
+          <span className="count">{c.identities.toLocaleString()}</span>
+        </button>
+      ))}
+    </>
   );
 }
 

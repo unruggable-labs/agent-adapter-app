@@ -5,7 +5,7 @@ import { getBalance } from "@wagmi/core";
 import { formatUnits, type Address } from "viem";
 import { createConfig, http, type Config } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { NETWORK, NETWORKS } from "./chain";
+import { HOME, MAINNETS, NETWORKS } from "./chain";
 
 /**
  * Wallet plumbing is wagmi's wheel: EIP-6963 discovery of injected wallets, account and chain
@@ -17,11 +17,12 @@ import { NETWORK, NETWORKS } from "./chain";
 const projectId = import.meta.env.VITE_WC_PROJECT_ID as string | undefined;
 export const appKitEnabled = Boolean(projectId);
 
-// Only the chain this build's indexer follows. Offering the other in the wallet menu would let
-// someone switch to a chain the app can't read, and the sidebar's network switch (dev only) is
-// what actually changes which backend the app talks to.
+// The chains this site shows: a chain's own site offers that one, the multichain explorer every
+// mainnet - a write switches the wallet to the chain of the record it is about (tx.ts).
+// Offering others would let someone switch to a chain the site can't read.
 const APPKIT_NETWORK: Record<number, AppKitNetwork> = { [mainnet.id]: mainnet, [sepolia.id]: sepolia, [base.id]: base, [robinhood.id]: robinhood, [foundry.id]: foundry };
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [APPKIT_NETWORK[NETWORK.chain.id] ?? sepolia];
+const shown = HOME ? [HOME] : MAINNETS.map((id) => NETWORKS[id]);
+const networks = shown.map((n) => APPKIT_NETWORK[n.chain.id]).filter(Boolean) as [AppKitNetwork, ...AppKitNetwork[]];
 const transports = {
   [mainnet.id]: http(NETWORKS.mainnet?.rpcUrl),
   [sepolia.id]: http(NETWORKS.sepolia?.rpcUrl),

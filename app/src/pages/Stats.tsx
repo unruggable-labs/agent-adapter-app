@@ -3,7 +3,7 @@ import { ChartLegend, LineChart, type ChartSeries } from "../components/chart";
 import { ChainIcon } from "../components/chains";
 import { MultiSelect, Pager, Skeleton, StandardBadge, Tip } from "../components/ui";
 import { statsApi, type ProjectRow, type StatsBucket, type StatsOverview, type StatsSeries } from "../lib/api";
-import { apiBaseFor, explorerOriginFor, NETWORKS, STANDARD_NAMES, type NetworkId } from "../lib/chain";
+import { statsSourceFor, explorerOriginFor, NETWORKS, STANDARD_NAMES, type NetworkId } from "../lib/chain";
 import { usePageParam } from "../lib/url";
 
 /**
@@ -118,7 +118,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     (async () => {
       const results = await Promise.all(
         chains.map(async (c) => {
-          const s = statsApi(apiBaseFor(c));
+          const s = statsApi(statsSourceFor(c));
           try {
             const [overview, claims, registrations, identities, projects] = await Promise.all([
               s.overview(window),
@@ -167,7 +167,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
       await Promise.all(
         [...byChain].map(async ([chain, addrs]) => {
           try {
-            const r = await statsApi(apiBaseFor(chain)).series("identities", bucket, window, { projects: addrs });
+            const r = await statsApi(statsSourceFor(chain)).series("identities", bucket, window, { projects: addrs });
             for (const sr of r.series) if (sr.key !== "total") out[`${chain}:${sr.key}`] = sr;
           } catch {
             // the chain didn't answer; its lines stay off until the next change of view

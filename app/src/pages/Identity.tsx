@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
 import { Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip } from "../components/ui";
-import { api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
+import { adapterOf, api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
+import { ChainTag } from "../components/chains";
 import { useApp, useLive, settle } from "../lib/app-state";
 import {
   ATTESTATION_TYPES,
@@ -59,6 +60,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <h1 className="page-title" style={{ fontSize: 18 }}>{displayName(id)}</h1>
             <StatusBadge id={id} />
             <StandardBadge id={id} />
+            <ChainTag chain={id.chain} />
           </div>
           <p className="mono t3 small" style={{ margin: 0, overflowWrap: "anywhere" }}>{id.ubid}</p>
           {id.card?.name && id.card.name !== displayName(id) && (
@@ -104,7 +106,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
               <div>{r.score !== null && r.score !== undefined && <span className="num" style={{ marginRight: 8 }}>{r.score}/100</span>}"{r.text}"</div>
               <div className="t3 small">
                 — <AddressLink address={r.attester} /> · block {r.order.blockNumber}
-                {r.reference && r.reference !== ZERO32 && <> · ref <TxRef hash={r.reference} /></>}
+                {r.reference && r.reference !== ZERO32 && <> · ref <TxRef hash={r.reference} chain={id.chain} /></>}
                 {" · "}<button className="agent-link" onClick={() => navigate(`/attestation/${r.attestationId}`)}>statement</button>
               </div>
             </div>
@@ -112,7 +114,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
           {id.reputation.interactions.map((x) => (
             <div key={x.attestationId} className="review-item">
               <div><span className="num">{x.score}/100</span> {x.text && <span className="t2">· {x.text}</span>}</div>
-              <div className="t3 small">transaction · ref <TxRef hash={x.reference} /> · by <AddressLink address={x.attester} /> · <button className="agent-link" onClick={() => navigate(`/attestation/${x.attestationId}`)}>statement</button></div>
+              <div className="t3 small">transaction · ref <TxRef hash={x.reference} chain={id.chain} /> · by <AddressLink address={x.attester} /> · <button className="agent-link" onClick={() => navigate(`/attestation/${x.attestationId}`)}>statement</button></div>
             </div>
           ))}
           {id.reputation.confirmedAccounts.length > 0 && (
@@ -146,7 +148,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
               ) : <span className="t3">not set</span>}
             </dd>
             <dt>ERC-8004 agent</dt>
-            <dd>{id.agentIds.length ? <AgentIds ids={id.agentIds} /> : <span className="t3">not registered</span>}</dd>
+            <dd>{id.agentIds.length ? <AgentIds ids={id.agentIds} chain={id.chain} /> : <span className="t3">not registered</span>}</dd>
             <dt>Last event</dt>
             <dd className="small t2">
               {id.lastEvent
@@ -183,7 +185,7 @@ function ControllerSection({ id }: { id: Identity }) {
   const { navigate } = useApp();
   const isToken = id.standard <= 4;
   const col = id.collection ?? null;
-  const explorer = explorerAddressUrl(id.boundAddress);
+  const explorer = explorerAddressUrl(id.chain, id.boundAddress);
   const holder = id.currentControllerHolder;
   return (
     <Section label="Controller">
@@ -203,7 +205,7 @@ function ControllerSection({ id }: { id: Identity }) {
             {id.contractName && !col?.name && <span style={{ fontWeight: 600 }}>{id.contractName}</span>}
             <Addr value={id.boundAddress} n={10} />
             <button className="agent-link small" onClick={() => navigate(`/address/${id.boundAddress}`)}>Everything about this address</button>
-            {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">View on {explorerName()}</a>}
+            {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">View on {explorerName(id.chain)}</a>}
           </span>
         </dd>
         {isToken && (
@@ -278,12 +280,12 @@ function HistoryPanel({ id }: { id: Identity }) {
             </thead>
             <tbody>
               {newestFirst.map((h) => {
-                const url = h.transactionHash ? explorerTxUrl(h.transactionHash) : null;
+                const url = h.transactionHash ? explorerTxUrl(id.chain, h.transactionHash) : null;
                 return (
                   <tr key={`${h.order.blockNumber}:${h.order.logIndex}`} className={h.outcome !== "applied" ? "is-muted" : undefined}>
                     <td className="td-right num">
-                      {explorerBlockUrl(h.order.blockNumber)
-                        ? <a className="agent-link" href={explorerBlockUrl(h.order.blockNumber)!} target="_blank" rel="noopener noreferrer">{h.order.blockNumber}</a>
+                      {explorerBlockUrl(id.chain, h.order.blockNumber)
+                        ? <a className="agent-link" href={explorerBlockUrl(id.chain, h.order.blockNumber)!} target="_blank" rel="noopener noreferrer">{h.order.blockNumber}</a>
                         : h.order.blockNumber}
                     </td>
                     <td><span className="mono small">{h.eventName}</span></td>
@@ -291,7 +293,7 @@ function HistoryPanel({ id }: { id: Identity }) {
                     <td className="td-wrap">
                       {h.outcome !== "applied" && <Badge tone={h.outcome === "dropped" ? "danger" : "warn"}>{h.outcome}</Badge>}
                       {h.outcome !== "applied" && " "}
-                      <span className="small"><Effect text={h.effect} /></span>
+                      <span className="small"><Effect text={h.effect} chain={id.chain} /></span>
                     </td>
                     <td>
                       {h.transactionHash ? (
@@ -324,7 +326,7 @@ export function AddressLink({ address }: { address: string }) {
  * Zero means "no reference".
  */
 const txChecks = new Map<string, Promise<"found" | "missing" | null>>();
-export function TxRef({ hash }: { hash: string }) {
+export function TxRef({ hash, chain }: { hash: string; chain: string }) {
   const [state, setState] = useState<"found" | "missing" | null>(null);
   useEffect(() => {
     if (hash === ZERO32) return;
@@ -340,7 +342,7 @@ export function TxRef({ hash }: { hash: string }) {
     };
   }, [hash]);
   if (hash === ZERO32) return <span className="t3">none</span>;
-  const url = explorerTxUrl(hash);
+  const url = explorerTxUrl(chain, hash);
   const label = <span className="mono" title={hash}>{shortHex(hash, 12)}</span>;
   return (
     <>
@@ -352,13 +354,13 @@ export function TxRef({ hash }: { hash: string }) {
 }
 
 /** An effect line with any "ERC-8004 agent #id" / "ERC-8004 #id" linked to its 8004Scan page. */
-function Effect({ text }: { text: string }) {
+function Effect({ text, chain }: { text: string; chain: string }) {
   const parts = text.split(/(ERC-8004 (?:agent )?#\d+)/g);
   return (
     <>
       {parts.map((part, i) => {
         const m = /^ERC-8004 (agent )?#(\d+)$/.exec(part);
-        const url = m ? scanAgentUrl(m[2]) : null;
+        const url = m ? scanAgentUrl(chain, m[2]) : null;
         return url ? (
           <span key={i}>ERC-8004 {m![1] ?? ""}<a className="agent-link" href={url} target="_blank" rel="noopener noreferrer">#{m![2]}</a></span>
         ) : (
@@ -379,7 +381,8 @@ function ConfirmBanner({ id }: { id: Identity }) {
     ([k, v]) => (k === "account" || k.startsWith("account[")) && signer !== null && v.toLowerCase().includes(signer.address.slice(2)),
   );
   const confirmed = id.reputation.confirmedAccounts.some((c) => c.attester === signer?.address);
-  if (!named || confirmed || !overview) return null;
+  const adapter = adapterOf(overview, id.chain);
+  if (!named || confirmed || !adapter) return null;
 
   return (
     <Callout tone="ok" title={`This identity names your address as an additional account.`}>
@@ -390,7 +393,7 @@ function ConfirmBanner({ id }: { id: Identity }) {
         disabled={busy}
         onClick={async () => {
           setBusy(true);
-          const r = await sendTx(signer, overview.adapter, adapterAbi, "confirmAdditionalAccount", [id.ubid]);
+          const r = await sendTx(signer, id.chain, adapter, adapterAbi, "confirmAdditionalAccount", [id.ubid]);
           toast(r.message);
           await settle(refresh);
           setBusy(false);
@@ -410,11 +413,12 @@ function ConfirmBanner({ id }: { id: Identity }) {
 function WalletLinkBanner({ id }: { id: Identity }) {
   const { signer, overview, refresh, toast } = useApp();
   const [busy, setBusy] = useState(false);
-  if (!signer || !overview || !id.agentWallet || id.agentWallet !== signer.address) return null;
+  const adapter = adapterOf(overview, id.chain);
+  if (!signer || !adapter || !id.agentWallet || id.agentWallet !== signer.address) return null;
 
   async function run(fn: string, args: unknown[]) {
     setBusy(true);
-    const r = await sendTx(signer, overview!.adapter, adapterAbi, fn, args);
+    const r = await sendTx(signer, id.chain, adapter!, adapterAbi, fn, args);
     toast(r.message);
     if (r.ok) await settle(refresh);
     setBusy(false);
@@ -450,17 +454,18 @@ function useAttest(id: Identity) {
   const { signer, overview, refresh, toast } = useApp();
   const [busy, setBusy] = useState(false);
 
+  const adapter = adapterOf(overview, id.chain);
   async function attest(type: number, data: Hex, reference: Hex = ZERO32) {
-    if (!overview) return false;
+    if (!adapter) return false;
     setBusy(true);
-    const r = await sendTx(signer, overview.adapter, adapterAbi, "attest", [type, id.ubid, reference, data]);
+    const r = await sendTx(signer, id.chain, adapter, adapterAbi, "attest", [type, id.ubid, reference, data]);
     toast(r.ok ? `Attested - ${r.message}` : r.message);
     if (r.ok) await settle(refresh);
     setBusy(false);
     return r.ok;
   }
 
-  return { attest, busy, signer, ready: !!overview };
+  return { attest, busy, signer, ready: !!adapter };
 }
 
 /** The star toggle, for the page header. Filled when this signer's live value is 1. */
@@ -625,13 +630,14 @@ function ManagePanel({ id }: { id: Identity }) {
 
   // Ask the contract rather than guess. Re-stating the current URI is authority-gated and is a
   // no-op even if it were sent, so it is a safe probe; the simulation never leaves the node.
+  const adapter = adapterOf(overview, id.chain);
   useEffect(() => {
-    if (!signer || !overview) {
+    if (!signer || !adapter) {
       setCanManage(false);
       return;
     }
     let cancelled = false;
-    canSend(signer, overview.adapter, adapterAbi, "counterfactualSetAgentURI", [
+    canSend(signer, id.chain, adapter, adapterAbi, "counterfactualSetAgentURI", [
       id.standard,
       id.boundAddress,
       BigInt(id.tokenId),
@@ -642,13 +648,13 @@ function ManagePanel({ id }: { id: Identity }) {
     return () => {
       cancelled = true;
     };
-  }, [signer?.address, overview?.adapter, id.ubid, id.agentURI, id.standard, id.boundAddress, id.tokenId]);
+  }, [signer?.address, adapter, id.chain, id.ubid, id.agentURI, id.standard, id.boundAddress, id.tokenId]);
 
-  if (!overview || !signer || canManage === null) return null;
+  if (!adapter || !signer || canManage === null) return null;
   // Not the holder: the manage panel simply doesn't appear. Who controls it is on the record.
   if (!canManage) return null;
 
-  return <ManageForm id={id} busy={busy} setBusy={setBusy} refresh={refresh} toast={toast} adapter={overview.adapter} signer={signer} />;
+  return <ManageForm id={id} busy={busy} setBusy={setBusy} refresh={refresh} toast={toast} adapter={adapter} signer={signer} />;
 }
 
 function ManageForm({
@@ -678,7 +684,7 @@ function ManageForm({
 
   async function run(label: string, fn: string, args: unknown[]) {
     setBusy(label);
-    const r = await sendTx(signer, adapter, adapterAbi, fn, args);
+    const r = await sendTx(signer, id.chain, adapter, adapterAbi, fn, args);
     toast(r.message);
     if (r.ok) await settle(refresh);
     setBusy(null);

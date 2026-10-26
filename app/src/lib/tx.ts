@@ -2,7 +2,7 @@ import type { Abi, Address } from "viem";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 import { getWalletClient, switchChain } from "wagmi/actions";
 import type { Signer } from "./app-state";
-import { NETWORK, publicClient, walletFor } from "./chain";
+import { chainConfig, clientFor, walletFor, type NetworkId } from "./chain";
 import { wagmiConfig } from "./wagmi";
 
 export interface TxResult {
@@ -11,13 +11,15 @@ export interface TxResult {
 }
 
 /**
- * Simulate → write → wait. Simulation runs first so an unauthorized action fails with the
- * contract's own error name before anything is signed — the preflight and the authority
- * check are the same code path. Local devnet signs with the persona's anvil key; public
- * networks sign with the user's connected wallet (switching it to the right chain first).
+ * Simulate → write → wait, on the chain the record is on. Simulation runs first so an
+ * unauthorized action fails with the contract's own error name before anything is signed — the
+ * preflight and the authority check are the same code path. Local devnet signs with the
+ * persona's anvil key; public networks sign with the user's connected wallet, switched to the
+ * record's chain first - on the multichain explorer that is the wallet's only chain switch.
  */
 export async function sendTx(
   signer: Signer | null,
+  chain: NetworkId,
   address: Address,
   abi: Abi,
   functionName: string,
@@ -27,8 +29,10 @@ export async function sendTx(
     return { ok: false, message: "Connect a wallet to do this" };
   }
   try {
+    const net = chainConfig(chain);
+    const client = clientFor(chain);
     const account = signer.isPersona ? walletFor(signer.actorIndex).account : signer.address;
-    const { request } = await publicClient.simulateContract({
+    const { request } = await client.simulateContract({
       account,
       address,
       abi,
@@ -41,14 +45,14 @@ export async function sendTx(
       hash = await walletFor(signer.actorIndex).writeContract(request);
     } else {
       try {
-        await switchChain(wagmiConfig, { chainId: NETWORK.chain.id });
+        await switchChain(wagmiConfig, { chainId: net.chain.id });
       } catch {
-        return { ok: false, message: `Your wallet is on the wrong network - switch it to ${NETWORK.chain.name} and retry` };
+        return { ok: false, message: `This is on ${net.label} - switch your wallet to it and retry` };
       }
-      const wallet = await getWalletClient(wagmiConfig, { chainId: NETWORK.chain.id });
+      const wallet = await getWalletClient(wagmiConfig, { chainId: net.chain.id });
       hash = await wallet.writeContract(request);
     }
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await client.waitForTransactionReceipt({ hash });
     return receipt.status === "success"
       ? { ok: true, message: `Confirmed in block ${receipt.blockNumber}` }
       : { ok: false, message: "Transaction reverted" };
@@ -70,6 +74,7 @@ export async function sendTx(
  */
 export async function canSend(
   signer: Signer | null,
+  chain: NetworkId,
   address: Address,
   abi: Abi,
   functionName: string,
@@ -78,7 +83,7 @@ export async function canSend(
   if (!signer) return false;
   try {
     const account = signer.isPersona ? walletFor(signer.actorIndex).account : signer.address;
-    await publicClient.simulateContract({ account, address, abi, functionName, args });
+    await clientFor(chain).simulateContract({ account, address, abi, functionName, args });
     return true;
   } catch {
     return false;

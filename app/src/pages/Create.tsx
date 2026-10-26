@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { encodeFunctionData, isAddress, type Address, type Hex } from "viem";
 import { Addr, Badge, Spinner, Tip } from "../components/ui";
 import { useApp, useLive, settle } from "../lib/app-state";
-import { api } from "../lib/api";
-import { adapterAbi, displayName, publicClient, shortHex } from "../lib/chain";
+import { adapterOf, api } from "../lib/api";
+import { ChainIcon } from "../components/chains";
+import { adapterAbi, chainLabel, clientFor, displayName, HOME_ID, NETWORKS, shortHex, type NetworkId } from "../lib/chain";
+import { useAccount } from "wagmi";
 import { canSend, revertReason, sendTx } from "../lib/tx";
 import { CodeBlock, CopyButton } from "../components/code";
 
@@ -70,12 +72,14 @@ const probeAbi = [
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const ZERO_ROLE = ("0x" + "00".repeat(32)) as Hex;
 
-async function read<T>(address: Address, functionName: string, args: unknown[] = []): Promise<T | null> {
-  return publicClient.readContract({ address, abi: probeAbi, functionName: functionName as never, args: args as never }).then((v) => v as T).catch(() => null);
+async function readOn<T>(chain: NetworkId, address: Address, functionName: string, args: unknown[] = []): Promise<T | null> {
+  return clientFor(chain).readContract({ address, abi: probeAbi, functionName: functionName as never, args: args as never }).then((v: unknown) => v as T).catch(() => null);
 }
 
-async function gatherFacts(kind: Kind, address: Address, tokenId: bigint, you: Address | null, accountDelegate: () => Promise<boolean>): Promise<Facts> {
-  const code = await publicClient.getCode({ address }).catch(() => undefined);
+/** What the chain says about the thing being bound - the wizard's probes, on the chain the identity will live on. */
+async function gatherFacts(chain: NetworkId, kind: Kind, address: Address, tokenId: bigint, you: Address | null, accountDelegate: () => Promise<boolean>): Promise<Facts> {
+  const read = <T,>(a: Address, fn: string, args: unknown[] = []) => readOn<T>(chain, a, fn, args);
+  const code = await clientFor(chain).getCode({ address }).catch(() => undefined);
   const hasCode = !!code && code !== "0x";
   const me = you ?? ZERO_ADDRESS;
   const [name, ownerOf, balance, erc721, erc1155, erc6909, owner, isAdmin, isAccountDelegate] = await Promise.all([
@@ -126,10 +130,12 @@ type Path = "wallet" | "developer";
 /** The root question: will this identity be created by signing here, or by a contract? */
 export function CreatePage() {
   const [path, setPath] = useState<Path | null>(null);
+  const chain = useCreateChain();
   return (
     <div className="page fade-in">
       <h1 className="page-title">Create an identity</h1>
       <p className="page-sub">Give your agent an identity.</p>
+      {!HOME_ID && <ChainChoice chain={chain.value} chains={chain.offered} onChange={chain.set} />}
 
       <Step n={1} title="How will this identity come to exist?">
         <Choice
@@ -146,14 +152,49 @@ export function CreatePage() {
         />
       </Step>
 
-      {path === "wallet" && <WalletFlow />}
-      {path === "developer" && <DeveloperFlow />}
+      {chain.value && path === "wallet" && <WalletFlow key={chain.value} chain={chain.value} />}
+      {chain.value && path === "developer" && <DeveloperFlow key={chain.value} chain={chain.value} />}
+    </div>
+  );
+}
+
+/**
+ * The chain the identity will live on. A chain's own site has one. On the multichain explorer it
+ * starts as the chain the wallet is on, where that is one the explorer follows, and the first
+ * chain otherwise - the thing being bound (a token, a contract) lives on one chain, and the
+ * identity has to live there too.
+ */
+function useCreateChain(): { value: NetworkId | null; offered: NetworkId[]; set: (c: NetworkId) => void } {
+  const { overview } = useApp();
+  const { chainId } = useAccount();
+  const offered = HOME_ID ? [HOME_ID] : (overview?.chains?.map((c) => c.chain) ?? []);
+  const [picked, setPicked] = useState<NetworkId | null>(null);
+  const walletChain = offered.find((c) => NETWORKS[c]?.chain.id === chainId) ?? null;
+  const value = picked && offered.includes(picked) ? picked : walletChain ?? offered[0] ?? null;
+  return { value, offered, set: setPicked };
+}
+
+function ChainChoice({ chain, chains, onChange }: { chain: NetworkId | null; chains: NetworkId[]; onChange: (c: NetworkId) => void }) {
+  if (chains.length < 2) return null;
+  return (
+    <div className="field" style={{ marginBottom: 18 }}>
+      <label>Chain</label>
+      <div>
+        <div className="seg" role="group" aria-label="Chain">
+          {chains.map((c) => (
+            <button key={c} className={chain === c ? "active" : ""} onClick={() => onChange(c)}>
+              <span className="row" style={{ gap: 6 }}><ChainIcon id={c} size={14} />{chainLabel(c)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <span className="hint">The chain the token, contract or address you're binding is on. The identity lives there too.</span>
     </div>
   );
 }
 
 /** Steps 2 to 5 for someone who will sign from the connected wallet. */
-function WalletFlow() {
+function WalletFlow({ chain }: { chain: NetworkId }) {
   const { signer, overview, navigate, refresh, toast } = useApp();
   const [kind, setKind] = useState<Kind | null>(null);
   const [address, setAddress] = useState("");
@@ -168,7 +209,7 @@ function WalletFlow() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Hex | null>(null);
 
-  const adapter = overview?.adapter;
+  const adapter = adapterOf(overview, chain);
   const bound: Address | null = kind === "eoa" ? (signer?.address ?? null) : isAddress(address) ? (address.toLowerCase() as Address) : null;
   const tokenId: bigint | null = kind === "token" ? (/^\d+$/.test(tokenIdText) ? BigInt(tokenIdText) : null) : kind ? 0n : null;
   const coordsReady = !!kind && !!bound && tokenId !== null;
@@ -183,8 +224,8 @@ function WalletFlow() {
     if (!coordsReady || !bound || tokenId === null) return;
     let cancelled = false;
     setProbing(true);
-    gatherFacts(kind!, bound, tokenId, signer?.address ?? null, () =>
-      adapter ? canSend(signer, adapter, adapterAbi, "counterfactualRegister", [5, bound, 0n, "preflight"]) : Promise.resolve(false))
+    gatherFacts(chain, kind!, bound, tokenId, signer?.address ?? null, () =>
+      adapter ? canSend(signer, chain, adapter, adapterAbi, "counterfactualRegister", [5, bound, 0n, "preflight"]) : Promise.resolve(false))
       .then((f) => {
         if (cancelled) return;
         setFacts(f);
@@ -205,8 +246,8 @@ function WalletFlow() {
     let cancelled = false;
     const args = [standard, bound, tokenId] as const;
     Promise.all([
-      publicClient.readContract({ address: adapter, abi: adapterAbi, functionName: "hashBinding", args: [...args] }).catch(() => null),
-      canSend(signer, adapter, adapterAbi, "counterfactualRegister", [...args, "preflight"]),
+      clientFor(chain).readContract({ address: adapter, abi: adapterAbi, functionName: "hashBinding", args: [...args] }).catch(() => null),
+      canSend(signer, chain, adapter, adapterAbi, "counterfactualRegister", [...args, "preflight"]),
     ]).then(([h, ok]) => {
       if (cancelled) return;
       setUbid((h as Hex | null) ?? null);
@@ -221,8 +262,8 @@ function WalletFlow() {
   // different standard are a different identity - say so before anyone makes a second one by
   // accident - and the same standard means this one already exists.
   const { data: atCoords } = useLive(
-    () => (bound && tokenId !== null ? api.identities({ bound, tokenId: tokenId.toString(), limit: 50 }) : null),
-    [bound, tokenId?.toString()],
+    () => (bound && tokenId !== null ? api.identities({ bound, tokenId: tokenId.toString(), limit: 50, chain: [chain] }) : null),
+    [bound, tokenId?.toString(), chain],
   );
   const siblings = useMemo(() => (atCoords?.items ?? []).filter((i) => i.standard !== standard), [atCoords, standard]);
   const existing = useMemo(() => (atCoords?.items ?? []).find((i) => i.ubid === ubid) ?? null, [atCoords, ubid]);
@@ -359,7 +400,7 @@ function WalletFlow() {
                 onClick={async () => {
                   setBusy(true);
                   const fn = effectiveMode === "claim" ? "counterfactualRegister" : "register";
-                  const r = await sendTx(signer, adapter, adapterAbi, fn, [standard, bound, tokenId, uri.trim()]);
+                  const r = await sendTx(signer, chain, adapter, adapterAbi, fn, [standard, bound, tokenId, uri.trim()]);
                   toast(r.ok ? r.message : revertReason(r.message));
                   if (r.ok) {
                     await settle(refresh);
@@ -374,7 +415,7 @@ function WalletFlow() {
             </div>
           </Step>
         ) : contractAsItself ? (
-          <ContractGuide n={5} adapter={adapter} contract={bound!} ubid={ubid} uri={uri} setUri={setUri} you={signer?.address ?? null} />
+          <ContractGuide n={5} chain={chain} adapter={adapter} contract={bound!} ubid={ubid} uri={uri} setUri={setUri} you={signer?.address ?? null} />
         ) : (
           <Step n={kind === "eoa" ? 4 : 5} title="Not from this wallet">
             <p className="t2 small" style={{ margin: 0 }}>
@@ -398,11 +439,11 @@ function WalletFlow() {
 type Plan = "mint" | "self" | "controlled";
 
 /** Steps 2 and 3 for someone writing a contract: what it will do, then the code for that. */
-function DeveloperFlow() {
+function DeveloperFlow({ chain }: { chain: NetworkId }) {
   const { signer, overview } = useApp();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [uri, setUri] = useState("");
-  const adapter = overview?.adapter;
+  const adapter = adapterOf(overview, chain);
   if (!adapter) return <Spinner />;
   return (
     <>
@@ -412,7 +453,7 @@ function DeveloperFlow() {
         <Choice selected={plan === "controlled"} onClick={() => setPlan("controlled")} title="Be controlled by its owner or admins" sub="The contract is the subject; a person claims for it. Usually no new code at all." />
       </Step>
       {plan === "mint" && <MintGuide n={3} adapter={adapter} />}
-      {plan === "self" && <ContractGuide n={3} adapter={adapter} contract={null} ubid={null} uri={uri} setUri={setUri} you={signer?.address ?? null} title="Give the contract a voice" />}
+      {plan === "self" && <ContractGuide n={3} chain={chain} adapter={adapter} contract={null} ubid={null} uri={uri} setUri={setUri} you={signer?.address ?? null} title="Give the contract a voice" />}
       {plan === "controlled" && <ControlledGuide n={3} />}
     </>
   );
@@ -534,7 +575,7 @@ function authorityDetail(kind: Kind, standard: number, f: Facts, you: Address | 
  * bound address and nothing else. So this step is instructions, not a button - the code to add,
  * or the exact call to send from a contract that can already execute arbitrary calls.
  */
-function ContractGuide({ n, adapter, contract: known, ubid: knownUbid, uri, setUri, you, title }: { n: number; adapter: Address; contract: Address | null; ubid: Hex | null; uri: string; setUri: (v: string) => void; you: Address | null; title?: string }) {
+function ContractGuide({ n, chain, adapter, contract: known, ubid: knownUbid, uri, setUri, you, title }: { n: number; chain: NetworkId; adapter: Address; contract: Address | null; ubid: Hex | null; uri: string; setUri: (v: string) => void; you: Address | null; title?: string }) {
   const { navigate } = useApp();
   const [route, setRoute] = useState<"execute" | "code" | "delegate">(known ? "execute" : "code");
   // On the developer path the contract may not be deployed yet; an address typed here unlocks
@@ -547,13 +588,13 @@ function ContractGuide({ n, adapter, contract: known, ubid: knownUbid, uri, setU
     setTypedUbid(null);
     if (known || !contract) return;
     let cancelled = false;
-    publicClient.readContract({ address: adapter, abi: adapterAbi, functionName: "hashBinding", args: [5, contract, 0n] })
-      .then((h) => !cancelled && setTypedUbid(h as Hex))
+    clientFor(chain).readContract({ address: adapter, abi: adapterAbi, functionName: "hashBinding", args: [5, contract, 0n] })
+      .then((h: unknown) => !cancelled && setTypedUbid(h as Hex))
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [known, contract, adapter]);
+  }, [known, contract, adapter, chain]);
   const agentURI = uri.trim() || "ipfs://…/agent.json";
   const target = contract ?? ZERO_ADDRESS;
   const registerData = encodeFunctionData({ abi: adapterAbi, functionName: "counterfactualRegister", args: [5, target, 0n, agentURI] });

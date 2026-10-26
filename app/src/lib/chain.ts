@@ -9,11 +9,11 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { base, foundry, mainnet, robinhood, sepolia } from "viem/chains";
 
-/** The backends the app can face. Each network pairs an indexer API with the RPC the wizard's
- *  probes and the write paths use. On the local devnet, demo personas sign with anvil
- *  keys; on public networks the user's connected wallet signs. API bases come from build-time env so a deployed
- *  build points at hosted indexers; the local devnet exists only in dev builds, because nobody
- *  else has our anvil. Toggle persists and reloads. */
+/** The chains the app knows. Each pairs an indexer API (for a chain's own site) with the RPC the
+ *  wizard's probes and the write paths use. On the local devnet, demo personas sign with anvil
+ *  keys; on public networks the user's connected wallet signs. API bases come from build-time env
+ *  so a deployed build points at hosted indexers; the local devnet exists only in dev builds,
+ *  because nobody else has our anvil. */
 interface NetworkConfig {
   label: string;
   apiBase: string;
@@ -27,6 +27,8 @@ interface NetworkConfig {
   status: "live" | "pending";
   /** One line for the chain picker. */
   blurb: string;
+  /** A testnet is its own site; the mainnets are one explorer at adapterscan.com. */
+  testnet?: boolean;
 }
 
 export const NETWORKS: Record<string, NetworkConfig> = {
@@ -53,6 +55,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     personaWrites: false,
     host: "testnet.adapterscan.com",
     status: "live",
+    testnet: true,
     blurb: "The testnet. Free to try; nothing here is worth anything.",
   },
   robinhood: {
@@ -90,48 +93,76 @@ export const NETWORKS: Record<string, NetworkConfig> = {
 export type NetworkId = string;
 
 /**
- * Which network a deployed build serves is decided by its hostname - one static build behind
- * several hostnames, with Caddy routing each /api to its indexer. The apex (adapterscan.com) is
- * the chain picker until Ethereum's adapter is upgraded and it becomes the Ethereum site. In dev
- * there is no hostname to go by, so VITE_NETWORK picks (local | sepolia | robinhood | base |
- * mainnet | select), Sepolia by default.
+ * What a hostname is. adapterscan.com is the explorer for every mainnet, served by the hub
+ * indexer, which says in its overview which chains it has. testnet.adapterscan.com is Sepolia on
+ * its own. stats.adapterscan.com is the usage page. robinhood. and base. were each chain's own
+ * site before the hub, and are served as such until their hostnames redirect to the apex. In dev
+ * there is no hostname to go by, so VITE_NETWORK picks (hub | local | sepolia | robinhood | base |
+ * mainnet | stats), Sepolia by default.
  */
-const HOST_NETWORK: Record<string, NetworkId | "select" | "stats"> = {
-  "adapterscan.com": "select",
-  "www.adapterscan.com": "select",
+type Site = "hub" | "stats" | NetworkId;
+const HOST_SITE: Record<string, Site> = {
+  "adapterscan.com": "hub",
+  "www.adapterscan.com": "hub",
   "stats.adapterscan.com": "stats",
   "testnet.adapterscan.com": "sepolia",
   "robinhood.adapterscan.com": "robinhood",
   "base.adapterscan.com": "base",
 };
 const devChoice = import.meta.env.VITE_NETWORK as string | undefined;
-const chosen: NetworkId | "select" | "stats" = import.meta.env.DEV
-  ? devChoice === "select" || devChoice === "stats" ? devChoice : devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
-  : (HOST_NETWORK[location.hostname] ?? "sepolia");
-/** True on the apex: show the chain picker, not an explorer. */
-export const IS_CHAIN_SELECT = chosen === "select";
+const site: Site = import.meta.env.DEV
+  ? devChoice === "hub" || devChoice === "stats" ? devChoice : devChoice && NETWORKS[devChoice] ? devChoice : "sepolia"
+  : (HOST_SITE[location.hostname] ?? "sepolia");
+
+/** True on adapterscan.com: every mainnet in one explorer. Rows say which chain they're on. */
+export const IS_HUB = site === "hub";
 /** True on stats.adapterscan.com: the usage page across every chain, no explorer around it. */
-export const IS_STATS_HOST = chosen === "stats";
-export const networkId: NetworkId = chosen === "select" || chosen === "stats" ? "sepolia" : chosen;
-export const NETWORK = NETWORKS[networkId];
+export const IS_STATS_HOST = site === "stats";
+/** The one chain a chain's own site shows (testnet.adapterscan.com: Sepolia). Null on the hub and the stats host. */
+export const HOME: NetworkConfig | null = site === "hub" || site === "stats" ? null : NETWORKS[site];
+export const HOME_ID: NetworkId | null = HOME ? site : null;
+/** On the local devnet demo personas sign; everywhere else a connected wallet does. */
+export const PERSONA_WRITES = HOME?.personaWrites ?? false;
+
+/** The mainnets: what the hub indexes, in the order the app lists them. */
+export const MAINNETS: NetworkId[] = ["robinhood", "base", "mainnet"];
+/** The hub's API: same-origin in production (Caddy sends the apex's /api to it), its port in dev. */
+const HUB_API = import.meta.env.VITE_HUB_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8792/api" : "/api");
+/** The API this site's pages ask. */
+export const API_BASE: string = HOME ? HOME.apiBase : HUB_API;
+
+/** A chain's config by its slug, as the API names it (robinhood, base, mainnet, sepolia, local). */
+export function chainConfig(id: NetworkId): NetworkConfig {
+  const n = NETWORKS[id];
+  if (!n) throw new Error(`unknown chain ${id}`);
+  return n;
+}
+/** The name people read, for a chain the API names; the slug itself for one this build doesn't know. */
+export function chainLabel(id: NetworkId): string {
+  return NETWORKS[id]?.label ?? id;
+}
+
 /** The networks the picker offers: Robinhood first, then the rest live-before-pending, in declaration order. */
 const PICKER_ORDER = ["robinhood", "sepolia", "base", "mainnet"];
 export const PUBLIC_NETWORKS = Object.entries(NETWORKS)
   .filter(([, n]) => !n.personaWrites)
   .sort(([a], [b]) => PICKER_ORDER.indexOf(a) - PICKER_ORDER.indexOf(b));
 
-export const RPC_URL = NETWORK.rpcUrl;
-
-/** A network's API from any host: its own hostname in production, its dev port locally. The
- *  stats page asks every chain this way and merges the answers. */
-export function apiBaseFor(id: NetworkId): string {
-  const n = NETWORKS[id];
-  return import.meta.env.DEV || n.personaWrites ? n.apiBase : `https://${n.host}/api`;
+/** Where to ask for one chain's stats from this site: the hub's own API, naming the chain, for
+ *  the mainnets; a chain's own API for its own site and for the testnet. The stats page asks each
+ *  chain this way and merges the answers. */
+export function statsSourceFor(id: NetworkId): { base: string; chain: NetworkId | null } {
+  const n = chainConfig(id);
+  if (HOME_ID === id || n.personaWrites) return { base: n.apiBase, chain: null };
+  if (MAINNETS.includes(id)) return { base: HUB_API, chain: id };
+  return { base: import.meta.env.DEV ? n.apiBase : `https://${n.host}/api`, chain: null };
 }
-/** The explorer for a network, for links out of the cross-chain stats page. */
+/** The explorer a chain's pages live on, for links out of the cross-chain stats page: this one
+ *  for the mainnets (and in dev), the testnet's own host for Sepolia. */
 export function explorerOriginFor(id: NetworkId): string {
-  const n = NETWORKS[id];
-  return import.meta.env.DEV ? "" : `https://${n.host}`;
+  const n = chainConfig(id);
+  if (import.meta.env.DEV || HOME_ID === id || (!HOME && MAINNETS.includes(id))) return "";
+  return MAINNETS.includes(id) ? "https://adapterscan.com" : `https://${n.host}`;
 }
 /** The chains the stats page can show: every live public network. */
 export const STATS_NETWORKS: NetworkId[] = PUBLIC_NETWORKS.filter(([, n]) => n.status === "live").map(([id]) => id);
@@ -150,10 +181,19 @@ export const ACTORS = [
   return { name: a.name, address: account.address.toLowerCase() as Address, account };
 });
 
-export const publicClient = createPublicClient({ chain: NETWORK.chain, transport: http(RPC_URL) });
+const clients = new Map<NetworkId, ReturnType<typeof makeClient>>();
+const makeClient = (n: NetworkConfig) => createPublicClient({ chain: n.chain, transport: http(n.rpcUrl) });
+/** An RPC client for a chain: only the write paths and the Create wizard's probes use one. Pages read the indexer. */
+export function clientFor(id: NetworkId) {
+  let c = clients.get(id);
+  if (!c) clients.set(id, (c = makeClient(chainConfig(id))));
+  return c;
+}
 
+/** The anvil key of a demo persona, signing on the local devnet. */
 export function walletFor(actorIndex: number) {
-  return createWalletClient({ account: ACTORS[actorIndex].account, chain: NETWORK.chain, transport: http(RPC_URL) });
+  const n = chainConfig("local");
+  return createWalletClient({ account: ACTORS[actorIndex].account, chain: n.chain, transport: http(n.rpcUrl) });
 }
 
 export const adapterAbi = parseAbi([
@@ -189,7 +229,7 @@ const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia",
 /** The explorer and the docs are one build on two hostnames; each links to the other. In dev both
  *  are served by Vite: the docs at /docs.html. */
 const IS_DOCS_HOST = location.hostname.startsWith("docs.");
-export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www|base|robinhood)\./, "")}`;
+export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www|base|robinhood|stats)\./, "")}`;
 /** The usage page across every chain. In dev, this chain's own /stats stands in. */
 export const STATS_URL: string = import.meta.env.DEV ? "/stats" : `https://stats.${location.hostname.replace(/^(testnet|www|base|robinhood|docs|stats)\./, "")}`;
 
@@ -197,29 +237,31 @@ export const STATS_URL: string = import.meta.env.DEV ? "/stats" : `https://stats
 const EXPLORER: Record<number, string> = { 1: "https://etherscan.io", 11155111: "https://sepolia.etherscan.io", 8453: "https://basescan.org", 4663: "https://robinhoodchain.blockscout.com" };
 const EXPLORER_NAME: Record<number, string> = { 1: "Etherscan", 11155111: "Sepolia Etherscan", 8453: "Basescan", 4663: "Blockscout" };
 
-/** What this chain's block explorer is called, for link labels. */
-export function explorerName(): string {
-  return EXPLORER_NAME[NETWORK.chain.id] ?? "block explorer";
+const idOf = (chain: NetworkId) => NETWORKS[chain]?.chain.id ?? 0;
+
+/** What a chain's block explorer is called, for link labels. */
+export function explorerName(chain: NetworkId): string {
+  return EXPLORER_NAME[idOf(chain)] ?? "block explorer";
 }
 
-export function explorerTxUrl(hash: string): string | null {
-  const base = EXPLORER[NETWORK.chain.id];
+export function explorerTxUrl(chain: NetworkId, hash: string): string | null {
+  const base = EXPLORER[idOf(chain)];
   return base ? `${base}/tx/${hash}` : null;
 }
 
-export function explorerBlockUrl(block: string | number | bigint): string | null {
-  const base = EXPLORER[NETWORK.chain.id];
+export function explorerBlockUrl(chain: NetworkId, block: string | number | bigint): string | null {
+  const base = EXPLORER[idOf(chain)];
   return base ? `${base}/block/${block}` : null;
 }
 
-export function explorerAddressUrl(address: string): string | null {
-  const base = EXPLORER[NETWORK.chain.id];
+export function explorerAddressUrl(chain: NetworkId, address: string): string | null {
+  const base = EXPLORER[idOf(chain)];
   return base ? `${base}/address/${address}` : null;
 }
 
-/** The 8004Scan page for an ERC-8004 agent id on the current network, or null when there isn't one. */
-export function scanAgentUrl(agentId: string): string | null {
-  const slug = SCAN_SLUGS[NETWORK.chain.id];
+/** The 8004Scan page for an ERC-8004 agent id on a chain, or null where 8004Scan doesn't index it. */
+export function scanAgentUrl(chain: NetworkId, agentId: string): string | null {
+  const slug = SCAN_SLUGS[idOf(chain)];
   return slug ? `https://8004scan.io/agents/${slug}/${agentId}` : null;
 }
 

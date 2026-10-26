@@ -20,7 +20,8 @@ What runs where:
   only (its event log is locked by whoever has it open).
 - Caddy — one static `app/dist` behind every hostname. `testnet.adapterscan.com` (plus the
   older `adapter.ens8004.xyz` and `adapter.178-105-235-22.sslip.io`) routes `/api/*` to the
-  Sepolia indexer; the mainnet hostnames and `stats.` go to the hub.
+  Sepolia indexer; the apex and `stats.` go to the hub; `robinhood.` and `base.` redirect to
+  the apex.
 - The indexer's state is a fold over chain events. The event log is kept in
   `/srv/adapter/indexer/data/<network>.sqlite` (ignored by git, so it survives the
   deploy's `git reset --hard`; `ADAPTER_DATA_DIR=` in `/etc/adapter.env` moves it).
@@ -73,7 +74,11 @@ each file is locked by one process, so stop those first. In order:
    `curl -s http://127.0.0.1:8792/api/overview` to list both chains as `live`. The files
    carry over: no re-index, only what came after their checkpoints.
 3. Re-run `deploy/setup.sh` (or install `Caddyfile.adapter` the way it does and
-   `systemctl reload caddy`): the mainnet hostnames, the apex and `stats.` move to 8792.
+   `systemctl reload caddy`): the apex and `stats.` move to 8792, and `robinhood.` and
+   `base.` redirect to the apex on the same path.
+
+Do this straight after the deploy that ships the multichain app: that build treats the apex as
+the explorer for every mainnet, which needs the hub behind it.
 
 Between 1 and 3 the mainnet sites show the plain shell (Caddy's `handle_errors`), seconds at
 most. To go back: disable the hub, re-enable the two units, restore the previous Caddyfile

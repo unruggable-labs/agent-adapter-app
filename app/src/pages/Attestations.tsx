@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Addr, Badge, ControllerCell, Modal, MultiSelect, Pager, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import type { Hex } from "viem";
-import { api, type AttestationRow } from "../lib/api";
+import { adapterOf, api, type AttestationRow } from "../lib/api";
+import { ChainFilter, ChainTag, useChainParam } from "../components/chains";
 import { useApp, useLive, settle } from "../lib/app-state";
 import { usePageParam } from "../lib/url";
-import { adapterAbi, STANDARD_NAMES } from "../lib/chain";
+import { adapterAbi, IS_HUB, STANDARD_NAMES } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
 const PAGE_SIZE = 25;
@@ -17,12 +18,13 @@ export function AttestationsPage() {
   const [standards, setStandards] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = usePageParam();
+  const chain = useChainParam(); // ?chain=base on the hub
 
   // The indexer filters, orders and slices; each row comes with the identity it is about.
   const attester = mineOnly && signer ? signer.address : undefined;
   const { data, status } = useLive(
-    () => api.attestations({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, type: types, standard: standards, attester }),
-    [page, types.join(","), standards.join(","), attester],
+    () => api.attestations({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, type: types, standard: standards, attester, chain: chain ? [chain] : undefined }),
+    [page, types.join(","), standards.join(","), attester, chain],
   );
   // A change of filters goes back to the first page without leaving a history entry.
   useEffect(() => {
@@ -50,12 +52,13 @@ export function AttestationsPage() {
       <p className="page-sub">
         Public statements about agents.
       </p>
+      {IS_HUB && <div style={{ marginBottom: 12 }}><ChainFilter /></div>}
 
       <div className="card card-table table-scroll">
         <table className="table clickable">
           <thead>
             <tr>
-              <th><Tip tip="The identity the statement is about. The mark beside it: a chain link means an ERC-8004 agent is minted for it, a dashed ring means it is a counterfactual claim only, a dotted ring means nothing has claimed it yet.">UBID</Tip></th><th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
+              <th><Tip tip="The identity the statement is about. The mark beside it: a chain link means an ERC-8004 agent is minted for it, a dashed ring means it is a counterfactual claim only, a dotted ring means nothing has claimed it yet.">UBID</Tip></th>{IS_HUB && <th>Chain</th>}<th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -69,6 +72,7 @@ export function AttestationsPage() {
                       {!target && <Badge tone="warn" tip="No claim or binding matches this UBID yet. The statement is kept and gains meaning if one arrives.">unresolved</Badge>}
                     </span>
                   </td>
+                  {IS_HUB && <td><ChainTag chain={a.chain} /></td>}
                   <td><TypeBadge name={a.typeName} /></td>
                   <td>{target ? <StandardBadge id={target} /> : <span className="t3">—</span>}</td>
                   <td>{target ? <ControllerCell id={target} /> : <span className="t3">—</span>}</td>
@@ -86,7 +90,12 @@ export function AttestationsPage() {
                         onClick={async (e) => {
                           e.stopPropagation();
                           setBusy(a.attestationId);
-                          const r = await sendTx(signer, overview!.adapter, adapterAbi, "revoke", [a.attestationId]);
+                          const adapter = adapterOf(overview, a.chain);
+                          if (!adapter) {
+                            setBusy(null);
+                            return toast("Can't find this chain's adapter yet - try again in a moment");
+                          }
+                          const r = await sendTx(signer, a.chain, adapter, adapterAbi, "revoke", [a.attestationId]);
                           toast(r.message);
                           await settle(refresh);
                           setBusy(null);
@@ -99,12 +108,12 @@ export function AttestationsPage() {
                 </tr>
               );
             })}
-            {loading && <SkeletonRows widths={[0, 40, 50, 60, 55, 70, 35, 30, 20]} />}
+            {loading && <SkeletonRows widths={IS_HUB ? [0, 40, 40, 50, 60, 55, 70, 35, 30, 20] : [0, 40, 50, 60, 55, 70, 35, 30, 20]} />}
             {!data && status === "error" && (
-              <tr className="is-static"><td colSpan={9}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
+              <tr className="is-static"><td colSpan={IS_HUB ? 10 : 9}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
             )}
             {data && total === 0 && (
-              <tr className="is-static"><td colSpan={9}><div className="empty">{active ? "Nothing matches these filters." : "No attestations yet."}</div></td></tr>
+              <tr className="is-static"><td colSpan={IS_HUB ? 10 : 9}><div className="empty">{active ? "Nothing matches these filters." : "No attestations yet."}</div></td></tr>
             )}
           </tbody>
         </table>

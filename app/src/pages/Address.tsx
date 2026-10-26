@@ -4,7 +4,8 @@ import { Badge, ControllerCell, Pager, registrationOf, Section, StandardBadge, S
 import { api, type Identity } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
 import { usePageParam } from "../lib/url";
-import { displayName, explorerAddressUrl, explorerName, plural, pluralise, STANDARD_NAMES } from "../lib/chain";
+import { displayName, explorerAddressUrl, explorerName, HOME_ID, IS_HUB, plural, pluralise, STANDARD_NAMES } from "../lib/chain";
+import { ChainTag } from "../components/chains";
 
 const BOUND_PAGE = 25;
 /** Everything but ACCOUNT: an address's own identity is shown under Agent, not among what is bound to it. */
@@ -18,7 +19,7 @@ import { payloadPreview } from "./Attestations";
  * Read-only; the actions live on the profiles.
  */
 export function AddressPage({ address }: { address: string }) {
-  const { navigate } = useApp();
+  const { navigate, overview } = useApp();
   const addr = address.toLowerCase();
   const { data, status } = useLive(() => (isAddress(addr) ? api.address(addr) : null), [addr]);
   // What is bound to this address can be a whole collection, so it pages through the identities endpoint.
@@ -31,13 +32,20 @@ export function AddressPage({ address }: { address: string }) {
 
   if (!isAddress(addr)) return <div className="page"><p className="t2">That's not an address.</p></div>;
 
+  // On the hub an address can be an agent on more than one chain: each one's own identity.
+  const selves = data?.byChain?.flatMap((b) => (b.self ? [b.self] : [])) ?? (data?.self ? [data.self] : []);
   const self = data?.self ?? null;
   const operates = data?.operates ?? null;
   const namedBy = data?.namedBy ?? [];
   const holds = data?.holds ?? [];
   const boundTotal = bound?.total ?? data?.boundHereTotal ?? 0;
   const rows = data?.statements ?? null;
-  const explorer = explorerAddressUrl(addr);
+  // The address on each chain's explorer: the chains it is on, or on the hub before it is on any, every chain the hub follows.
+  const onChains = HOME_ID ? [HOME_ID] : data?.chains?.length ? data.chains : (overview?.chains?.map((c) => c.chain) ?? []);
+  const explorers = onChains.flatMap((c) => {
+    const url = explorerAddressUrl(c, addr);
+    return url ? [{ chain: c, url }] : [];
+  });
   const loading = !data && status === "loading";
 
   return (
@@ -48,7 +56,9 @@ export function AddressPage({ address }: { address: string }) {
           <h1 className="page-title mono" style={{ fontSize: 16, overflowWrap: "anywhere" }}>{addr}</h1>
           <span className="row wrap" style={{ gap: 8 }}>
             <CopyAddress value={addr} />
-            {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">View on {explorerName()}</a>}
+            {explorers.map((e) => (
+              <a key={e.chain} className="agent-link small" href={e.url} target="_blank" rel="noopener noreferrer">View on {explorerName(e.chain)}</a>
+            ))}
           </span>
         </div>
       </div>
@@ -65,7 +75,7 @@ export function AddressPage({ address }: { address: string }) {
       <div className="stack">
         <Section label="Agent">
           {loading ? <Spinner /> : self ? (
-            <IdentityTable rows={[{ id: self }]} />
+            <IdentityTable rows={selves.map((id) => ({ id }))} />
           ) : (
             <p className="t2 small" style={{ margin: 0 }}>This address is not an agent.</p>
           )}
@@ -108,12 +118,13 @@ export function AddressPage({ address }: { address: string }) {
           ) : (
             <div className="table-scroll">
               <table className="table clickable">
-                <thead><tr><th>Type</th><th>About</th><th>Payload</th><th className="td-right">Block</th><th>State</th></tr></thead>
+                <thead><tr>{IS_HUB && <th>Chain</th>}<th>Type</th><th>About</th><th>Payload</th><th className="td-right">Block</th><th>State</th></tr></thead>
                 <tbody>
                   {rows.map((a) => {
                     const target = a.target ?? null;
                     return (
                       <tr key={a.attestationId} onClick={() => navigate(`/attestation/${a.attestationId}`)}>
+                        {IS_HUB && <td><ChainTag chain={a.chain} /></td>}
                         <td><TypeBadge name={a.typeName} /></td>
                         <td>{target ? <span className="row" style={{ gap: 8 }}><UbidCell ubid={a.ubid} image={target.image} registration={registrationOf(target)} /><span className="t2 small">{displayName(target)}</span></span> : <span className="mono t3">{a.ubid.slice(0, 12)}…</span>}</td>
                         <td className="mono t2" style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{payloadPreview(a)}</td>
@@ -173,12 +184,13 @@ function IdentityTable({ rows }: { rows: { id: Identity; note?: string; tone?: s
     <div className="table-scroll">
       <table className="table clickable">
         <thead>
-          <tr><th>UBID</th><th>Standard</th><th>Controller</th><th>Registration</th>{withLink && <th><Tip tip="Whether the wallet link is confirmed from both sides. Either side alone is a claim.">Link</Tip></th>}{withNotes && <th>Why it's here</th>}</tr>
+          <tr><th>UBID</th>{IS_HUB && <th>Chain</th>}<th>Standard</th><th>Controller</th><th>Registration</th>{withLink && <th><Tip tip="Whether the wallet link is confirmed from both sides. Either side alone is a claim.">Link</Tip></th>}{withNotes && <th>Why it's here</th>}</tr>
         </thead>
         <tbody>
           {rows.map(({ id, note, tone, link }) => (
             <tr key={id.ubid} onClick={() => navigate(`/identity/${id.ubid}`)}>
               <td><UbidCell ubid={id.ubid} image={id.image} registration={registrationOf(id)} /></td>
+              {IS_HUB && <td><ChainTag chain={id.chain} /></td>}
               <td><StandardBadge id={id} /></td>
               <td><ControllerCell id={id} /></td>
               <td><StatusBadge id={id} /></td>

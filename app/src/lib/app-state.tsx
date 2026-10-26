@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 import { api, type Overview } from "./api";
-import { ACTORS, NETWORK, shortHex } from "./chain";
+import { ACTORS, PERSONA_WRITES, shortHex } from "./chain";
+import { notifySearch } from "./url";
 
 /**
  * Who signs. On the local devnet it's a demo persona (anvil key, picked in the sidebar);
@@ -56,7 +57,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const { address: connectedAddress } = useAccount();
 
-  const signer: Signer | null = NETWORK.personaWrites
+  const signer: Signer | null = PERSONA_WRITES
     ? {
         address: ACTORS[actorIndex].address,
         label: ACTORS[actorIndex].name,
@@ -107,9 +108,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToastMsg(null), 3500);
   }, []);
 
+  // A target may carry a query string (/identities?chain=base): the route is the path, the
+  // query is for the page's own readers (lib/url.ts), told it changed.
   const navigate = useCallback((r: string) => {
-    if (r !== location.pathname) history.pushState(null, "", r);
-    setRoute(r);
+    if (r !== location.pathname + location.search) history.pushState(null, "", r);
+    setRoute(r.split("?")[0] || "/");
+    notifySearch();
     window.scrollTo({ top: 0 });
   }, []);
 

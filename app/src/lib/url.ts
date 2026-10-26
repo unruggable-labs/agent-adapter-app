@@ -8,6 +8,8 @@ import { useCallback, useSyncExternalStore } from "react";
  */
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
+/** Tell the readers the query string changed - for a navigation that carried one. */
+export const notifySearch = notify;
 if (typeof window !== "undefined") window.addEventListener("popstate", notify);
 
 function subscribe(l: () => void) {

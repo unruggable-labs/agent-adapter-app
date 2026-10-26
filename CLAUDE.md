@@ -36,7 +36,7 @@ tooltips kept to the fewest sentences that do the job.
   (`src/docs/`, the documentation site at docs.adapterscan.com - the model page, the protocol
   concepts, a quickstart, the contract map and deployments; the contract repo stays the source
   of truth and the docs link to it). Dev-only: local-devnet network + anvil persona writes, chosen with
-  VITE_NETWORK=local. Production picks Sepolia or Ethereum from the hostname; writes go through the user's
+  VITE_NETWORK=local; VITE_NETWORK=hub is the multichain explorer against a local hub (:8792). Production picks Sepolia or Ethereum from the hostname; writes go through the user's
   connected wallet (wagmi + Reown AppKit, needs VITE_WC_PROJECT_ID). Personas are devnet-only.
 - `contracts/` + `indexer/artifacts/` — vendored demo mock + build artifacts; regeneration
   from the contracts repo is documented in `indexer/src/abi.ts`.
@@ -54,8 +54,9 @@ tooltips kept to the fewest sentences that do the job.
 ## Deploy
 
 Push to `main` = production deploy (GitHub Action → Hetzner box shared with ens8004.xyz →
-systemd `adapter-indexer@<instance>` + Caddy). One static build; the app picks its network from
-the hostname. Instances: `@sepolia` (8788) and `@hub` (8792, the mainnets in one process, serving
+systemd `adapter-indexer@<instance>` + Caddy). One static build; the app picks its site from
+the hostname (`lib/chain.ts`): adapterscan.com is the multichain explorer (rows carry their
+`chain`, links and writes use the record's chain), testnet.adapterscan.com is Sepolia alone. Instances: `@sepolia` (8788) and `@hub` (8792, the mainnets in one process, serving
 the apex and each chain's own hostname) - the per-chain `@robinhood`/`@base` units are retired by
 the cutover in deploy/README.md. A chain's SQLite file is locked by one process. Live: testnet.adapterscan.com (Sepolia),
 robinhood.adapterscan.com (Robinhood Chain, proxy 0x000000009d62675362a58911e3f32FEcf46F5E18,

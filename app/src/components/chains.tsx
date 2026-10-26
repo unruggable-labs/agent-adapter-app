@@ -1,4 +1,6 @@
-import { DOCS_URL, NETWORK, PUBLIC_NETWORKS } from "../lib/chain";
+import { useApp } from "../lib/app-state";
+import { chainLabel, IS_HUB, MAINNETS, NETWORKS } from "../lib/chain";
+import { setSearchParams, useSearchParams } from "../lib/url";
 
 /** A mark per chain, drawn inline so it takes the tile's colour treatment in both themes. */
 export function ChainIcon({ id, size = 28 }: { id: string; size?: number }) {
@@ -35,56 +37,81 @@ export function ChainIcon({ id, size = 28 }: { id: string; size?: number }) {
   }
 }
 
-/** The chain tiles: one per network, live ones linking to their hostname. Used by the apex
- *  picker and by the docs' "Open the explorer" dialog. */
+/**
+ * Which chain a record is on, as a small mark and its name. Only where it tells you something:
+ * the multichain explorer. A chain's own site is all one chain, so there it draws nothing.
+ * `bare` drops the name, for tight table cells (the name is still the tooltip).
+ */
+export function ChainTag({ chain, bare = false }: { chain: string; bare?: boolean }) {
+  if (!IS_HUB) return null;
+  return (
+    <span className="chain-tag" title={chainLabel(chain)}>
+      <ChainIcon id={chain} size={16} />
+      {!bare && <span>{chainLabel(chain)}</span>}
+    </span>
+  );
+}
+
+/** The two explorers: every mainnet at adapterscan.com, the testnet on its own. Used by the
+ *  header's chain button, the docs' "Open the explorer" and the stats site. */
 export function ChainGrid() {
+  const live = MAINNETS.filter((id) => NETWORKS[id]?.status === "live");
+  const coming = MAINNETS.filter((id) => NETWORKS[id]?.status !== "live");
+  const names = (ids: string[]) => ids.map(chainLabel).join(", ");
   return (
     <div className="chains-grid">
-      {PUBLIC_NETWORKS.map(([id, n]) => (
-        <a key={id} className={`chain-tile${n.status === "pending" ? " is-pending" : ""}`} href={n.status === "live" ? `https://${n.host}` : undefined} aria-disabled={n.status !== "live"}>
-          <span className="row spread">
-            <span className="row" style={{ gap: 10 }}>
-              <ChainIcon id={id} />
-              <span className="chain-name">{n.label}</span>
-            </span>
-            {n.status === "live" ? <span className="badge badge-ok">live</span> : <span className="badge badge-outline">coming</span>}
+      <a className="chain-tile" href="https://adapterscan.com">
+        <span className="row spread">
+          <span className="row" style={{ gap: 6 }}>
+            {MAINNETS.map((id) => (
+              <span key={id} className={coming.includes(id) ? "is-dim" : undefined}><ChainIcon id={id} /></span>
+            ))}
           </span>
-          <span className="chain-host mono">{n.host}</span>
-        </a>
+          <span className="badge badge-ok">live</span>
+        </span>
+        <span className="chain-name">Mainnets</span>
+        <span className="hint" style={{ margin: 0 }}>{names(live)}{coming.length > 0 && ` - ${names(coming)} soon`}</span>
+        <span className="chain-host mono">adapterscan.com</span>
+      </a>
+      <a className="chain-tile" href={`https://${NETWORKS.sepolia.host}`}>
+        <span className="row spread">
+          <ChainIcon id="sepolia" />
+          <span className="badge badge-outline">testnet</span>
+        </span>
+        <span className="chain-name">Sepolia</span>
+        <span className="hint" style={{ margin: 0 }}>Free to try. Nothing here is worth anything.</span>
+        <span className="chain-host mono">{NETWORKS.sepolia.host}</span>
+      </a>
+    </div>
+  );
+}
+
+/** The chain a list is narrowed to, from ?chain= - null for every chain. Only the hub has a choice. */
+export function useChainParam(): string | null {
+  const p = useSearchParams();
+  return IS_HUB ? p.get("chain") : null;
+}
+
+/** Every chain, or one: the hub's list filter, kept in ?chain= so the view can be shared. */
+export function ChainFilter() {
+  const { overview } = useApp();
+  const chain = useChainParam();
+  const chains = overview?.chains ?? [];
+  if (!IS_HUB || chains.length < 2) return null;
+  const pick = (c: string | null) =>
+    setSearchParams((p) => {
+      if (c) p.set("chain", c);
+      else p.delete("chain");
+      p.delete("page");
+    });
+  return (
+    <div className="seg" role="group" aria-label="Chain">
+      <button className={chain === null ? "active" : ""} onClick={() => pick(null)}>All chains</button>
+      {chains.map((c) => (
+        <button key={c.chain} className={chain === c.chain ? "active" : ""} onClick={() => pick(c.chain)}>
+          <span className="row" style={{ gap: 6 }}><ChainIcon id={c.chain} size={14} />{chainLabel(c.chain)}</span>
+        </button>
       ))}
-    </div>
-  );
-}
-
-/** adapterscan.com until Ethereum is indexed: pick a chain. Each chain is its own hostname. */
-export function ChainSelect() {
-  return (
-    <div className="chains-page">
-      <div className="chains-card fade-in">
-        <h1 className="page-title" style={{ fontSize: 24, marginBottom: 20 }}>Agent Identity</h1>
-        <ChainGrid />
-      </div>
-      <p className="chains-foot">Adapterscan · <a href={DOCS_URL}>Docs</a></p>
-    </div>
-  );
-}
-
-/** A chain's hostname before its adapter is on v0.0.17: say so, point at the live ones. */
-export function PendingChain() {
-  const live = PUBLIC_NETWORKS.filter(([, n]) => n.status === "live");
-  return (
-    <div className="chains-page">
-      <div className="chains-card fade-in">
-        <h1 className="page-title" style={{ fontSize: 22 }}>{NETWORK.label} is not indexed yet.</h1>
-        <p className="page-sub">
-          The adapter is deployed on {NETWORK.label}, but it is not on v0.0.17, and Adapterscan indexes a chain
-          only from that version's cutover. This site opens once the upgrade lands.
-        </p>
-        <div className="row wrap" style={{ marginTop: 16, gap: 8 }}>
-          {live.map(([id, n]) => <a key={id} className="btn" href={`https://${n.host}`}>{n.label}</a>)}
-          <a className="btn btn-ghost" href={DOCS_URL}>Docs</a>
-        </div>
-      </div>
     </div>
   );
 }

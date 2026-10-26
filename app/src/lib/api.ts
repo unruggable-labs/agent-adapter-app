@@ -1,8 +1,28 @@
 import type { Address, Hex } from "viem";
 
-export interface Overview {
-  adapter: Address;
+/** One chain's figures and how its indexer is doing. */
+export interface ChainOverview {
+  chain: string;
+  label: string;
   chainId: string;
+  adapter: Address;
+  identities: number;
+  agents: number;
+  projects: number;
+  registered: number;
+  attestations: number;
+  /** syncing: the first sync hasn't finished. live: polling. stalled: no good poll for a while. */
+  state: "syncing" | "live" | "stalled";
+  syncedTo: string | null;
+  head: string | null;
+}
+
+export interface Overview {
+  /** The adapter and chain, where the site is one chain; null on the hub, where each chain has its own. */
+  adapter: Address | null;
+  chainId: string | null;
+  /** Each chain the indexer follows. Older indexers omit it. */
+  chains?: ChainOverview[];
   identities: number;
   agents: number;
   /** Distinct collections and contracts identities are bound to. Older indexers omit it. */
@@ -45,6 +65,8 @@ export interface Order {
 
 export interface Identity {
   ubid: Hex;
+  /** The chain the record is on: robinhood, base, mainnet, sepolia, local. */
+  chain: string;
   standard: number;
   standardName: string;
   /** What the bound thing is called: "DemoPunks #7", or the contract/account name. */
@@ -88,6 +110,13 @@ export interface Identity {
   };
 }
 
+/** The adapter a chain's records are scoped to, from the overview: what writes are sent to. */
+export function adapterOf(overview: Overview | null, chain: string): Address | null {
+  const c = overview?.chains?.find((x) => x.chain === chain);
+  if (c) return c.adapter;
+  return overview?.chains ? null : (overview?.adapter ?? null);
+}
+
 /** One line of an identity's audit trail. `outcome` says whether the event counted: `dropped`
  *  failed its own consistency check, `inert` is a revocation by someone other than the attester. */
 export interface HistoryEntry {
@@ -101,6 +130,8 @@ export interface HistoryEntry {
 
 export interface AttestationRow {
   attestationId: Hex;
+  /** The chain the statement is on. */
+  chain: string;
   attester: Address;
   attestationType: number;
   typeName: string;
@@ -155,9 +186,14 @@ export interface AddressView {
    *  identities({ bound }). */
   boundHereTotal: number;
   statements: AttestationRow[];
+  /** The chains the address appears on, and what it is on each. Older indexers omit them. */
+  chains?: string[];
+  byChain?: { chain: string; self: Identity | null; operates: { identity: Identity; verified: boolean } | null }[];
 }
 
 export interface IdentitiesQuery {
+  /** Only these chains (slugs). */
+  chain?: string[];
   limit?: number;
   offset?: number;
   standard?: string[];
@@ -167,6 +203,7 @@ export interface IdentitiesQuery {
 }
 
 export interface AttestationsQuery {
+  chain?: string[];
   limit?: number;
   offset?: number;
   type?: string[];
@@ -175,10 +212,10 @@ export interface AttestationsQuery {
   ubid?: string;
 }
 
-import { NETWORK } from "./chain";
+import { API_BASE } from "./chain";
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(NETWORK.apiBase + path);
+  const res = await fetch(API_BASE + path);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
   return res.json();
 }
@@ -187,7 +224,7 @@ async function get<T>(path: string): Promise<T> {
 export class NotFound extends Error {}
 
 async function getOrNotFound<T>(path: string): Promise<T> {
-  const res = await fetch(NETWORK.apiBase + path);
+  const res = await fetch(API_BASE + path);
   if (res.status === 404) throw new NotFound(path);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
   return res.json();
@@ -257,10 +294,11 @@ export interface ProjectsQuery {
   offset?: number;
 }
 
-/** The stats endpoints of one indexer, by its API base, since the page asks several chains. */
-export function statsApi(base: string) {
+/** The stats endpoints of one chain, by its API base and - where that API serves several chains,
+ *  as the hub does - the chain's name, since the page asks several chains. */
+export function statsApi(source: { base: string; chain: string | null }) {
   const getAt = async <T,>(path: string): Promise<T> => {
-    const res = await fetch(base + path);
+    const res = await fetch(source.base + path + (source.chain ? `&chain=${encodeURIComponent(source.chain)}` : ""));
     if (!res.ok) throw new Error(`${path}: ${res.status}`);
     return res.json();
   };

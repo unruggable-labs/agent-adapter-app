@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type SearchHit } from "../lib/api";
+import { ChainTag } from "./chains";
 import { useApp } from "../lib/app-state";
 import { displayName } from "../lib/chain";
 import { Avatar, Badge, StandardBadge } from "./ui";
@@ -114,6 +115,7 @@ export function SearchBar() {
                   <span className="row" style={{ gap: 8 }}>
                     <span className="search-item-ubid mono">{h.identity.ubid.slice(0, 14)}…{h.identity.ubid.slice(-6)}</span>
                     <StandardBadge name={h.identity.standardName} />
+                    <ChainTag chain={h.identity.chain} bare />
                   </span>
                   <span className="search-item-name t2">{displayName(h.identity)}</span>
                 </span>

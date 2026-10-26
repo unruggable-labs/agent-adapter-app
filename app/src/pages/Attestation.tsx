@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Addr, Badge, Modal, Section, Spinner, StandardBadge, StatusBadge, Tip, TypeBadge, UbidCell, registrationOf } from "../components/ui";
-import { api, NotFound, type AttestationView } from "../lib/api";
+import { adapterOf, api, NotFound, type AttestationView } from "../lib/api";
+import { ChainTag } from "../components/chains";
 import { useApp, useLive, settle } from "../lib/app-state";
 import { adapterAbi, displayName, explorerBlockUrl, explorerTxUrl, ZERO32 } from "../lib/chain";
 import { sendTx } from "../lib/tx";
@@ -45,6 +46,7 @@ export function AttestationPage({ id }: { id: string }) {
       <div className="page-head wrap" style={{ marginTop: 10, gap: 10, alignItems: "center", marginBottom: 4 }}>
         <h1 className="page-title" style={{ fontSize: 18 }}>A {word} about {about}</h1>
         <TypeBadge name={a.typeName} />
+        <ChainTag chain={a.chain} />
         {a.revoked ? <Badge tone="danger">revoked</Badge> : a.supersededBy ? <Badge tone="warn">replaced</Badge> : <Badge tone="ok">live</Badge>}
         {!payload.valid && <Badge tone="warn" tip="The payload does not follow this type's encoding, so it is on the record but does not count toward anything.">invalid payload</Badge>}
         <div className="head-actions"><RevokeButton a={a} /></div>
@@ -101,7 +103,7 @@ export function AttestationPage({ id }: { id: string }) {
             {payload.reference !== undefined && (
               <>
                 <dt>Transaction it is about</dt>
-                <dd>{payload.reference ? <TxRef hash={payload.reference} /> : <span className="t3">none</span>}</dd>
+                <dd>{payload.reference ? <TxRef hash={payload.reference} chain={a.chain} /> : <span className="t3">none</span>}</dd>
               </>
             )}
             {a.typeName === "CONFIRM_ACCOUNT" && (
@@ -121,16 +123,16 @@ export function AttestationPage({ id }: { id: string }) {
             </dd>
             <dt>Made in</dt>
             <dd className="small">
-              {explorerBlockUrl(a.order.blockNumber) ? <a className="agent-link num" href={explorerBlockUrl(a.order.blockNumber)!} target="_blank" rel="noopener noreferrer">block {a.order.blockNumber}</a> : <span className="num">block {a.order.blockNumber}</span>}
+              {explorerBlockUrl(a.chain, a.order.blockNumber) ? <a className="agent-link num" href={explorerBlockUrl(a.chain, a.order.blockNumber)!} target="_blank" rel="noopener noreferrer">block {a.order.blockNumber}</a> : <span className="num">block {a.order.blockNumber}</span>}
               <span className="t3"> · log {a.order.logIndex}</span>
-              {a.transactionHash && <> · {explorerTxUrl(a.transactionHash) ? <a className="agent-link mono" href={explorerTxUrl(a.transactionHash)!} target="_blank" rel="noopener noreferrer">{a.transactionHash.slice(0, 14)}…{a.transactionHash.slice(-6)}</a> : <span className="mono">{a.transactionHash.slice(0, 14)}…</span>}</>}
+              {a.transactionHash && <> · {explorerTxUrl(a.chain, a.transactionHash) ? <a className="agent-link mono" href={explorerTxUrl(a.chain, a.transactionHash)!} target="_blank" rel="noopener noreferrer">{a.transactionHash.slice(0, 14)}…{a.transactionHash.slice(-6)}</a> : <span className="mono">{a.transactionHash.slice(0, 14)}…</span>}</>}
             </dd>
             <dt>State</dt>
             <dd>
               {a.revoked && a.revocation ? (
                 <span className="small">
                   <Badge tone="danger">revoked</Badge> by <AddressLink address={a.revocation.revoker} /> in block <span className="num">{a.revocation.order.blockNumber}</span>
-                  {a.revocation.transactionHash && explorerTxUrl(a.revocation.transactionHash) && <> · <a className="agent-link mono" href={explorerTxUrl(a.revocation.transactionHash)!} target="_blank" rel="noopener noreferrer">{a.revocation.transactionHash.slice(0, 14)}…</a></>}
+                  {a.revocation.transactionHash && explorerTxUrl(a.chain, a.revocation.transactionHash) && <> · <a className="agent-link mono" href={explorerTxUrl(a.chain, a.revocation.transactionHash)!} target="_blank" rel="noopener noreferrer">{a.revocation.transactionHash.slice(0, 14)}…</a></>}
                 </span>
               ) : a.revoked ? (
                 <Badge tone="danger">revoked</Badge>
@@ -183,7 +185,8 @@ export function AttestationPage({ id }: { id: string }) {
 function RevokeButton({ a }: { a: AttestationView }) {
   const { signer, overview, refresh, toast } = useApp();
   const [busy, setBusy] = useState(false);
-  if (!signer || !overview || a.attester !== signer.address || a.revoked) return null;
+  const adapter = adapterOf(overview, a.chain);
+  if (!signer || !adapter || a.attester !== signer.address || a.revoked) return null;
   return (
     <button
       className="btn btn-sm btn-danger"
@@ -191,7 +194,7 @@ function RevokeButton({ a }: { a: AttestationView }) {
       title="Withdraw this statement. It stays in the history as revoked - a position, not a deletion."
       onClick={async () => {
         setBusy(true);
-        const r = await sendTx(signer, overview.adapter, adapterAbi, "revoke", [a.attestationId]);
+        const r = await sendTx(signer, a.chain, adapter, adapterAbi, "revoke", [a.attestationId]);
         toast(r.message);
         await settle(refresh);
         setBusy(false);

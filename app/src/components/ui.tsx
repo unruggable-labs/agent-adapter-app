@@ -240,11 +240,11 @@ export function Section({ label, children, actions }: { label: string; children:
 /** An identity's ERC-8004 agent ids, each linking out to its 8004Scan page in a new tab. Plain
  *  text on a network 8004Scan doesn't index. Clicks stop at the link so a clickable table row
  *  underneath doesn't also navigate. */
-export function AgentIds({ ids }: { ids: string[] }) {
+export function AgentIds({ ids, chain }: { ids: string[]; chain: string }) {
   return (
     <>
       {ids.map((agentId, i) => {
-        const url = scanAgentUrl(agentId);
+        const url = scanAgentUrl(chain, agentId);
         return (
           <span key={agentId}>
             {i > 0 && ", "}
@@ -266,7 +266,7 @@ export function StatusBadge({ id }: { id: Identity }) {
   if (id.agentIds.length)
     return (
       <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with ID #${id.agentIds.join(", #")}.`}>
-        <span className="dot" /> ERC-8004 <AgentIds ids={id.agentIds} />
+        <span className="dot" /> ERC-8004 <AgentIds ids={id.agentIds} chain={id.chain} />
       </Badge>
     );
   if (id.claimed)

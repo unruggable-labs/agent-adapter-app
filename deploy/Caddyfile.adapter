@@ -45,19 +45,18 @@
 }
 
 # Ports: sepolia 8788, the hub 8792. (8789-8791 were the mainnets' own indexers before the hub.)
+# The hub still answers a chain's own hostname with that chain alone, should one point at it.
 testnet.adapterscan.com, adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
 	import adapterscan 8788
 }
-robinhood.adapterscan.com {
-	import adapterscan 8792
+# The mainnets' own hostnames from before the hub: their pages are at the apex now, on the same
+# paths (a UBID or a statement id names its chain, so a shared link lands on the same record).
+robinhood.adapterscan.com, base.adapterscan.com {
+	redir https://adapterscan.com{uri} permanent
 }
 # The usage page across every chain. The page asks each chain's API itself; behind it, the hub
 # draws the combined social card from its own logs.
 stats.adapterscan.com {
-	import adapterscan 8792
-}
-# Base: on v0.0.17 since block 52991843, in the hub.
-base.adapterscan.com {
 	import adapterscan 8792
 }
 
