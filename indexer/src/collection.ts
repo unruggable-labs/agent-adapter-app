@@ -4,7 +4,7 @@ import { readJson, toBrowserUrl } from "./images.js";
 /**
  * What a collection or contract says about itself: the `contractURI()` document (OpenSea's
  * convention, widely followed) with a name, a description, an image and a website. Read once
- * per address by the view worker, never on a request. Where a token has no image yet - an
+ * by the view worker and kept in the advisory store, never on a request. Where a token has no image yet - an
  * identity claimed ahead of the mint, say - the collection's image stands in.
  */
 export interface Collection {
@@ -15,16 +15,9 @@ export interface Collection {
   externalLink: string | null;
 }
 
-const HIT_TTL_MS = 6 * 60 * 60 * 1000;
-const MISS_TTL_MS = 30 * 60 * 1000;
-const cache = new Map<Address, { value: Collection | null; at: number }>();
-
 const CONTRACT_URI_ABI = [{ type: "function", name: "contractURI", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] }] as const;
 
 export async function collectionFor(client: PublicClient, address: Address): Promise<Collection | null> {
-  const key = address.toLowerCase() as Address;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < (hit.value ? HIT_TTL_MS : MISS_TTL_MS)) return hit.value;
   let value: Collection | null = null;
   try {
     const uri = (await client.readContract({ address, abi: CONTRACT_URI_ABI, functionName: "contractURI" })) as string;
@@ -32,7 +25,6 @@ export async function collectionFor(client: PublicClient, address: Address): Pro
   } catch {
     value = null;
   }
-  cache.set(key, { value, at: Date.now() });
   return value;
 }
 

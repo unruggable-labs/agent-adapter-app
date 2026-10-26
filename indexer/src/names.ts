@@ -10,12 +10,8 @@ import { ACCOUNT_STANDARDS } from "./ubid.js";
  *    it decodes as printable UTF-8. Claims, not truth: it is caller-supplied like the rest.
  */
 
-const nameCache = new Map<Address, string | null>();
-
-/** The collection or contract's `name()`, read once per address and kept for the life of the process. */
+/** The collection or contract's `name()`, from the chain. The view worker reads it and keeps it in the advisory store. */
 export async function contractName(client: PublicClient, address: Address): Promise<string | null> {
-  const key = address.toLowerCase() as Address;
-  if (nameCache.has(key)) return nameCache.get(key)!;
   let name: string | null = null;
   try {
     const raw = (await client.readContract({
@@ -27,7 +23,6 @@ export async function contractName(client: PublicClient, address: Address): Prom
   } catch {
     name = null;
   }
-  nameCache.set(key, name);
   return name;
 }
 

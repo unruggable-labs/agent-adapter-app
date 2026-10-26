@@ -82,21 +82,14 @@ export function verdictOf(t: Omit<TrustBase, "verdict">): TrustBase["verdict"] {
 }
 
 /**
- * Cached readings expire. A trust base is not a constant: an upgradeable proxy can swap its
- * implementation for one that burns and calls out, and a cache with no expiry would keep serving
- * the reading taken when the process started - which, for a long-running server, means forever.
- * A stale "solid" on a contract that has since become ruggable is the worst failure this module
- * has, so the TTL bounds it.
+ * One reading, from the chain, now. Nothing is cached here: the view worker keeps readings in the
+ * advisory store (advisories.ts) and takes a new one when the collection watcher (watch.ts) sees
+ * the contract emit Upgraded or BeaconUpgraded, plus a daily re-read. A trust base is not a
+ * constant - an upgradeable proxy can swap its implementation for one that burns and calls out -
+ * and a stale "solid" on a contract that has since become ruggable is the worst failure this
+ * module has, so an upgrade event, not a timer, is what moves it.
  */
-export const TRUST_BASE_TTL_MS = 10 * 60 * 1000;
-
-const cache = new Map<Address, { at: number; value: TrustBase }>();
-
 export async function probeTrustBase(client: PublicClient, address: Address): Promise<TrustBase> {
-  const key = address.toLowerCase() as Address;
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.at < TRUST_BASE_TTL_MS) return cached.value;
-
   const code = ((await client.getCode({ address })) ?? "0x") as Hex;
   const fromCode = analyzeBytecode(code);
   let upgradeable = false;
@@ -108,12 +101,5 @@ export async function probeTrustBase(client: PublicClient, address: Address): Pr
     upgradeable = (impl ?? ZERO_WORD) !== ZERO_WORD || (beacon ?? ZERO_WORD) !== ZERO_WORD;
   }
   const partial = { ...fromCode, upgradeable };
-  const result: TrustBase = { ...partial, verdict: verdictOf(partial) };
-  cache.set(key, { at: Date.now(), value: result });
-  return result;
-}
-
-/** For tests, and for callers that need a reading fresher than the TTL. */
-export function clearTrustBaseCache() {
-  cache.clear();
+  return { ...partial, verdict: verdictOf(partial) };
 }

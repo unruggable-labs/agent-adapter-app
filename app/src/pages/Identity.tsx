@@ -13,7 +13,6 @@ import {
   explorerBlockUrl,
   explorerName,
   explorerTxUrl,
-  publicClient,
   scanAgentUrl,
   plural,
   pluralise,
@@ -320,18 +319,22 @@ export function AddressLink({ address }: { address: string }) {
 
 /**
  * A referenced transaction hash, in full, linked to the chain's explorer, and checked against
- * the chain: a reference is a claim until the transaction is found. Zero means "no reference".
+ * the chain: a reference is a claim until the transaction is found. The indexer checks it in the
+ * background and we ask the indexer - the page never reads the chain. Unchecked shows no badge.
+ * Zero means "no reference".
  */
-const txChecks = new Map<string, Promise<"found" | "missing">>();
+const txChecks = new Map<string, Promise<"found" | "missing" | null>>();
 export function TxRef({ hash }: { hash: string }) {
-  const [state, setState] = useState<"checking" | "found" | "missing">("checking");
+  const [state, setState] = useState<"found" | "missing" | null>(null);
   useEffect(() => {
     if (hash === ZERO32) return;
     let cancelled = false;
-    if (!txChecks.has(hash)) {
-      txChecks.set(hash, publicClient.getTransaction({ hash: hash as Hex }).then(() => "found" as const).catch(() => "missing" as const));
-    }
-    txChecks.get(hash)!.then((r) => !cancelled && setState(r));
+    // A hash not checked yet isn't remembered, so a later page shows the answer once there is one.
+    if (!txChecks.has(hash)) txChecks.set(hash, api.txref(hash).then((r) => r.status).catch(() => null));
+    txChecks.get(hash)!.then((r) => {
+      if (r === null) txChecks.delete(hash);
+      if (!cancelled) setState(r);
+    });
     return () => {
       cancelled = true;
     };

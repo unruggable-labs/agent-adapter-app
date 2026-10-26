@@ -19,9 +19,10 @@ tooltips kept to the fewest sentences that do the job.
   fork point and refolds (`ingest.ts`). The file is a copy of the chain - delete it to re-index.
   `SPEC.md` documents the projection rules. `serve.ts` = standalone chain indexer;
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
-  API core; `views.ts` = identity views served from memory, with a worker that reads the chain
-  facts around each identity (holder, name, trust base) on its own budget - no request reads the
-  chain per identity; `stats.ts` = usage over the event log's fact columns and block timestamps for
+  API core; `views.ts` = identity views, with a worker that reads the chain facts around each
+  identity (holder, name, trust base, card, cited transactions) and keeps them in the SQLite file
+  (`advisories.ts`); `watch.ts` follows the bound contracts' transfer/upgrade/metadata events to
+  say what to re-read. No request and no page view reads the chain; `stats.ts` = usage over the event log's fact columns and block timestamps for
   `/api/stats/*` and the `/stats` page (stats.adapterscan.com shows every chain combined, the page
   fanning out to each chain's API). `server.ts` also serves the built
   app's HTML for page paths with title/description/social-card tags filled in (`meta.ts`), the
@@ -53,8 +54,8 @@ Push to `main` = production deploy (GitHub Action → Hetzner box shared with en
 systemd `adapter-indexer@<network>` + Caddy). One hostname per chain, one static build: the app
 picks its network from the hostname. Live: testnet.adapterscan.com (Sepolia),
 robinhood.adapterscan.com (Robinhood Chain, proxy 0x000000009d62675362a58911e3f32FEcf46F5E18,
-v0.0.17 from block 75810067). Pending the v0.0.17 upgrade: base.adapterscan.com and the apex
-(Ethereum) - the apex shows a chain picker until then (deploy/README.md "Mainnet"). Server config is versioned in `deploy/`; box access:
+v0.0.17 from block 75810067), base.adapterscan.com (Base, proxy 0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27,
+v0.0.17 from block 52991843). Pending the v0.0.17 upgrade: the apex (Ethereum) - it shows a chain picker until then (deploy/README.md "Mainnet"). Server config is versioned in `deploy/`; box access:
 `ssh ens8004` (deploy) or `root@178.105.235.22` (same key, admin). RPC is PublicNode's free
 endpoint by default (`SEPOLIA_RPC_URL` in `/etc/adapter.env` overrides; beware: load-balanced
 free RPCs have been observed returning incomplete logs — serve.ts verifies backfills).

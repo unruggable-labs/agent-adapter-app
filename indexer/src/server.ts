@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, type Address, type Hex, type PublicClient } from "viem";
+import { AdvisoryStore } from "./advisories.js";
 import type { EventLog } from "./eventlog.js";
 import type { Ingester } from "./ingest.js";
 import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
@@ -13,6 +14,7 @@ import { attestationView } from "./queries.js";
 import { overview as statsOverview, series as statsSeries } from "./stats.js";
 import { handleApi } from "./service.js";
 import { ViewCache } from "./views.js";
+import { CollectionWatcher } from "./watch.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const legacyUi = join(here, "..", "ui", "index.html");
@@ -48,6 +50,7 @@ const cards = new Map<string, { png: Buffer; at: number }>();
  *  does. The same list the app keeps in chain.ts; a new chain goes in both. */
 const PUBLIC_SITES = [
   { slug: "robinhood", chain: { id: 4663, label: "Robinhood Chain" }, host: "robinhood.adapterscan.com", testnet: false },
+  { slug: "base", chain: { id: 8453, label: "Base" }, host: "base.adapterscan.com", testnet: false },
   { slug: "sepolia", chain: { id: 11155111, label: "Sepolia" }, host: "testnet.adapterscan.com", testnet: true },
 ];
 
@@ -58,12 +61,37 @@ export function startServer(
   port: number,
   ingester?: Ingester,
   pollMs = 2000,
-  opts: { networkLabel?: string; log?: EventLog } = {},
+  opts: { networkLabel?: string; log?: EventLog; watchMs?: number } = {},
 ) {
   if (ingester) setInterval(() => ingester.sync().catch(() => {}), pollMs);
-  // Chain facts around each identity are read by this worker, never on a request.
-  const views = new ViewCache(store, client, { log: (line) => console.log(line) });
+  // Chain facts around each identity are read by this worker, never on a request, and kept in the
+  // network's SQLite file beside the event log so a restart starts warm.
+  const advisories = new AdvisoryStore(opts.log?.connection ?? null);
+  const views = new ViewCache(store, client, { log: (line) => console.log(line) }, advisories);
   views.start();
+  // The contracts records are bound to, followed on a slower cadence than the adapter: what they
+  // emit marks records for the worker to read again (watch.ts). It scans only what the ingester
+  // has synced, so every event maps onto records the store already has.
+  if (ingester) {
+    const watcher = new CollectionWatcher(store, client, advisories, { log: (line) => console.log(line) });
+    let scanning = false;
+    const scan = () => {
+      if (scanning) return;
+      scanning = true;
+      watcher
+        .scan(ingester.next - 1n)
+        .then((d) => {
+          if (d.holders.size + d.cards.size + d.contracts.size > 0) {
+            console.log(`Watch: ${d.holders.size} holders, ${d.cards.size} cards, ${d.contracts.size} contracts to read again`);
+          }
+          views.mark(d);
+        })
+        .catch((e) => console.warn(`Watch scan failed, retrying next round: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`))
+        .finally(() => (scanning = false));
+    };
+    setInterval(scan, opts.watchMs ?? 5 * 60_000).unref?.();
+    scan();
+  }
   const chain = opts.networkLabel ?? `chain ${store.chainId}`;
   const chainCard = { id: Number(store.chainId), label: chain };
 
@@ -88,7 +116,7 @@ export function startServer(
     try {
       // ---- the API
       if (url.pathname.startsWith("/api/")) {
-        const { status, body, type } = await handleApi(store, client, adapter, url.pathname.slice("/api/".length) + url.search, views, opts.log);
+        const { status, body, type } = await handleApi(store, adapter, url.pathname.slice("/api/".length) + url.search, views, opts.log);
         return send(status, type ?? "application/json", body, { "access-control-allow-origin": "*" });
       }
 

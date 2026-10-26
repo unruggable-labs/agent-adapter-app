@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PublicClient } from "viem";
-import { cardFor, imageFor } from "../src/images.js";
+import { resolveCard } from "../src/images.js";
 import type { IdentityState } from "../src/projection.js";
 import { Standard } from "../src/ubid.js";
 
@@ -30,11 +30,9 @@ function identity(over: Partial<IdentityState>): IdentityState {
 
 const json = (doc: unknown) => `data:application/json;base64,${Buffer.from(JSON.stringify(doc)).toString("base64")}`;
 
-/** imageFor answers from cache and resolves in the background; settle, then ask again. */
+/** The image the worker would store for this record. */
 async function resolved(c: PublicClient, id: IdentityState) {
-  expect(imageFor(c, id)).toBeNull();
-  await new Promise((r) => setTimeout(r, 20));
-  return imageFor(c, id);
+  return (await resolveCard(c, id))?.image ?? null;
 }
 
 describe("identity images", () => {
@@ -74,9 +72,7 @@ describe("identity images", () => {
   it("keeps the token's name and description, and lets the agent card fill what the token left blank", async () => {
     const c = client({ tokenURI: () => json({ name: "Punk #7", image: "ipfs://bafy/7.png" }) });
     const id = identity({ agentURI: json({ name: "PunkBot", description: "Trades punks, politely." }) });
-    expect(cardFor(c, id)).toBeNull();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(cardFor(c, id)).toEqual({
+    expect(await resolveCard(c, id)).toEqual({
       image: "/ipfs/bafy/7.png",
       name: "Punk #7",
       description: "Trades punks, politely.",

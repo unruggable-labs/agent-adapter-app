@@ -8,14 +8,12 @@ import { Standard } from "./ubid.js";
  * metadata's `image`. Registered agents may also carry one in their agent card (the JSON at
  * `agentURI`). Token image first, agent card second, nothing otherwise.
  *
- * Resolution touches the chain (tokenURI/uri) and then the open web (the metadata JSON), so it
- * is never awaited on the request path: `imageFor` answers from cache and starts a background
- * resolution on a miss. The next poll picks the answer up. Hits are kept for hours, misses are
- * retried after minutes, and the cache key includes the agent URI so an edited card re-resolves.
+ * Resolution touches the chain (tokenURI/uri) and then the open web (the metadata JSON), so only
+ * the view worker calls it, and what it finds is kept in the advisory store (advisories.ts). A
+ * request reads the stored card. `cardKey` says what a card was resolved from, so an edited
+ * agent URI shows as a stale card without a read.
  */
 
-const HIT_TTL_MS = 6 * 60 * 60 * 1000;
-const MISS_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 6_000;
 const MAX_JSON_BYTES = 1_000_000;
 
@@ -28,41 +26,17 @@ export interface Card {
   source: "token" | "agent";
 }
 
-const cache = new Map<string, { value: Card | null; at: number }>();
-const inFlight = new Set<string>();
-
 const TOKEN_URI_ABI = [{ type: "function", name: "tokenURI", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
 const URI_ABI = [{ type: "function", name: "uri", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
 
-export function imageFor(client: PublicClient, id: IdentityState): string | null {
-  return cardFor(client, id)?.image ?? null;
-}
-
-/** The card as last resolved, stale or not, and nothing started if it hasn't been: the read for a
- *  request path. The view worker calls `cardFor` to resolve and refresh. */
-export function cardIfCached(id: IdentityState): Card | null {
-  return cache.get(cardKey(id))?.value ?? null;
-}
-
-function cardKey(id: IdentityState): string {
+/** What a card is resolved from. A record whose key changed (a new agent URI) has a stale card. */
+export function cardKey(id: IdentityState): string {
   return `${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
 }
 
-export function cardFor(client: PublicClient, id: IdentityState): Card | null {
-  const key = cardKey(id);
-  const hit = cache.get(key);
-  const fresh = hit && Date.now() - hit.at < (hit.value ? HIT_TTL_MS : MISS_TTL_MS);
-  if (fresh) return hit.value;
-  if (!inFlight.has(key)) {
-    inFlight.add(key);
-    resolve(client, id)
-      .catch(() => null)
-      .then((value) => {
-        cache.set(key, { value, at: Date.now() });
-        inFlight.delete(key);
-      });
-  }
-  return hit?.value ?? null;
+/** Read the card from the chain and the web, now. The view worker's call; never a request's. */
+export async function resolveCard(client: PublicClient, id: IdentityState): Promise<Card | null> {
+  return resolve(client, id).catch(() => null);
 }
 
 async function resolve(client: PublicClient, id: IdentityState): Promise<Card | null> {

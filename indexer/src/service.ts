@@ -1,16 +1,15 @@
-import type { Address, Hex, PublicClient } from "viem";
+import type { Address, Hex } from "viem";
 import { ProjectionStore } from "./projection.js";
 import type { EventLog } from "./eventlog.js";
 import { addressView, attestationView, listAttestations, listIdentities, search } from "./queries.js";
 import { BUCKETS, METRICS, overview as statsOverview, projects as statsProjects, projectsCsv, series as statsSeries, windowFrom, type Bucket, type Metric, type ProjectRow } from "./stats.js";
-import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
 import type { ViewCache } from "./views.js";
 
-/** The API core, host-agnostic. Identity views come from the ViewCache, so no request reads the
- *  chain per identity - see views.ts. Subpaths are relative, with their query string:
+/** The API core, host-agnostic. Everything it answers is indexed: the store's fold of the event
+ *  log, and the advisories the view worker keeps (views.ts). No request reads the chain. Subpaths are relative, with their query string:
  *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
- *    search?q= · address/<addr> · wallet/<addr> · trustbase/<addr> · attestations[?limit&offset&type&standard&attester&ubid]
+ *    search?q= · address/<addr> · wallet/<addr> · txref/<hash> · attestations[?limit&offset&type&standard&attester&ubid]
  *    attestation/<id> · stats/overview?from&to · stats/series?metric&bucket&from&to&by&project · stats/projects?...[&format=csv]
  *  `identities` and `attestations` with no query string return the whole list, as they always
  *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts. */
@@ -29,7 +28,6 @@ export interface ApiResponse {
 
 export async function handleApi(
   store: ProjectionStore,
-  client: PublicClient,
   adapter: Address,
   subpath: string,
   views: ViewCache,
@@ -71,7 +69,6 @@ export async function handleApi(
   if (head === "identity" && arg) {
     const id = store.identities.get(arg.toLowerCase() as Hex);
     if (!id) return { status: 404, body: toJson({ error: "unknown identity", ubid: arg }) };
-    views.want(id.ubid); // someone is looking: its chain facts move up the worker's queue
     return { status: 200, body: toJson(views.view(id)) };
   }
   if (head === "history" && arg) {
@@ -82,8 +79,10 @@ export async function handleApi(
   if (head === "wallet" && arg) {
     return { status: 200, body: toJson(store.resolveWallet(arg.toLowerCase() as Address)) };
   }
-  if (head === "trustbase" && arg) {
-    return { status: 200, body: toJson(await probeTrustBase(client, arg as Address)) };
+  if (head === "txref" && arg) {
+    // Whether a transaction a statement cites exists on this chain, as the worker found it. null: not checked yet.
+    if (!/^0x[0-9a-fA-F]{64}$/.test(arg)) return { status: 400, body: toJson({ error: "not a transaction hash", hash: arg }) };
+    return { status: 200, body: toJson({ hash: arg.toLowerCase(), status: views.txRef(arg as Hex) }) };
   }
   if (head === "stats") {
     if (!log) return { status: 503, body: toJson({ error: "stats need the event log; this indexer runs without one" }) };

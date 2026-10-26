@@ -293,5 +293,6 @@ export const api = {
       designation: { ubid: Hex } | null;
       verified: boolean;
     } | null>(`/wallet/${address}`),
-  trustbase: (address: string) => get<TrustBase>(`/trustbase/${address}`),
+  /** Whether a cited transaction exists on this chain, as the indexer found it; null until it has checked. */
+  txref: (hash: string) => get<{ hash: Hex; status: "found" | "missing" | null }>(`/txref/${hash}`),
 };

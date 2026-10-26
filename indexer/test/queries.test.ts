@@ -56,7 +56,7 @@ describe("queries", () => {
     expect(listIdentities(store, views, params({ bound: PUNKS, tokenId: "7" })).items.map((i) => i.ubid)).toEqual([UBID7]);
     expect(listIdentities(store, views, params({ q: "punkbot" })).items.map((i) => i.ubid)).toEqual([UBID7]);
     await views.refresh(store.identities.get(UBID9)!);
-    expect(listIdentities(store, views, params({ q: "demopunks" })).total).toBe(1); // only #9 has its name read so far
+    expect(listIdentities(store, views, params({ q: "demopunks" })).total).toBe(2); // the name is the collection's: reading it for #9 names #7 too
   });
 
   it("search: addresses lead, then identities with why they matched", async () => {

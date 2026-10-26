@@ -23,6 +23,9 @@ import { computeUbid, type Standard } from "./ubid.js";
  * attestation type - in indexed columns, so "attestations per week by type" is one query rather
  * than a scan that parses JSON. Neither changes the fold; the store never reads them.
  *
+ * The same file holds the advisories (advisories.ts) - the facts the view worker reads around
+ * each record - in their own tables. They are not part of the log and the fold never reads them.
+ *
  * The file is only a copy of the chain. Deleting it costs a re-index, never data.
  */
 
