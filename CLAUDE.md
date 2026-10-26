@@ -17,9 +17,12 @@ tooltips kept to the fewest sentences that do the job.
   kept in SQLite (`eventlog.ts`, `data/<network>.sqlite`, `node:sqlite`, no native deps): a
   restart folds from the file and syncs from its checkpoint; a reorg truncates the log at the
   fork point and refolds (`ingest.ts`). The file is a copy of the chain - delete it to re-index.
-  `SPEC.md` documents the projection rules. `serve.ts` = standalone chain indexer;
+  `SPEC.md` documents the projection rules. `serve.ts` = the indexer entrypoint, one chain or
+  several in one process (`serve.ts hub` = the mainnets, adapterscan.com); `runtime.ts` = one chain
+  running (poller, worker, watcher, status), failing on its own; `queries.ts`/`service.ts` answer
+  for a list of chains, rows tagged with their chain, lists merged by block time;
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
-  API core; `views.ts` = identity views, with a worker that reads the chain facts around each
+  API core (a request for a chain's own hostname sees that chain alone); `views.ts` = identity views, with a worker that reads the chain facts around each
   identity (holder, name, trust base, card, cited transactions) and keeps them in the SQLite file
   (`advisories.ts`); `watch.ts` follows the bound contracts' transfer/upgrade/metadata events to
   say what to re-read. No request and no page view reads the chain; `stats.ts` = usage over the event log's fact columns and block timestamps for
@@ -51,8 +54,10 @@ tooltips kept to the fewest sentences that do the job.
 ## Deploy
 
 Push to `main` = production deploy (GitHub Action → Hetzner box shared with ens8004.xyz →
-systemd `adapter-indexer@<network>` + Caddy). One hostname per chain, one static build: the app
-picks its network from the hostname. Live: testnet.adapterscan.com (Sepolia),
+systemd `adapter-indexer@<instance>` + Caddy). One static build; the app picks its network from
+the hostname. Instances: `@sepolia` (8788) and `@hub` (8792, the mainnets in one process, serving
+the apex and each chain's own hostname) - the per-chain `@robinhood`/`@base` units are retired by
+the cutover in deploy/README.md. A chain's SQLite file is locked by one process. Live: testnet.adapterscan.com (Sepolia),
 robinhood.adapterscan.com (Robinhood Chain, proxy 0x000000009d62675362a58911e3f32FEcf46F5E18,
 v0.0.17 from block 75810067), base.adapterscan.com (Base, proxy 0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27,
 v0.0.17 from block 52991843). Pending the v0.0.17 upgrade: the apex (Ethereum) - it shows a chain picker until then (deploy/README.md "Mainnet"). Server config is versioned in `deploy/`; box access:

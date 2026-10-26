@@ -74,6 +74,27 @@ export class EventLog {
     this.chainId = identity.chainId;
     this.adapter = identity.adapter.toLowerCase() as Address;
     this.db = new DatabaseSync(path);
+    // One writer per chain: two processes folding and appending the same log would each rewind
+    // the other on a reorg and pay for every poll twice. The lock is taken now and held for the
+    // life of the connection, so a second process stops here and says why.
+    if (path !== ":memory:") {
+      try {
+        this.db.exec("PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;");
+      } catch (e) {
+        this.db.close();
+        throw new Error(`${path} is open in another indexer process (${e instanceof Error ? e.message : String(e)}). Run each chain in one process only - on its own or in the hub, not both.`);
+      }
+    }
+    // A file that turns out to be the wrong one is closed again, so its lock goes with the error.
+    try {
+      this.init(path, identity);
+    } catch (e) {
+      this.db.close();
+      throw e;
+    }
+  }
+
+  private init(path: string, identity: LogIdentity): void {
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
@@ -302,6 +323,18 @@ export class EventLog {
     }
   }
 
+  /** A block's timestamp, unix seconds, or null if it isn't stored (yet). Kept once read: a block's time never changes. */
+  blockTimestamp(block: bigint): number | null {
+    const hit = this.times.get(block);
+    if (hit !== undefined) return hit;
+    const row = (this.timeStmt ??= this.db.prepare("SELECT timestamp FROM blocks WHERE number = ?")).get(Number(block)) as { timestamp: number | null } | undefined;
+    const t = row?.timestamp ?? null;
+    if (t !== null) this.times.set(block, t);
+    return t;
+  }
+  private readonly times = new Map<bigint, number>();
+  private timeStmt: ReturnType<DatabaseSync["prepare"]> | null = null;
+
   /** Event blocks whose timestamp is not known yet - the backfill's worklist, oldest first. */
   blocksWithoutTimestamp(limit = 200): bigint[] {
     const rows = this.db.prepare("SELECT DISTINCT e.block_number AS n FROM events e JOIN blocks b ON b.number = e.block_number WHERE b.timestamp IS NULL ORDER BY e.block_number LIMIT ?").all(limit) as { n: number }[];
@@ -322,6 +355,7 @@ export class EventLog {
 
   /** Drop everything after `block` - the reorg rewind. The checkpoint becomes that block, or nothing if it was never stored. */
   rewindTo(block: bigint): void {
+    for (const n of this.times.keys()) if (n > block) this.times.delete(n);
     this.db.exec("BEGIN");
     try {
       this.db.prepare("DELETE FROM events WHERE block_number > ?").run(Number(block));
@@ -338,6 +372,7 @@ export class EventLog {
 
   /** Forget the chain entirely; the next boot re-indexes from the cutover block. */
   reset(): void {
+    this.times.clear();
     this.db.exec("BEGIN; DELETE FROM events; DELETE FROM blocks; DELETE FROM meta WHERE key = 'checkpoint'; COMMIT;");
   }
 

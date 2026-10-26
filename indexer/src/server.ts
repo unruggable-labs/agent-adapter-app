@@ -2,19 +2,14 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAddress, type Address, type Hex, type PublicClient } from "viem";
-import { AdvisoryStore } from "./advisories.js";
-import type { EventLog } from "./eventlog.js";
-import type { Ingester } from "./ingest.js";
+import { isAddress, type Address, type Hex } from "viem";
 import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
 import { withMeta } from "./meta.js";
-import type { ProjectionStore } from "./projection.js";
 import { fetchContent } from "./gateway.js";
-import { attestationView } from "./queries.js";
+import { attestationView, findIdentity } from "./queries.js";
+import type { ChainRuntime } from "./runtime.js";
 import { overview as statsOverview, series as statsSeries } from "./stats.js";
 import { handleApi } from "./service.js";
-import { ViewCache } from "./views.js";
-import { CollectionWatcher } from "./watch.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const legacyUi = join(here, "..", "ui", "index.html");
@@ -46,54 +41,29 @@ const TAGLINE = "Identity, profiles, and reviews for AI agents. Discover reputab
 const CARD_TTL_MS = 5 * 60 * 1000;
 const cards = new Map<string, { png: Buffer; at: number }>();
 
-/** The live public sites, for the stats host's card, which adds every chain up the way the page
- *  does. The same list the app keeps in chain.ts; a new chain goes in both. */
+/** The live public sites, for the stats card, which adds every chain up the way the page does: a
+ *  chain this server runs from its own log, the others from their public APIs. The same list the
+ *  app keeps in chain.ts; a new chain goes in both. */
 const PUBLIC_SITES = [
   { slug: "robinhood", chain: { id: 4663, label: "Robinhood Chain" }, host: "robinhood.adapterscan.com", testnet: false },
   { slug: "base", chain: { id: 8453, label: "Base" }, host: "base.adapterscan.com", testnet: false },
   { slug: "sepolia", chain: { id: 11155111, label: "Sepolia" }, host: "testnet.adapterscan.com", testnet: true },
 ];
 
-export function startServer(
-  store: ProjectionStore,
-  client: PublicClient,
-  adapter: Address,
-  port: number,
-  ingester?: Ingester,
-  pollMs = 2000,
-  opts: { networkLabel?: string; log?: EventLog; watchMs?: number } = {},
-) {
-  if (ingester) setInterval(() => ingester.sync().catch(() => {}), pollMs);
-  // Chain facts around each identity are read by this worker, never on a request, and kept in the
-  // network's SQLite file beside the event log so a restart starts warm.
-  const advisories = new AdvisoryStore(opts.log?.connection ?? null);
-  const views = new ViewCache(store, client, { log: (line) => console.log(line) }, advisories);
-  views.start();
-  // The contracts records are bound to, followed on a slower cadence than the adapter: what they
-  // emit marks records for the worker to read again (watch.ts). It scans only what the ingester
-  // has synced, so every event maps onto records the store already has.
-  if (ingester) {
-    const watcher = new CollectionWatcher(store, client, advisories, { log: (line) => console.log(line) });
-    let scanning = false;
-    const scan = () => {
-      if (scanning) return;
-      scanning = true;
-      watcher
-        .scan(ingester.next - 1n)
-        .then((d) => {
-          if (d.holders.size + d.cards.size + d.contracts.size > 0) {
-            console.log(`Watch: ${d.holders.size} holders, ${d.cards.size} cards, ${d.contracts.size} contracts to read again`);
-          }
-          views.mark(d);
-        })
-        .catch((e) => console.warn(`Watch scan failed, retrying next round: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`))
-        .finally(() => (scanning = false));
-    };
-    setInterval(scan, opts.watchMs ?? 5 * 60_000).unref?.();
-    scan();
-  }
-  const chain = opts.networkLabel ?? `chain ${store.chainId}`;
-  const chainCard = { id: Number(store.chainId), label: chain };
+/**
+ * Serve a list of running chains (runtime.ts) on one port: the API, the social cards, the page
+ * shell with its tags, the crawlers' files. One chain is a chain's own site; several are the
+ * multichain explorer. A request for a chain's own hostname (robinhood.adapterscan.com) sees only
+ * that chain, so the old per-chain sites keep working from the same process.
+ */
+export function startServer(chains: ChainRuntime[], port: number) {
+  for (const c of chains) c.start();
+  /** The chains a request sees: its host's chain if the host is one's own site, else all of them. */
+  const scopeFor = (host: string) => {
+    const own = chains.filter((c) => c.host && c.host === host.split(":")[0]);
+    return own.length ? own : chains;
+  };
+  const cardOf = (c: ChainRuntime) => ({ id: Number(c.chainId), label: c.label });
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -112,11 +82,14 @@ export function startServer(
       return png;
     };
     const pngHeaders = { "cache-control": "public, max-age=300" };
+    const scope = scopeFor(host);
+    // "on Base" where the page is about one chain; nothing where it spans several.
+    const onScope = scope.length === 1 ? ` on ${scope[0].label}` : "";
 
     try {
       // ---- the API
       if (url.pathname.startsWith("/api/")) {
-        const { status, body, type } = await handleApi(store, adapter, url.pathname.slice("/api/".length) + url.search, views, opts.log);
+        const { status, body, type } = await handleApi(scope, url.pathname.slice("/api/".length) + url.search);
         return send(status, type ?? "application/json", body, { "access-control-allow-origin": "*" });
       }
 
@@ -137,11 +110,12 @@ export function startServer(
       // ---- social cards
       let m: RegExpExecArray | null;
       if ((m = /^\/og\/identity\/(0x[0-9a-fA-F]{64})\.png$/.exec(url.pathname))) {
-        const id = store.identities.get(m[1].toLowerCase() as Hex);
-        if (!id) return send(404, "text/plain", "no such identity");
-        const v = views.view(id);
+        const found = findIdentity(scope, m[1]);
+        if (!found) return send(404, "text/plain", "no such identity");
+        const { c, id } = found;
+        const v = c.views.view(id);
         const png = await cached(`identity:${id.ubid}:${id.lastEvent?.blockNumber ?? 0}:${v.reputation.stars}:${v.reputation.ratings.length}:${v.reputation.reviews.length}:${v.reputation.interactions.length}`, () =>
-          identityCard(host, chainCard, {
+          identityCard(host, cardOf(c), {
             name: v.agentName ?? v.subjectLabel,
             ubid: id.ubid,
             standardName: v.standardName,
@@ -159,11 +133,20 @@ export function startServer(
       }
       if ((m = /^\/og\/address\/(0x[0-9a-fA-F]{40})\.png$/.exec(url.pathname))) {
         const a = m[1].toLowerCase() as Address;
-        const w = store.resolveWallet(a);
-        const bound = [...store.identities.values()].filter((i) => i.boundAddress === a).length;
-        const statements = [...store.attestations.values()].filter((s) => s.attester === a && !s.revoked).length;
-        const png = await cached(`address:${a}:${statements}:${w?.designation?.ubid ?? ""}`, () =>
-          addressCard(host, chainCard, {
+        // Every chain the address is on: its first answer for what it is, the counts added up.
+        const per = scope.map((c) => ({
+          c,
+          w: c.store.resolveWallet(a),
+          bound: [...c.store.identities.values()].filter((i) => i.boundAddress === a).length,
+          statements: [...c.store.attestations.values()].filter((s) => s.attester === a && !s.revoked).length,
+        }));
+        const present = per.filter((p) => p.w || p.bound || p.statements);
+        const w = present.find((p) => p.w?.self || p.w?.designation)?.w ?? null;
+        const bound = per.reduce((n, p) => n + p.bound, 0);
+        const statements = per.reduce((n, p) => n + p.statements, 0);
+        const pills = (present.length ? present : per).map((p) => cardOf(p.c));
+        const png = await cached(`address:${scope.map((c) => c.slug).join(",")}:${a}:${statements}:${w?.designation?.ubid ?? ""}`, () =>
+          addressCard(host, pills.length === 1 ? pills[0] : pills, {
             address: a,
             isAgent: !!w?.self,
             operates: w?.designation ? (w.verified ? "verified" : "claimed") : "no",
@@ -178,18 +161,21 @@ export function startServer(
         // chain from its own log, the others from their public APIs. Elsewhere, this chain alone.
         const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
         const window = { from: now - 90 * 86400, to: now };
-        const onStatsHost = host.startsWith("stats.");
-        const wanted = onStatsHost
-          ? PUBLIC_SITES.filter((s) => (url.searchParams.get("chains") ? url.searchParams.get("chains")!.split(",").includes(s.slug) : !s.testnet))
-          : PUBLIC_SITES.filter((s) => s.chain.id === Number(store.chainId));
-        const sites = wanted.length ? wanted : PUBLIC_SITES.filter((s) => s.chain.id === Number(store.chainId));
-        const key = `stats:${onStatsHost ? sites.map((s) => s.slug).join(",") : "local"}:${now}`;
+        // The stats host, or a server running several chains, adds up every mainnet (or ?chains=);
+        // a chain's own site shows that chain.
+        const across = host.startsWith("stats.") || scope.length > 1;
+        const pick = url.searchParams.get("chains")?.split(",");
+        const local = (id: number) => scope.find((c) => Number(c.chainId) === id && c.log);
+        const wanted = across ? PUBLIC_SITES.filter((s) => (pick ? pick.includes(s.slug) : !s.testnet)) : PUBLIC_SITES.filter((s) => local(s.chain.id));
+        const sites = wanted.length ? wanted : PUBLIC_SITES.filter((s) => local(s.chain.id));
+        const key = `stats:${sites.map((s) => s.slug).join(",")}:${now}`;
         const png = await cached(key, async () => {
           const parts = await Promise.all(
             sites.map(async (s) => {
-              if (s.chain.id === Number(store.chainId) && opts.log) {
-                const o = statsOverview(opts.log.connection, store, window);
-                const w = statsSeries(opts.log.connection, "identities", "week", window).series[0].points;
+              const c = local(s.chain.id);
+              if (c?.log) {
+                const o = statsOverview(c.log.connection, c.store, window);
+                const w = statsSeries(c.log.connection, "identities", "week", window).series[0].points;
                 return { identities: o.figures.identities.value, projects: o.figures.projects.value, attestations: o.figures.attestations.value, weekly: w };
               }
               try {
@@ -208,7 +194,7 @@ export function startServer(
           const byWeek = new Map<string, number>();
           for (const p of got) for (const pt of p.weekly) byWeek.set(pt.t, (byWeek.get(pt.t) ?? 0) + pt.v);
           const chainsShown = sites.filter((_, i) => parts[i] !== null).map((s) => s.chain);
-          return statsCard(host, chainsShown.length ? chainsShown : [chainCard], {
+          return statsCard(host, chainsShown.length ? chainsShown : scope.map(cardOf), {
             identities: got.reduce((a, p) => a + p.identities, 0),
             projects: got.reduce((a, p) => a + p.projects, 0),
             attestations: got.reduce((a, p) => a + p.attestations, 0),
@@ -219,8 +205,10 @@ export function startServer(
         return send(200, "image/png", png, pngHeaders);
       }
       if (url.pathname === "/og/default.png") {
-        const png = await cached(`default:${store.identities.size}:${store.attestations.size}`, () =>
-          defaultCard(host, chainCard, { identities: store.identities.size, attestations: store.attestations.size }),
+        const identities = scope.reduce((n, c) => n + c.store.identities.size, 0);
+        const attestations = scope.reduce((n, c) => n + c.store.attestations.size, 0);
+        const png = await cached(`default:${scope.map((c) => c.slug).join(",")}:${identities}:${attestations}`, () =>
+          defaultCard(host, scope.length === 1 ? cardOf(scope[0]) : scope.map(cardOf), { identities, attestations }),
         );
         return send(200, "image/png", png, pngHeaders);
       }
@@ -228,7 +216,7 @@ export function startServer(
       // ---- crawlers' housekeeping
       if (url.pathname === "/robots.txt") return send(200, "text/plain", `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
       if (url.pathname === "/sitemap.xml") {
-        const urls = ["/", "/attestations", ...[...store.identities.keys()].map((u) => `/identity/${u}`)];
+        const urls = ["/", "/attestations", ...scope.flatMap((c) => [...c.store.identities.keys()].map((u) => `/identity/${u}`))];
         const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${origin}${u}</loc></url>`).join("\n")}\n</urlset>\n`;
         return send(200, "application/xml", xml);
       }
@@ -241,9 +229,11 @@ export function startServer(
       }
       const pageUrl = `${origin}${url.pathname}`;
       if ((m = /^\/identity\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {
-        const id = store.identities.get(m[1].toLowerCase() as Hex);
-        if (id) {
-          const v = views.view(id);
+        const found = findIdentity(scope, m[1]);
+        if (found) {
+          const { id } = found;
+          const chain = found.c.label;
+          const v = found.c.views.view(id);
           const name = v.agentName ?? v.subjectLabel;
           const rep = v.reputation;
           const bits = [
@@ -263,7 +253,7 @@ export function startServer(
       }
       if (url.pathname === "/stats" || host.startsWith("stats.")) {
         const onStatsHost = host.startsWith("stats.");
-        const where = onStatsHost ? "" : ` on ${chain}`;
+        const where = onStatsHost ? "" : onScope;
         const chainsParam = onStatsHost && url.searchParams.get("chains") ? `?chains=${encodeURIComponent(url.searchParams.get("chains")!)}` : "";
         return send(200, "text/html", withMeta(html, {
           title: `Adapter usage${where} · Adapterscan`,
@@ -273,8 +263,9 @@ export function startServer(
         }));
       }
       if ((m = /^\/attestation\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {
-        const v = attestationView(store, views, m[1].toLowerCase() as Hex);
+        const v = attestationView(scope, m[1].toLowerCase() as Hex);
         if (v) {
+          const chain = scope.find((c) => c.slug === v.chain)!.label;
           const about = v.target ? (v.target.agentName ?? v.target.subjectLabel) : `${v.ubid.slice(0, 10)}…`;
           const kind = v.typeName.toLowerCase().replace("_", " ");
           return send(200, "text/html", withMeta(html, {
@@ -289,15 +280,15 @@ export function startServer(
       if ((m = /^\/address\/(0x[0-9a-fA-F]{40})$/.exec(url.pathname)) && isAddress(m[1])) {
         const a = m[1].toLowerCase();
         return send(200, "text/html", withMeta(html, {
-          title: `${a.slice(0, 10)}…${a.slice(-6)} · Agent Identity on ${chain} · Adapterscan`,
-          description: `What ${a} is, holds, operates and has said on ${chain}. ${TAGLINE}`,
+          title: `${a.slice(0, 10)}…${a.slice(-6)} · Agent Identity${onScope} · Adapterscan`,
+          description: `What ${a} is, holds, operates and has said${onScope}. ${TAGLINE}`,
           url: pageUrl,
           image: `${origin}/og/address/${a}.png`,
           type: "profile",
         }));
       }
       return send(200, "text/html", withMeta(html, {
-        title: `Agent Identity on ${chain} · Adapterscan`,
+        title: `Agent Identity${onScope} · Adapterscan`,
         description: TAGLINE,
         url: pageUrl,
         image: `${origin}/og/default.png`,

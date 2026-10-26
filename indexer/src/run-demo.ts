@@ -5,6 +5,7 @@ import { deployStack } from "./deploy.js";
 import { runScenario } from "./demo.js";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
+import { ChainRuntime } from "./runtime.js";
 import { startServer } from "./server.js";
 import { probeTrustBase } from "./trustbase.js";
 import { ATTESTATION_TYPE_NAMES, STANDARD_NAMES } from "./ubid.js";
@@ -129,7 +130,7 @@ async function main() {
 
     if (serve) {
       console.log(`\n6. Serving API + UI on http://127.0.0.1:${API_PORT} (anvil stays up; Ctrl-C to stop)`);
-      startServer(store, publicClient, deployment.adapter as Address, API_PORT, ingester);
+      startServer([new ChainRuntime({ slug: "local", label: "Local devnet", store, client: publicClient, adapter: deployment.adapter as Address, ingester })], API_PORT);
       await new Promise(() => {});
     } else {
       process.exitCode = failures === 0 ? 0 : 1;

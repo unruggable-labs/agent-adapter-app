@@ -1,18 +1,28 @@
 import type { Address, Hex } from "viem";
-import { ProjectionStore } from "./projection.js";
 import type { EventLog } from "./eventlog.js";
-import { addressView, attestationView, listAttestations, listIdentities, search } from "./queries.js";
+import { addressView, attestationView, findIdentity, listAttestations, listIdentities, search, type ChainScope } from "./queries.js";
+import type { ChainStatus } from "./runtime.js";
 import { BUCKETS, METRICS, overview as statsOverview, projects as statsProjects, projectsCsv, series as statsSeries, windowFrom, type Bucket, type Metric, type ProjectRow } from "./stats.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
-import type { ViewCache } from "./views.js";
 
-/** The API core, host-agnostic. Everything it answers is indexed: the store's fold of the event
- *  log, and the advisories the view worker keeps (views.ts). No request reads the chain. Subpaths are relative, with their query string:
+/** The API core, host-agnostic. Everything it answers is indexed: the stores' folds of the event
+ *  logs, and the advisories the view workers keep (views.ts). No request reads the chain.
+ *  It answers for a list of chains - one for a chain's own site, several for the multichain
+ *  explorer - and rows say which chain they're on. `?chain=a,b` narrows any request to those.
+ *  Subpaths are relative, with their query string:
  *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
  *    search?q= · address/<addr> · wallet/<addr> · txref/<hash> · attestations[?limit&offset&type&standard&attester&ubid]
  *    attestation/<id> · stats/overview?from&to · stats/series?metric&bucket&from&to&by&project · stats/projects?...[&format=csv]
  *  `identities` and `attestations` with no query string return the whole list, as they always
- *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts. */
+ *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts.
+ *  `stats/*` is per chain: with several chains it needs `?chain=` to name one. */
+
+export interface ApiChain extends ChainScope {
+  chainId: bigint;
+  adapter: Address;
+  log?: EventLog;
+  status(): ChainStatus;
+}
 
 export function toJson(value: unknown): string {
   return JSON.stringify(value, (_k, v) =>
@@ -26,69 +36,106 @@ export interface ApiResponse {
   type?: string;
 }
 
-export async function handleApi(
-  store: ProjectionStore,
-  adapter: Address,
-  subpath: string,
-  views: ViewCache,
-  log?: EventLog,
-): Promise<ApiResponse> {
+function chainOverview(c: ApiChain) {
+  const ids = [...c.store.identities.values()];
+  return {
+    chain: c.slug,
+    label: c.label,
+    chainId: c.chainId.toString(),
+    adapter: c.adapter,
+    identities: c.store.identities.size,
+    agents: c.store.agents.size,
+    /** Distinct collections and contracts identities are bound to - one collection with a hundred agents counts once. */
+    projects: new Set(ids.map((i) => i.boundAddress)).size,
+    /** Identities with an ERC-8004 agent minted; the rest are counterfactual claims. */
+    registered: ids.filter((i) => i.agentIds.length > 0).length,
+    attestations: c.store.attestations.size,
+    dropped: c.store.dropped.length,
+    inertRevocations: c.store.inertRevocations.length,
+    ...c.status(),
+  };
+}
+
+export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiResponse> {
   const [path, query = ""] = subpath.split("?");
   const params = new URLSearchParams(query);
   const parts = path.replace(/^\/+|\/+$/g, "").split("/");
   const [head, arg] = parts;
 
+  // `?chain=` narrows; it isn't a filter the list endpoints should see as "a query".
+  const wanted = params.get("chain")?.split(",").map((s) => s.trim()).filter(Boolean);
+  params.delete("chain");
+  const chains = wanted ? all.filter((c) => wanted.includes(c.slug)) : all;
+  if (wanted && chains.length === 0) return { status: 400, body: toJson({ error: "unknown chain", chains: all.map((c) => c.slug) }) };
+
   if (head === "overview") {
+    const per = chains.map(chainOverview);
+    const sum = (k: "identities" | "agents" | "projects" | "registered" | "attestations" | "dropped" | "inertRevocations") => per.reduce((n, o) => n + o[k], 0);
+    // One chain: the shape a chain's own site always had, plus its status. Several: the totals,
+    // with each chain's figures and status under `chains`; adapter and chainId belong to a chain.
+    const one = per.length === 1 ? per[0] : null;
     return {
       status: 200,
       body: toJson({
-        adapter,
-        chainId: store.chainId.toString(),
-        identities: store.identities.size,
-        agents: store.agents.size,
-        /** Distinct collections and contracts identities are bound to - one collection with a hundred agents counts once. */
-        projects: new Set([...store.identities.values()].map((i) => i.boundAddress)).size,
-        /** Identities with an ERC-8004 agent minted; the rest are counterfactual claims. */
-        registered: [...store.identities.values()].filter((i) => i.agentIds.length > 0).length,
-        attestations: store.attestations.size,
-        dropped: store.dropped.length,
-        inertRevocations: store.inertRevocations.length,
+        adapter: one?.adapter ?? null,
+        chainId: one?.chainId ?? null,
+        identities: sum("identities"),
+        agents: sum("agents"),
+        projects: sum("projects"),
+        registered: sum("registered"),
+        attestations: sum("attestations"),
+        dropped: sum("dropped"),
+        inertRevocations: sum("inertRevocations"),
+        chains: per,
       }),
     };
   }
   if (head === "identities") {
-    return { status: 200, body: toJson(params.size > 0 ? listIdentities(store, views, params) : views.views()) };
+    if (params.size > 0) return { status: 200, body: toJson(listIdentities(chains, params)) };
+    return { status: 200, body: toJson(chains.flatMap((c) => [...c.store.identities.values()].map((id) => ({ ...c.views.view(id), chain: c.slug })))) };
   }
   if (head === "search") {
-    return { status: 200, body: toJson({ hits: search(store, views, params.get("q") ?? "") }) };
+    return { status: 200, body: toJson({ hits: search(chains, params.get("q") ?? "") }) };
   }
   if (head === "address" && arg) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(arg)) return { status: 400, body: toJson({ error: "not an address", address: arg }) };
-    return { status: 200, body: toJson(addressView(store, views, arg)) };
+    return { status: 200, body: toJson(addressView(chains, arg)) };
   }
   if (head === "identity" && arg) {
-    const id = store.identities.get(arg.toLowerCase() as Hex);
-    if (!id) return { status: 404, body: toJson({ error: "unknown identity", ubid: arg }) };
-    return { status: 200, body: toJson(views.view(id)) };
+    const found = findIdentity(chains, arg);
+    if (!found) return { status: 404, body: toJson({ error: "unknown identity", ubid: arg }) };
+    return { status: 200, body: toJson({ ...found.c.views.view(found.id), chain: found.c.slug }) };
   }
   if (head === "history" && arg) {
     // The audit trail: every event that touched this identity, in log order, dropped and
     // inert ones included. Empty for a UBID nothing has touched.
-    return { status: 200, body: toJson(store.history.get(arg.toLowerCase() as `0x${string}`) ?? []) };
+    const key = arg.toLowerCase() as Hex;
+    const c = chains.find((x) => x.store.history.has(key));
+    return { status: 200, body: toJson(c?.store.history.get(key) ?? []) };
   }
   if (head === "wallet" && arg) {
-    return { status: 200, body: toJson(store.resolveWallet(arg.toLowerCase() as Address)) };
+    // An address can be an agent, or operate one, on more than one chain: the first chain that
+    // knows it answers, as a chain's own site always did, and `chains` lists every chain's answer.
+    const a = arg.toLowerCase() as Address;
+    const answers = chains.map((c) => ({ chain: c.slug, wallet: c.store.resolveWallet(a) })).filter((x) => x.wallet);
+    const first = answers[0];
+    return { status: 200, body: toJson(first ? { ...first.wallet, chain: first.chain, chains: answers.map((x) => ({ chain: x.chain, ...x.wallet })) } : null) };
   }
   if (head === "txref" && arg) {
-    // Whether a transaction a statement cites exists on this chain, as the worker found it. null: not checked yet.
+    // Whether a transaction a statement cites exists, as the worker found it. A hash names a
+    // transaction on one chain; with several, any chain that found it says found. null: not checked yet.
     if (!/^0x[0-9a-fA-F]{64}$/.test(arg)) return { status: 400, body: toJson({ error: "not a transaction hash", hash: arg }) };
-    return { status: 200, body: toJson({ hash: arg.toLowerCase(), status: views.txRef(arg as Hex) }) };
+    const answers = chains.map((c) => c.views.txRef(arg as Hex));
+    const status = answers.includes("found") ? "found" : answers.includes("missing") ? "missing" : null;
+    return { status: 200, body: toJson({ hash: arg.toLowerCase(), status }) };
   }
   if (head === "stats") {
-    if (!log) return { status: 503, body: toJson({ error: "stats need the event log; this indexer runs without one" }) };
-    const db = log.connection;
+    if (chains.length !== 1) return { status: 400, body: toJson({ error: "stats are per chain: name one with ?chain=", chains: chains.map((c) => c.slug) }) };
+    const c = chains[0];
+    if (!c.log) return { status: 503, body: toJson({ error: "stats need the event log; this indexer runs without one" }) };
+    const db = c.log.connection;
     const window = windowFrom(params);
-    if (arg === "overview") return { status: 200, body: toJson(statsOverview(db, store, window)) };
+    if (arg === "overview") return { status: 200, body: toJson(statsOverview(db, c.store, window)) };
     if (arg === "series") {
       const metric = (params.get("metric") ?? "identities") as Metric;
       const bucket = (params.get("bucket") ?? "day") as Bucket;
@@ -100,7 +147,7 @@ export async function handleApi(
     }
     if (arg === "projects") {
       const limit = Math.min(500, Math.max(1, Number(params.get("limit")) || 50));
-      const page = statsProjects(db, store, views, {
+      const page = statsProjects(db, c.store, c.views, {
         window,
         standard: params.get("standard")?.split(",").filter(Boolean),
         registration: (params.get("registration") as "registered" | "counterfactual" | null) ?? undefined,
@@ -117,20 +164,23 @@ export async function handleApi(
     return { status: 404, body: toJson({ error: "not found" }) };
   }
   if (head === "attestation" && arg) {
-    const v = attestationView(store, views, arg as Hex);
+    const v = attestationView(chains, arg as Hex);
     if (!v) return { status: 404, body: toJson({ error: "unknown attestation", attestationId: arg }) };
     return { status: 200, body: toJson(v) };
   }
   if (head === "attestations") {
-    if (params.size > 0) return { status: 200, body: toJson(listAttestations(store, views, params)) };
+    if (params.size > 0) return { status: 200, body: toJson(listAttestations(chains, params)) };
     return {
       status: 200,
       body: toJson(
-        [...store.attestations.values()].map((a) => ({
-          ...a,
-          typeName: ATTESTATION_TYPE_NAMES[a.attestationType],
-          resolved: store.identities.has(a.ubid),
-        })),
+        chains.flatMap((c) =>
+          [...c.store.attestations.values()].map((a) => ({
+            ...a,
+            chain: c.slug,
+            typeName: ATTESTATION_TYPE_NAMES[a.attestationType],
+            resolved: c.store.identities.has(a.ubid),
+          })),
+        ),
       ),
     };
   }

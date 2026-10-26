@@ -1,6 +1,7 @@
 # --- adapterscan (managed by deploy/setup.sh; everything below this line is replaced) ---
-# One static build, two hostnames. The app picks its network from the hostname and Caddy
-# routes /api to the matching indexer: Sepolia on 8788, Ethereum on 8789.
+# One static build behind every hostname. The testnet has its own indexer (8788); the mainnets
+# run in one process, the hub (8792), which answers a chain's own hostname with that chain alone
+# and adapterscan.com with all of them. Apply this together with the hub cutover in README.md.
 
 (adapterscan) {
 	encode gzip zstd
@@ -43,22 +44,21 @@
 	}
 }
 
-# One hostname per chain; the app reads its network from the hostname and Caddy routes /api
-# to that chain's indexer. Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
+# Ports: sepolia 8788, the hub 8792. (8789-8791 were the mainnets' own indexers before the hub.)
 testnet.adapterscan.com, adapter.ens8004.xyz, adapter.178-105-235-22.sslip.io {
 	import adapterscan 8788
 }
 robinhood.adapterscan.com {
-	import adapterscan 8791
+	import adapterscan 8792
 }
-# The usage page across every chain. The page asks each chain's API itself; this host only needs
-# a shell, so any live indexer will do behind it.
+# The usage page across every chain. The page asks each chain's API itself; behind it, the hub
+# draws the combined social card from its own logs.
 stats.adapterscan.com {
-	import adapterscan 8788
+	import adapterscan 8792
 }
-# Base: on v0.0.17 since block 52991843, indexed by adapter-indexer@base.
+# Base: on v0.0.17 since block 52991843, in the hub.
 base.adapterscan.com {
-	import adapterscan 8790
+	import adapterscan 8792
 }
 
 # The documentation site: the same build, entered through docs.html.
@@ -74,9 +74,7 @@ docs.adapterscan.com {
 	}
 }
 
-# The apex. Until Ethereum's adapter is on v0.0.17 the app shows the chain picker here (it
-# knows the hostname); when the upgrade lands, set MAINNET_FROM_BLOCK, enable
-# adapter-indexer@mainnet, and flip "adapterscan.com" to "mainnet" in app/src/lib/chain.ts.
+# The apex: every mainnet, from the hub. Ethereum joins when MAINNET_FROM_BLOCK is set.
 adapterscan.com, www.adapterscan.com {
-	import adapterscan 8789
+	import adapterscan 8792
 }

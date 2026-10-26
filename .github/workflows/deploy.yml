@@ -24,9 +24,10 @@ jobs:
             echo "========== DEPLOY START =========="
             cd /srv/adapter
 
-            # Every indexer instance the box has enabled. Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
+            # Every indexer instance the box has enabled. Ports: sepolia 8788, mainnet 8789, base 8790,
+            # robinhood 8791, and the hub (the mainnets in one process, adapterscan.com) 8792.
             SERVICES=""
-            for NET in sepolia robinhood base mainnet; do
+            for NET in sepolia robinhood base mainnet hub; do
               if sudo systemctl is-enabled "adapter-indexer@$NET" >/dev/null 2>&1; then
                 SERVICES="$SERVICES adapter-indexer@$NET"
               fi
@@ -55,7 +56,7 @@ jobs:
 
             echo "--- Health check (a restart replays the chain; allow up to 2 minutes) ---"
             for SERVICE in $SERVICES; do
-              case "$SERVICE" in *sepolia) PORT=8788;; *mainnet) PORT=8789;; *base) PORT=8790;; *robinhood) PORT=8791;; esac
+              case "$SERVICE" in *sepolia) PORT=8788;; *mainnet) PORT=8789;; *base) PORT=8790;; *robinhood) PORT=8791;; *hub) PORT=8792;; esac
               ok=""
               for i in $(seq 1 24); do
                 status=$(sudo systemctl is-active "$SERVICE" || true)

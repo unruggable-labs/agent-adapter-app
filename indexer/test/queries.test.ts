@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore, type LogEvent } from "../src/projection.js";
-import { addressView, attestationView, listAttestations, listIdentities, search } from "../src/queries.js";
+import { addressView, attestationView, listAttestations, listIdentities, search, type ChainScope } from "../src/queries.js";
 import { AttestationType, computeAttestationId, computeUbid, Standard } from "../src/ubid.js";
 import { ViewCache } from "../src/views.js";
 
@@ -40,91 +40,92 @@ function world() {
     getStorageAt: async () => undefined,
   } as unknown as PublicClient;
   const views = new ViewCache(store, client);
-  return { store, views };
+  const chains: ChainScope[] = [{ slug: "local", label: "Local devnet", store, views, timeOf: () => null }];
+  return { store, views, chains };
 }
 const params = (o: Record<string, string>) => new URLSearchParams(o);
 
 describe("queries", () => {
   it("pages identities newest first, with filters", async () => {
-    const { store, views } = world();
-    const all = listIdentities(store, views, params({ limit: "10" }));
+    const { store, views, chains } = world();
+    const all = listIdentities(chains, params({ limit: "10" }));
     expect(all.total).toBe(3);
     expect(all.items.map((i) => i.ubid)).toEqual([UBID9, UBID_BOB, UBID7]);
-    const second = listIdentities(store, views, params({ limit: "1", offset: "1" }));
+    const second = listIdentities(chains, params({ limit: "1", offset: "1" }));
     expect(second.items.map((i) => i.ubid)).toEqual([UBID_BOB]);
-    expect(listIdentities(store, views, params({ standard: "ACCOUNT" })).items.map((i) => i.ubid)).toEqual([UBID_BOB]);
-    expect(listIdentities(store, views, params({ bound: PUNKS, tokenId: "7" })).items.map((i) => i.ubid)).toEqual([UBID7]);
-    expect(listIdentities(store, views, params({ q: "punkbot" })).items.map((i) => i.ubid)).toEqual([UBID7]);
+    expect(listIdentities(chains, params({ standard: "ACCOUNT" })).items.map((i) => i.ubid)).toEqual([UBID_BOB]);
+    expect(listIdentities(chains, params({ bound: PUNKS, tokenId: "7" })).items.map((i) => i.ubid)).toEqual([UBID7]);
+    expect(listIdentities(chains, params({ q: "punkbot" })).items.map((i) => i.ubid)).toEqual([UBID7]);
     await views.refresh(store.identities.get(UBID9)!);
-    expect(listIdentities(store, views, params({ q: "demopunks" })).total).toBe(2); // the name is the collection's: reading it for #9 names #7 too
+    expect(listIdentities(chains, params({ q: "demopunks" })).total).toBe(2); // the name is the collection's: reading it for #9 names #7 too
   });
 
   it("search: addresses lead, then identities with why they matched", async () => {
-    const { store, views } = world();
+    const { store, views, chains } = world();
     for (const id of store.identities.values()) await views.refresh(id);
-    const byName = search(store, views, "punk");
+    const byName = search(chains, "punk");
     expect(byName.map((h) => (h.kind === "identity" ? h.identity.ubid : h.address)).sort()).toEqual([UBID7, UBID9].sort()); // "PunkBot" and "DemoPunks #9"
-    const bob = search(store, views, BOB);
+    const bob = search(chains, BOB);
     expect(bob[0]).toEqual({ kind: "address", address: BOB });
     expect(bob[1]).toMatchObject({ kind: "identity", note: "this address is the agent", tone: "ok" });
-    const alice = search(store, views, ALICE.slice(0, 10));
+    const alice = search(chains, ALICE.slice(0, 10));
     expect(alice[0]).toEqual({ kind: "address", address: ALICE }); // a known holder
     expect(alice[1]).toMatchObject({ kind: "identity", note: "holds the token" });
-    expect(search(store, views, UBID7.slice(0, 12))[0]).toMatchObject({ kind: "identity", note: "UBID" });
-    expect(search(store, views, "")).toEqual([]);
+    expect(search(chains, UBID7.slice(0, 12))[0]).toMatchObject({ kind: "identity", note: "UBID" });
+    expect(search(chains, "")).toEqual([]);
   });
 
   it("an address: what it is, holds, and has said", async () => {
-    const { store, views } = world();
+    const { store, views, chains } = world();
     for (const id of store.identities.values()) await views.refresh(id);
-    const bob = addressView(store, views, BOB.toUpperCase().replace("0X", "0x"));
+    const bob = addressView(chains, BOB.toUpperCase().replace("0X", "0x"));
     expect(bob.self?.ubid).toBe(UBID_BOB);
     expect(bob.operates).toBeNull();
     expect(bob.statements).toHaveLength(1);
     expect(bob.statements[0].target?.ubid).toBe(UBID7);
     expect(bob.statements[0].typeName).toBe("STAR");
-    const alice = addressView(store, views, ALICE);
+    const alice = addressView(chains, ALICE);
     expect(alice.self).toBeNull();
     expect(alice.holds.map((i) => i.ubid)).toEqual([UBID7]);
-    const punks = addressView(store, views, PUNKS);
+    const punks = addressView(chains, PUNKS);
     expect(punks.boundHereTotal).toBe(2);
   });
 
   it("pages statements with their targets and filters", () => {
-    const { store, views } = world();
-    const page = listAttestations(store, views, params({ limit: "5" }));
+    const { store, views, chains } = world();
+    const page = listAttestations(chains, params({ limit: "5" }));
     expect(page.total).toBe(1);
     expect(page.items[0].target?.ubid).toBe(UBID7);
-    expect(listAttestations(store, views, params({ type: "RATING" })).total).toBe(0);
-    expect(listAttestations(store, views, params({ standard: "ERC721" })).total).toBe(1);
-    expect(listAttestations(store, views, params({ attester: ALICE })).total).toBe(0);
+    expect(listAttestations(chains, params({ type: "RATING" })).total).toBe(0);
+    expect(listAttestations(chains, params({ standard: "ERC721" })).total).toBe(1);
+    expect(listAttestations(chains, params({ attester: ALICE })).total).toBe(0);
   });
 
   it("one statement in full: its target, its transaction, what replaced or revoked it, and its preimage", () => {
-    const { store, views } = world();
+    const { store, views, chains } = world();
     const first = [...store.attestations.keys()][0];
-    const v = attestationView(store, views, first)!;
+    const v = attestationView(chains, first)!;
     expect(v.target?.ubid).toBe(UBID7);
     expect(v.typeName).toBe("STAR");
     expect(v.revoked).toBe(false);
     expect(v.supersededBy).toBeNull();
     expect(v.transactionHash).toBe(`0x${(4).toString(16).padStart(64, "0")}`);
     expect(v.preimage).toMatchObject({ chainId: CHAIN, adapter: ADAPTER, attester: BOB, ubid: UBID7, attestationType: AttestationType.STAR, blockNumber: 4n, variant: ZERO32, data: "0x01" });
-    expect(attestationView(store, views, `0x${"ab".repeat(32)}` as Hex)).toBeNull();
+    expect(attestationView(chains, `0x${"ab".repeat(32)}` as Hex)).toBeNull();
 
     // Bob stars again later (value 0): the first star is replaced, not revoked
     const second = starred(5, BOB, UBID7, "0x00");
     store.apply(second);
-    expect(attestationView(store, views, first)!.supersededBy).toEqual({ attestationId: second.attestationId, order: { blockNumber: 5n, logIndex: 0 } });
-    expect(attestationView(store, views, second.attestationId)!.supersededBy).toBeNull();
+    expect(attestationView(chains, first)!.supersededBy).toEqual({ attestationId: second.attestationId, order: { blockNumber: 5n, logIndex: 0 } });
+    expect(attestationView(chains, second.attestationId)!.supersededBy).toBeNull();
 
     // then revokes the second: revoked wins over replaced, and the revocation is on the record
     store.apply({ ...ev(6, "AttestationRevoked", { attestationId: second.attestationId, revoker: BOB }), transactionHash: `0x${"06".repeat(32)}` as Hex });
-    const revoked = attestationView(store, views, second.attestationId)!;
+    const revoked = attestationView(chains, second.attestationId)!;
     expect(revoked.revoked).toBe(true);
     expect(revoked.revocation).toEqual({ revoker: BOB, order: { blockNumber: 6n, logIndex: 0 }, transactionHash: `0x${"06".repeat(32)}` });
     expect(revoked.supersededBy).toBeNull();
     // with the second gone, the first stands again
-    expect(attestationView(store, views, first)!.supersededBy).toBeNull();
+    expect(attestationView(chains, first)!.supersededBy).toBeNull();
   });
 });

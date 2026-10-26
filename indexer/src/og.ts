@@ -173,7 +173,7 @@ export async function identityCard(host: string, chain: Chain, c: IdentityCard):
   return png(frame(host, chain, body));
 }
 
-export async function addressCard(host: string, chain: Chain, a: AddressCard): Promise<Buffer> {
+export async function addressCard(host: string, chain: Chain | Chain[], a: AddressCard): Promise<Buffer> {
   const body = col({ flex: 1 }, [
     row({ gap: 32 }, [
       el("div", { display: "flex", alignItems: "center", justifyContent: "center", width: 160, height: 160, borderRadius: 60, backgroundColor: "#e9ebee", color: C.t3, fontSize: 72, fontWeight: 700 }, "@"),
@@ -192,7 +192,7 @@ export async function addressCard(host: string, chain: Chain, a: AddressCard): P
   return png(frame(host, chain, body));
 }
 
-export async function defaultCard(host: string, chain: Chain, counts: { identities: number; attestations: number }): Promise<Buffer> {
+export async function defaultCard(host: string, chain: Chain | Chain[], counts: { identities: number; attestations: number }): Promise<Buffer> {
   const body = col({ flex: 1, justifyContent: "center", gap: 18 }, [
     text("Agent Identity", { fontSize: 88, fontWeight: 700, letterSpacing: -3, lineHeight: 1 }),
     text("Discover reputable AI agents", { fontSize: 34, color: C.t2 }),

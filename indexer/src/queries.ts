@@ -8,12 +8,27 @@ import type { IdentityView, ViewCache } from "./views.js";
  * one address is and has done, a page of statements. The app asks these instead of downloading
  * the registry and filtering it itself.
  *
- * Today they run over the store and the view cache in memory, and they are careful about what
- * that costs: an identity's full view folds its reputation out of every attestation, so a page
- * builds views only for the rows it returns and searches on the cheap summary (labels, holder,
- * card). When the views move into SQLite these functions are the seam - same questions, same
- * answers, a different engine underneath.
+ * They are asked of a list of chains - one for a chain's own site, several for the multichain
+ * explorer - and every row says which chain it is on. A UBID or an attestation id is unique
+ * across chains (both are hashed over the adapter's ERC-7930 address, chain id included), so a
+ * lookup by id needs no chain; an address isn't, so an address's answer gathers every chain.
+ * Lists are newest first: within a chain by block and log index, as always; across chains by
+ * block time, since block numbers on two chains don't compare.
+ *
+ * They run over the stores and view caches in memory, and they are careful about what that
+ * costs: an identity's full view folds its reputation out of every attestation, so a page builds
+ * views only for the rows it returns and searches on the cheap summary (labels, holder, card).
  */
+
+/** One chain, as the queries see it. A ChainRuntime is one. */
+export interface ChainScope {
+  slug: string;
+  label: string;
+  store: ProjectionStore;
+  views: ViewCache;
+  /** When the block an order key points into was made, unix seconds, or null if unknown. */
+  timeOf(order: OrderKey): number | null;
+}
 
 export interface Page<T> {
   items: T[];
@@ -21,6 +36,8 @@ export interface Page<T> {
   offset: number;
   limit: number;
 }
+
+export type ChainIdentityView = IdentityView & { chain: string };
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
@@ -36,10 +53,34 @@ function newestFirst(a: OrderKey, b: OrderKey): number {
   return b.logIndex - a.logIndex;
 }
 
+/**
+ * Several chains' rows as one list, newest first. Each chain's rows are sorted exactly by block
+ * and log index; the chains are then interleaved by block time. A row whose block time isn't
+ * known yet takes the time of the newer row before it, so a chain's own order is never broken.
+ */
+function interleave<T>(chains: ChainScope[], rowsOf: (c: ChainScope) => T[], orderOf: (t: T) => OrderKey): { c: ChainScope; row: T }[] {
+  const keyed: { c: ChainScope; row: T; t: number }[] = [];
+  for (const c of chains) {
+    const rows = rowsOf(c).sort((a, b) => newestFirst(orderOf(a), orderOf(b)));
+    let t = Number.POSITIVE_INFINITY;
+    for (const row of rows) {
+      t = Math.min(t, c.timeOf(orderOf(row)) ?? t);
+      keyed.push({ c, row, t });
+    }
+  }
+  // Stable: rows of one chain keep their order, and equal times keep the chains' order.
+  return chains.length > 1 ? keyed.sort((a, b) => b.t - a.t) : keyed;
+}
+
 const names = (p: URLSearchParams, key: string): Set<string> | null => {
   const v = p.get(key);
   return v ? new Set(v.split(",").map((s) => s.trim()).filter(Boolean)) : null;
 };
+
+/** The full view, saying which chain it is on. */
+export function viewOf(c: ChainScope, id: IdentityState): ChainIdentityView {
+  return { ...c.views.view(id), chain: c.slug };
+}
 
 /** Does the identity's text - what people call it - contain the query? */
 function matchesText(views: ViewCache, id: IdentityState, q: string): boolean {
@@ -59,84 +100,109 @@ function matchesHex(views: ViewCache, id: IdentityState, q: string): boolean {
 const isHex = (q: string) => /^0x[0-9a-f]{1,64}$/.test(q);
 const isAddress = (q: string) => /^0x[0-9a-f]{40}$/.test(q);
 
-/** A page of identities, newest first. Filters: standard (names, comma-separated), bound, tokenId, q. */
-export function listIdentities(store: ProjectionStore, views: ViewCache, p: URLSearchParams): Page<IdentityView> {
-  const { limit, offset } = paging(p);
-  let ids = [...store.identities.values()];
-  const standards = names(p, "standard");
-  if (standards) ids = ids.filter((i) => standards.has(STANDARD_NAMES[i.standard]));
-  const bound = p.get("bound")?.toLowerCase();
-  if (bound) ids = ids.filter((i) => i.boundAddress === bound);
-  const tokenId = p.get("tokenId");
-  if (tokenId && /^\d+$/.test(tokenId)) {
-    const t = BigInt(tokenId);
-    ids = ids.filter((i) => i.tokenId === t);
+/** The chain whose store has this identity, if any. */
+export function findIdentity<C extends ChainScope>(chains: C[], ubid: string): { c: C; id: IdentityState } | null {
+  const key = ubid.toLowerCase() as Hex;
+  for (const c of chains) {
+    const id = c.store.identities.get(key);
+    if (id) return { c, id };
   }
+  return null;
+}
+
+/** A page of identities, newest first. Filters: standard (names, comma-separated), bound, tokenId, q. */
+export function listIdentities(chains: ChainScope[], p: URLSearchParams): Page<ChainIdentityView> {
+  const { limit, offset } = paging(p);
+  const standards = names(p, "standard");
+  const bound = p.get("bound")?.toLowerCase();
+  const tokenId = p.get("tokenId");
+  const t = tokenId && /^\d+$/.test(tokenId) ? BigInt(tokenId) : null;
   const q = p.get("q")?.trim().toLowerCase();
-  if (q) ids = ids.filter((i) => (isHex(q) ? matchesHex(views, i, q) : matchesText(views, i, q)));
-  ids.sort((a, b) => newestFirst(a.created, b.created));
-  return { items: ids.slice(offset, offset + limit).map((i) => views.view(i)), total: ids.length, offset, limit };
+  const rows = interleave(
+    chains,
+    (c) => {
+      let ids = [...c.store.identities.values()];
+      if (standards) ids = ids.filter((i) => standards.has(STANDARD_NAMES[i.standard]));
+      if (bound) ids = ids.filter((i) => i.boundAddress === bound);
+      if (t !== null) ids = ids.filter((i) => i.tokenId === t);
+      if (q) ids = ids.filter((i) => (isHex(q) ? matchesHex(c.views, i, q) : matchesText(c.views, i, q)));
+      return ids;
+    },
+    (i) => i.created,
+  );
+  return { items: rows.slice(offset, offset + limit).map(({ c, row }) => viewOf(c, row)), total: rows.length, offset, limit };
 }
 
 export type SearchHit =
   | { kind: "address"; address: Address }
-  | { kind: "identity"; identity: IdentityView; note?: string; tone?: string };
+  | { kind: "identity"; identity: ChainIdentityView; note?: string; tone?: string };
 
 const MAX_HITS = 8;
 
 /**
  * The header search box: who is this? A full address leads with its own page; a hex prefix leads
  * with the pages of known addresses that start with it; then identities by UBID, bound address,
- * operating wallet, holder, ERC-8004 id, or name. The note says why a hit matched when the name
- * alone wouldn't.
+ * operating wallet, holder, ERC-8004 id, or name, on every chain. The note says why a hit matched
+ * when the name alone wouldn't.
  */
-export function search(store: ProjectionStore, views: ViewCache, raw: string): SearchHit[] {
+export function search(chains: ChainScope[], raw: string): SearchHit[] {
   const q = raw.trim().toLowerCase();
   if (!q) return [];
-  const out: SearchHit[] = [];
-  const seen = new Set<Hex>();
-  const add = (id: IdentityState, note?: string, tone?: string) => {
-    if (seen.has(id.ubid) || seen.size >= MAX_HITS) return;
-    seen.add(id.ubid);
-    const hit: SearchHit = { kind: "identity", identity: views.view(id) };
-    if (note) hit.note = note;
-    if (tone) hit.tone = tone;
-    out.push(hit);
+  const addresses: SearchHit[] = [];
+  const knownAddresses = new Set<string>();
+  const addAddress = (a: string) => {
+    if (knownAddresses.has(a)) return;
+    knownAddresses.add(a);
+    addresses.push({ kind: "address", address: a as Address });
   };
+  const hits: SearchHit[] = [];
   const hex = isHex(q);
-  const ids = [...store.identities.values()];
+  if (isAddress(q)) addAddress(q);
 
-  if (isAddress(q)) {
-    out.push({ kind: "address", address: q as Address });
-    // The reverse index, with the mutual-pointing verdict - not anything the wallet says about itself.
-    const w = store.resolveWallet(q as Address);
-    if (w?.self) add(w.self, "this address is the agent", "ok");
-    else if (w?.identity) add(w.identity, w.verified ? "operating wallet, verified both ways" : "claims to operate this, not verified", w.verified ? "ok" : "warn");
-  } else if (hex && q.length >= 4) {
-    const known = new Set<string>();
-    for (const id of ids) for (const a of [id.boundAddress, views.holder(id), id.agentWallet]) if (a && a.startsWith(q)) known.add(a);
-    for (const a of [...known].slice(0, 3)) out.push({ kind: "address", address: a as Address });
-  }
+  for (const c of chains) {
+    const views = c.views;
+    const seen = new Set<Hex>();
+    const add = (id: IdentityState, note?: string, tone?: string) => {
+      if (seen.has(id.ubid) || hits.length >= MAX_HITS) return;
+      seen.add(id.ubid);
+      const hit: SearchHit = { kind: "identity", identity: viewOf(c, id) };
+      if (note) hit.note = note;
+      if (tone) hit.tone = tone;
+      hits.push(hit);
+    };
+    const ids = [...c.store.identities.values()];
 
-  const agentId = /^#?\d+$/.test(q) ? q.replace("#", "") : null;
-  for (const id of ids) {
-    if (hex && id.ubid.startsWith(q)) add(id, "UBID");
-    else if (hex && id.boundAddress.startsWith(q)) add(id, id.standard === Standard.ACCOUNT ? "this address is the agent" : "bound to this contract");
-    else if (hex && id.agentWallet?.startsWith(q)) add(id, "operating wallet");
-    else if (hex && views.holder(id)?.startsWith(q)) add(id, id.standard <= 4 ? "holds the token" : "controls it");
-    else if (agentId) {
-      const match = id.agentIds.find((a) => a.toString().startsWith(agentId));
-      if (match !== undefined) add(id, `ERC-8004 #${match}`);
+    if (isAddress(q)) {
+      // The reverse index, with the mutual-pointing verdict - not anything the wallet says about itself.
+      const w = c.store.resolveWallet(q as Address);
+      if (w?.self) add(w.self, "this address is the agent", "ok");
+      else if (w?.identity) add(w.identity, w.verified ? "operating wallet, verified both ways" : "claims to operate this, not verified", w.verified ? "ok" : "warn");
+    } else if (hex && q.length >= 4) {
+      const known = new Set<string>();
+      for (const id of ids) for (const a of [id.boundAddress, views.holder(id), id.agentWallet]) if (a && a.startsWith(q)) known.add(a);
+      for (const a of [...known].slice(0, 3)) if (knownAddresses.size < 3) addAddress(a);
     }
+
+    const agentId = /^#?\d+$/.test(q) ? q.replace("#", "") : null;
+    for (const id of ids) {
+      if (hex && id.ubid.startsWith(q)) add(id, "UBID");
+      else if (hex && id.boundAddress.startsWith(q)) add(id, id.standard === Standard.ACCOUNT ? "this address is the agent" : "bound to this contract");
+      else if (hex && id.agentWallet?.startsWith(q)) add(id, "operating wallet");
+      else if (hex && views.holder(id)?.startsWith(q)) add(id, id.standard <= 4 ? "holds the token" : "controls it");
+      else if (agentId) {
+        const match = id.agentIds.find((a) => a.toString().startsWith(agentId));
+        if (match !== undefined) add(id, `ERC-8004 #${match}`);
+      }
+    }
+    if (!hex) for (const id of ids) if (matchesText(views, id, q)) add(id);
   }
-  if (!hex) for (const id of ids) if (matchesText(views, id, q)) add(id);
-  return out;
+  return [...addresses, ...hits];
 }
 
-/** One statement as the API shows it: the record, its type's name, and the identity it is about when known. */
-export function attestationRow(store: ProjectionStore, views: ViewCache, a: AttestationRecord) {
-  const target = store.identities.get(a.ubid);
-  return { ...a, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? views.view(target) : null };
+/** One statement as the API shows it: the record, its type's name, its chain, and the identity it is about when known. */
+export function attestationRow(c: ChainScope, a: AttestationRecord) {
+  const target = c.store.identities.get(a.ubid);
+  return { ...a, chain: c.slug, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? viewOf(c, target) : null };
 }
 
 /** The statement classes where one live statement per attester stands and the latest wins (spec §6).
@@ -146,16 +212,19 @@ const STATE_CLASSES = new Set([AttestationType.STAR, AttestationType.RATING, Att
 /**
  * One statement in full: the row, the identity it is about, the later statement by the same
  * attester that replaced it if one did, and the fields its id was recomputed from when it was
- * indexed - the whole case for believing it. Null when the id is unknown (never indexed, or
- * dropped because its id did not match its fields).
+ * indexed - the whole case for believing it. Null when the id is unknown on every chain (never
+ * indexed, or dropped because its id did not match its fields).
  */
-export function attestationView(store: ProjectionStore, views: ViewCache, id: Hex) {
-  const a = store.attestations.get(id.toLowerCase() as Hex);
-  if (!a) return null;
+export function attestationView(chains: ChainScope[], id: Hex) {
+  const key = id.toLowerCase() as Hex;
+  const c = chains.find((x) => x.store.attestations.has(key));
+  if (!c) return null;
+  const store = c.store;
+  const a = store.attestations.get(key)!;
   const live = STATE_CLASSES.has(a.attestationType) ? store.liveStateValue(a.ubid, a.attester, a.attestationType) : null;
   const supersededBy = live && live.attestationId !== a.attestationId && !a.revoked ? { attestationId: live.attestationId, order: live.order } : null;
   return {
-    ...attestationRow(store, views, a),
+    ...attestationRow(c, a),
     supersededBy,
     preimage: {
       chainId: store.chainId,
@@ -171,45 +240,65 @@ export function attestationView(store: ProjectionStore, views: ViewCache, id: He
 }
 
 /** A page of statements, newest first. Filters: type (names), standard (of the identity; hides unresolved), attester, ubid. */
-export function listAttestations(store: ProjectionStore, views: ViewCache, p: URLSearchParams) {
+export function listAttestations(chains: ChainScope[], p: URLSearchParams) {
   const { limit, offset } = paging(p);
-  let rows = [...store.attestations.values()];
   const types = names(p, "type");
-  if (types) rows = rows.filter((a) => types.has(ATTESTATION_TYPE_NAMES[a.attestationType]));
   const standards = names(p, "standard");
-  if (standards)
-    rows = rows.filter((a) => {
-      const id = store.identities.get(a.ubid);
-      return !!id && standards.has(STANDARD_NAMES[id.standard]);
-    });
   const attester = p.get("attester")?.toLowerCase();
-  if (attester) rows = rows.filter((a) => a.attester === attester);
   const ubid = p.get("ubid")?.toLowerCase();
-  if (ubid) rows = rows.filter((a) => a.ubid === ubid);
-  rows.sort((a, b) => newestFirst(a.order, b.order));
-  return { items: rows.slice(offset, offset + limit).map((a) => attestationRow(store, views, a)), total: rows.length, offset, limit };
+  const rows = interleave(
+    chains,
+    (c) => {
+      let rows = [...c.store.attestations.values()];
+      if (types) rows = rows.filter((a) => types.has(ATTESTATION_TYPE_NAMES[a.attestationType]));
+      if (standards)
+        rows = rows.filter((a) => {
+          const id = c.store.identities.get(a.ubid);
+          return !!id && standards.has(STANDARD_NAMES[id.standard]);
+        });
+      if (attester) rows = rows.filter((a) => a.attester === attester);
+      if (ubid) rows = rows.filter((a) => a.ubid === ubid);
+      return rows;
+    },
+    (a) => a.order,
+  );
+  return { items: rows.slice(offset, offset + limit).map(({ c, row }) => attestationRow(c, row)), total: rows.length, offset, limit };
 }
 
 /**
- * Everything the registry knows about one address: whether it is an agent, which agent it
- * operates and whether that link is verified both ways, what it holds or controls, how many
- * identities are bound to it (paged separately via listIdentities with `bound`, since a collection
- * can bind thousands), and every statement it has made.
+ * Everything the registry knows about one address, on every chain: whether it is an agent, which
+ * agent it operates and whether that link is verified both ways, what it holds or controls, how
+ * many identities are bound to it (paged separately via listIdentities with `bound`, since a
+ * collection can bind thousands), and every statement it has made. `chains` lists the chains it
+ * appears on; `self` and `operates` are the first chain's that has one, and `byChain` has each.
  */
-export function addressView(store: ProjectionStore, views: ViewCache, raw: string) {
+export function addressView(chains: ChainScope[], raw: string) {
   const a = raw.toLowerCase() as Address;
-  const ids = [...store.identities.values()];
-  const w = store.resolveWallet(a);
-  const operatesId = w?.identity ?? null;
-  const boundHereTotal = ids.filter((i) => i.boundAddress === a && i.standard !== Standard.ACCOUNT).length;
-  const statements = [...store.attestations.values()].filter((s) => s.attester === a).sort((x, y) => newestFirst(x.order, y.order));
+  const byChain = chains.map((c) => {
+    const ids = [...c.store.identities.values()];
+    const w = c.store.resolveWallet(a);
+    const operatesId = w?.identity ?? null;
+    return {
+      chain: c.slug,
+      self: w?.self ? viewOf(c, w.self) : null,
+      operates: operatesId ? { identity: viewOf(c, operatesId), verified: w!.verified } : null,
+      namedBy: ids.filter((i) => i.agentWallet === a && i.ubid !== operatesId?.ubid).map((i) => viewOf(c, i)),
+      holds: ids.filter((i) => c.views.holder(i) === a && i.boundAddress !== a).map((i) => viewOf(c, i)),
+      boundHereTotal: ids.filter((i) => i.boundAddress === a && i.standard !== Standard.ACCOUNT).length,
+    };
+  });
+  const statements = interleave(chains, (c) => [...c.store.attestations.values()].filter((s) => s.attester === a), (s) => s.order);
+  const present = new Set(statements.map((s) => s.c.slug));
+  for (const b of byChain) if (b.self || b.operates || b.namedBy.length || b.holds.length || b.boundHereTotal) present.add(b.chain);
   return {
     address: a,
-    self: w?.self ? views.view(w.self) : null,
-    operates: operatesId ? { identity: views.view(operatesId), verified: w!.verified } : null,
-    namedBy: ids.filter((i) => i.agentWallet === a && i.ubid !== operatesId?.ubid).map((i) => views.view(i)),
-    holds: ids.filter((i) => views.holder(i) === a && i.boundAddress !== a).map((i) => views.view(i)),
-    boundHereTotal,
-    statements: statements.map((s) => attestationRow(store, views, s)),
+    chains: chains.map((c) => c.slug).filter((s) => present.has(s)),
+    self: byChain.find((b) => b.self)?.self ?? null,
+    operates: byChain.find((b) => b.operates)?.operates ?? null,
+    namedBy: byChain.flatMap((b) => b.namedBy),
+    holds: byChain.flatMap((b) => b.holds),
+    boundHereTotal: byChain.reduce((n, b) => n + b.boundHereTotal, 0),
+    statements: statements.map(({ c, row }) => attestationRow(c, row)),
+    byChain: byChain.filter((b) => present.has(b.chain)).map(({ chain, self, operates }) => ({ chain, self, operates })),
   };
 }

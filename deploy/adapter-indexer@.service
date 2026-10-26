@@ -1,5 +1,7 @@
-# One indexer per network: adapter-indexer@sepolia (127.0.0.1:8788), adapter-indexer@mainnet
-# (127.0.0.1:8789). The instance name is the network passed to serve.ts.
+# One instance per process. adapter-indexer@sepolia is the testnet alone (127.0.0.1:8788);
+# adapter-indexer@hub is the mainnets in one process (127.0.0.1:8792, HUB_NETWORKS in
+# /etc/adapter.env, default robinhood,base,mainnet). The instance name is what serve.ts is given.
+# A chain runs in one instance only: its event log is locked by the process that has it open.
 [Unit]
 Description=Adapter %i indexer (event-sourced API)
 After=network.target

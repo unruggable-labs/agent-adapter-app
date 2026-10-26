@@ -68,7 +68,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
   base: {
     label: "Base",
     apiBase: import.meta.env.VITE_BASE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:8790/api" : "/api"),
-    rpcUrl: import.meta.env.VITE_BASE_RPC ?? "https://mainnet.base.org",
+    rpcUrl: import.meta.env.VITE_BASE_RPC ?? "https://base-rpc.publicnode.com",
     chain: base,
     personaWrites: false,
     host: "base.adapterscan.com",

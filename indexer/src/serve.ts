@@ -7,23 +7,30 @@ import { EventLog } from "./eventlog.js";
 import { configureGatewayCache } from "./gateway.js";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
+import { ChainRuntime } from "./runtime.js";
 import { startServer } from "./server.js";
 
 /**
- * Standalone indexer for a public chain. The local devnet is served by `run-demo.ts --serve`
- * (it deploys the stack it indexes); this entrypoint points at an already-deployed adapter.
+ * The indexer for public chains. The local devnet is served by `run-demo.ts --serve` (it deploys
+ * the stack it indexes); this entrypoint points at already-deployed adapters.
  *
  *   npm run serve:sepolia
- *   npx tsx src/serve.ts robinhood
- *   npx tsx src/serve.ts base
- *   npx tsx src/serve.ts mainnet    (needs MAINNET_FROM_BLOCK)
+ *   npx tsx src/serve.ts robinhood            one chain, on its own port
+ *   npx tsx src/serve.ts robinhood base       several chains in one process, on HUB_PORT (8792)
+ *   npx tsx src/serve.ts hub                  the mainnets: HUB_NETWORKS, default robinhood,base,mainnet
  *
- * Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791. Caddy routes each hostname's /api
- * to its port.
+ * One chain is a chain's own site; several are the multichain explorer at adapterscan.com, which
+ * also answers for each chain's own hostname with that chain alone (server.ts). In the hub a
+ * chain with no cutover block yet (Ethereum before its v0.0.17 upgrade) is skipped and said so;
+ * on its own it refuses to start. A bad RPC (wrong chain, capped log ranges) stops the process
+ * either way, with the fix in one line.
  *
- * The adapter's event log is kept in `data/<network>.sqlite` (ADAPTER_DATA_DIR overrides the
+ * Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791, the hub 8792.
+ *
+ * Each chain's event log is kept in `data/<network>.sqlite` (ADAPTER_DATA_DIR overrides the
  * directory), so a restart folds from the file and asks the chain only for what came after. The
- * file is a copy of the chain: delete it to re-index.
+ * file is a copy of the chain: delete it to re-index. Only one process may have a chain's file
+ * open: run a chain in the hub or on its own, not both.
  */
 const NETWORKS = {
   sepolia: {
@@ -37,6 +44,8 @@ const NETWORKS = {
     fromBlock: 11_661_779n,
     port: 8788,
     pollMs: 12_000,
+    host: "testnet.adapterscan.com",
+    testnet: true,
   },
   mainnet: {
     chain: mainnet,
@@ -54,13 +63,15 @@ const NETWORKS = {
   base: {
     chain: base,
     chainId: 8453n,
-    rpcUrl: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
+    // PublicNode, as elsewhere: mainnet.base.org answers a handful of calls and then 429s.
+    rpcUrl: process.env.BASE_RPC_URL ?? "https://base-rpc.publicnode.com",
     adapter: "0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" as Address, // the Base proxy
     // Upgraded to v0.0.17 in 0x148b82c7…0626 (Safe nonce 1); events before it are the older scheme.
     fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : 52_991_843n,
     port: 8790,
-    // 2 s blocks, so a poll covers ~15. mainnet.base.org rate-limits hard; BASE_RPC_URL in
-    // /etc/adapter.env for a dedicated, metered one - 30 s keeps the poll under 3k calls a day.
+    host: "base.adapterscan.com",
+    // 2 s blocks, so a poll covers ~15. 30 s keeps the poll under 3k calls a day, for when
+    // BASE_RPC_URL in /etc/adapter.env points at a dedicated, metered endpoint.
     pollMs: 30_000,
   },
   robinhood: {
@@ -72,6 +83,7 @@ const NETWORKS = {
     // Fresh v0.0.17 deployment: the block the proxy's code first appeared in is the start.
     fromBlock: 75_810_067n,
     port: 8791,
+    host: "robinhood.adapterscan.com",
     // 100 ms blocks, so a poll covers ~300 of them. The dedicated RPC is metered: a poll is
     // three calls (latest header, checkpoint check, logs), and 30 s keeps that under 10k a day.
     pollMs: 30_000,
@@ -81,69 +93,66 @@ const NETWORKS = {
   },
 } as const;
 
-async function main() {
-  const name = (process.argv[2] ?? "sepolia") as keyof typeof NETWORKS;
-  const net = NETWORKS[name];
-  if (!net) throw new Error(`unknown network ${String(name)}; known: ${Object.keys(NETWORKS).join(", ")}`);
-  if (net.fromBlock === null)
-    throw new Error(`${name}: no cutover block. Set ${name.toUpperCase()}_FROM_BLOCK to the block the v0.0.17 upgrade landed in; older events must not be indexed.`);
+type NetworkName = keyof typeof NETWORKS;
+const HUB_PORT = Number(process.env.HUB_PORT ?? 8792);
+const LABELS: Record<NetworkName, string> = { sepolia: "Sepolia", mainnet: "Ethereum", base: "Base", robinhood: "Robinhood Chain" };
 
-  console.log(`Indexing ${name}: adapter ${net.adapter} from block ${net.fromBlock} via ${net.rpcUrl}`);
-  const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) }) as PublicClient;
-  await preflight(client, net.rpcUrl, net.chainId, net.fromBlock);
-  const store = new ProjectionStore(net.chainId, net.adapter);
+async function main() {
+  const args = process.argv.slice(2);
+  const hub = args.length === 1 && args[0] === "hub";
+  const names = (hub ? (process.env.HUB_NETWORKS ?? "robinhood,base,mainnet").split(",").map((n) => n.trim()) : args.length ? args : ["sepolia"]) as NetworkName[];
+  for (const n of names) if (!NETWORKS[n]) throw new Error(`unknown network ${n}; known: ${Object.keys(NETWORKS).join(", ")}`);
+  const several = hub || names.length > 1;
 
   const dataDir = process.env.ADAPTER_DATA_DIR ?? fileURLToPath(new URL("../data", import.meta.url));
   mkdirSync(dataDir, { recursive: true });
   configureGatewayCache(join(dataDir, "cache")); // ipfs/ar content, under its address
-  const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock: net.fromBlock });
-  const ingester = new Ingester(client, store, net.adapter, net.fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2", {
+
+  const chains: ChainRuntime[] = [];
+  for (const name of names) {
+    const net = NETWORKS[name];
+    if (net.fromBlock === null) {
+      const fix = `Set ${name.toUpperCase()}_FROM_BLOCK to the block the v0.0.17 upgrade landed in; older events must not be indexed.`;
+      if (!several) throw new Error(`${name}: no cutover block. ${fix}`);
+      console.log(`[${name}] not indexed yet: no cutover block. ${fix}`);
+      continue;
+    }
+    chains.push(await boot(name, net.fromBlock, dataDir));
+  }
+  if (chains.length === 0) throw new Error(`none of ${names.join(", ")} can be indexed yet`);
+
+  const port = several ? HUB_PORT : NETWORKS[names[0]].port;
+  startServer(chains, port);
+  console.log(`API + UI for ${chains.map((c) => c.slug).join(", ")} on http://127.0.0.1:${port}`);
+}
+
+/** One chain up to the point of serving: the RPC checked, the stored log folded. Its first sync starts with the server. */
+async function boot(name: NetworkName, fromBlock: bigint, dataDir: string): Promise<ChainRuntime> {
+  const net = NETWORKS[name];
+  console.log(`[${name}] adapter ${net.adapter} from block ${fromBlock} via ${net.rpcUrl}`);
+  const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) }) as PublicClient;
+  await preflight(client, net.rpcUrl, net.chainId, fromBlock);
+  const store = new ProjectionStore(net.chainId, net.adapter);
+  const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock });
+  const ingester = new Ingester(client, store, net.adapter, fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2", {
     log,
-    onReorg: (r) => console.warn(`Reorg: the chain dropped block ${r.previousHead}; rewound to ${r.fork}, ${r.droppedEvents} events refolded away`),
+    onReorg: (r) => console.warn(`[${name}] Reorg: the chain dropped block ${r.previousHead}; rewound to ${r.fork}, ${r.droppedEvents} events refolded away`),
   });
   const replayed = ingester.replay();
-  if (replayed > 0 || log.checkpoint()) console.log(`Loaded ${replayed} events from ${log.path}, synced to block ${log.checkpoint()?.number}`);
-
-  let syncedTo = ingester.next - 1n;
-  const fresh = await ingester.sync((from, to, head) => {
-    syncedTo = to;
-    if (head - from > 10_000n) console.log(`  backfill ${from} … ${to} (head ${head})`);
+  if (replayed > 0 || log.checkpoint()) console.log(`[${name}] Loaded ${replayed} events from ${log.path}, synced to block ${log.checkpoint()?.number}`);
+  return new ChainRuntime({
+    slug: name,
+    label: LABELS[name],
+    host: "host" in net ? net.host : undefined,
+    testnet: "testnet" in net ? net.testnet : false,
+    store,
+    client,
+    adapter: net.adapter,
+    ingester,
+    log,
+    pollMs: net.pollMs,
+    verifyFrom: fromBlock,
   });
-  const count = log.count();
-  console.log(
-    `Synced: ${count} events (${fresh} new) → ${store.identities.size} identities, ${store.agents.size} agents, ` +
-      `${store.attestations.size} attestations, ${store.dropped.length} dropped`,
-  );
-
-  // Load-balanced public RPCs can silently return incomplete logs for a chunk — observed in
-  // the wild (a backfill came back one AgentBound short with no error). Cross-check the
-  // log against one full-range query; on mismatch, forget the log and exit nonzero so systemd
-  // (or the operator) restarts into a fresh, hopefully-honest backfill. Skipped if the RPC caps
-  // full-range queries.
-  try {
-    const fullRange = await client.getLogs({ address: net.adapter, fromBlock: net.fromBlock, toBlock: syncedTo });
-    if (fullRange.length > count) {
-      console.error(
-        `BACKFILL MISMATCH: the event log holds ${count} events but a full-range query ` +
-          `returned ${fullRange.length} — the RPC returned incomplete logs. Forgetting the log and exiting to retry.`,
-      );
-      log.reset();
-      process.exit(1);
-    }
-    if (fullRange.length < count) {
-      // A verifier that undercounts is itself the broken party; the applied set stands.
-      console.warn(`Backfill verification inconclusive: full-range recount saw ${fullRange.length} < ${count}.`);
-    } else {
-      console.log(`Backfill verified: full-range recount matches (${count} events).`);
-    }
-  } catch {
-    console.warn("Backfill verification skipped: RPC rejected the full-range query.");
-  }
-
-  startServer(store, client, net.adapter, net.port, ingester, net.pollMs, { networkLabel: net.chain.name, log });
-  console.log(`API + UI on http://127.0.0.1:${net.port} (polling every ${net.pollMs / 1000}s)`);
-  // Blocks stored before timestamps were kept get theirs now, in the background.
-  ingester.backfillTimestamps().then((n) => n > 0 && console.log(`Timestamps: filled ${n} blocks stored before they were kept`)).catch(() => {});
 }
 
 /**

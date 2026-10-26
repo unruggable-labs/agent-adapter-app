@@ -47,7 +47,7 @@ describe("event log", () => {
   it("refuses to be reused for a different adapter, chain or cutover", () => {
     const path = `/tmp/claude-501/eventlog-${process.pid}-${Date.now()}.sqlite`;
     new EventLog(path, identity).close();
-    expect(() => new EventLog(path, identity)).not.toThrow();
+    expect(() => new EventLog(path, identity).close()).not.toThrow();
     expect(() => new EventLog(path, { ...identity, fromBlock: 101n })).toThrow(/fromBlock=100.*wants fromBlock=101/);
     expect(() => new EventLog(path, { ...identity, chainId: 1n })).toThrow(/chainId/);
   });
@@ -134,6 +134,6 @@ describe("event log facts and timestamps (schema 2)", () => {
     expect(log.blocksWithoutTimestamp()).toEqual([101n]);
     expect((log.connection.prepare("SELECT value FROM meta WHERE key='schema'").get() as { value: string }).value).toBe("2");
     log.close();
-    expect(() => new EventLog(path, identity)).not.toThrow(); // and opens cleanly as schema 2
+    expect(() => new EventLog(path, identity).close()).not.toThrow(); // and opens cleanly as schema 2
   });
 });

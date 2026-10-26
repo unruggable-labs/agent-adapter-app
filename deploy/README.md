@@ -8,18 +8,19 @@ What runs where:
 
 - `/srv/adapter` — this repo, `main` branch
 - `adapter-indexer@sepolia` — the Sepolia indexer (`indexer`, port 8788, localhost)
-- `adapter-indexer@robinhood` — the Robinhood Chain indexer (port 8791). The public RPC
-  is rate-limited; `ROBINHOOD_RPC_URL=` in `/etc/adapter.env` for a dedicated one.
-- `adapter-indexer@base` — the Base indexer (port 8790), from block 52991843 (the v0.0.17
-  upgrade). `mainnet.base.org` rate-limits hard: set `BASE_RPC_URL=` in `/etc/adapter.env` to a
-  dedicated endpoint before enabling it.
-- `adapter-indexer@mainnet` (port 8789) — dormant until the Ethereum proxy runs v0.0.17 (see
-  "Mainnet" below)
-- Caddy — one static `app/dist` behind two hostnames. `testnet.adapterscan.com`
-  (plus the older `adapter.ens8004.xyz` and `adapter.178-105-235-22.sslip.io`)
-  routes `/api/*` to the Sepolia indexer; `adapterscan.com` is Ethereum, and
-  redirects to testnet until the mainnet indexer exists. The app reads its
-  network from the hostname, so there is no network switch in production.
+- `adapter-indexer@hub` — the mainnets in one process (port 8792): Robinhood Chain, Base and,
+  once its upgrade lands, Ethereum (`HUB_NETWORKS=` in `/etc/adapter.env` overrides the list).
+  It serves adapterscan.com with every chain, and each chain's own hostname
+  (`robinhood.adapterscan.com`, `base.adapterscan.com`) with that chain alone. A chain whose
+  RPC fails stalls on its own and shows as `stalled` in `/api/overview`; the others carry on.
+  RPCs: `ROBINHOOD_RPC_URL=` (the public one is rate-limited), `BASE_RPC_URL=` and
+  `MAINNET_RPC_URL=` (PublicNode by default).
+- `adapter-indexer@robinhood`, `@base`, `@mainnet` (ports 8791, 8790, 8789) — the mainnets'
+  own indexers from before the hub. Retired by the cutover below; a chain runs in one process
+  only (its event log is locked by whoever has it open).
+- Caddy — one static `app/dist` behind every hostname. `testnet.adapterscan.com` (plus the
+  older `adapter.ens8004.xyz` and `adapter.178-105-235-22.sslip.io`) routes `/api/*` to the
+  Sepolia indexer; the mainnet hostnames and `stats.` go to the hub.
 - The indexer's state is a fold over chain events. The event log is kept in
   `/srv/adapter/indexer/data/<network>.sqlite` (ignored by git, so it survives the
   deploy's `git reset --hard`; `ADAPTER_DATA_DIR=` in `/etc/adapter.env` moves it).
@@ -62,22 +63,33 @@ shared Caddyfile with the current `Caddyfile.adapter`, validates, reloads, and
 starts `adapter-indexer@sepolia`. The sudoers file changes too, so run it as
 root (or as deploy with a sudo password), not through the GitHub Action.
 
+## Cutover to the hub (once, needs sudo)
+
+The hub opens the same `data/<network>.sqlite` files the per-chain indexers have open, and
+each file is locked by one process, so stop those first. In order:
+
+1. `systemctl disable --now adapter-indexer@robinhood adapter-indexer@base`
+2. `systemctl enable --now adapter-indexer@hub` and wait for
+   `curl -s http://127.0.0.1:8792/api/overview` to list both chains as `live`. The files
+   carry over: no re-index, only what came after their checkpoints.
+3. Re-run `deploy/setup.sh` (or install `Caddyfile.adapter` the way it does and
+   `systemctl reload caddy`): the mainnet hostnames, the apex and `stats.` move to 8792.
+
+Between 1 and 3 the mainnet sites show the plain shell (Caddy's `handle_errors`), seconds at
+most. To go back: disable the hub, re-enable the two units, restore the previous Caddyfile
+(`/etc/caddy/Caddyfile.bak.*`).
+
 ## Mainnet
 
 The Ethereum proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336` is not on
-v0.0.17 yet, and events under the older scheme must not be indexed into this
-namespace. When the upgrade lands:
+v0.0.17 yet (the Safe's nonce-3 upgrade is queued), and events under the older
+scheme must not be indexed into this namespace. Until then the hub skips it and
+says so in its log. When the upgrade lands:
 
 1. Put `MAINNET_FROM_BLOCK=<block the upgrade tx landed in>` in
    `/etc/adapter.env` (`MAINNET_RPC_URL=` optional, PublicNode by default).
-2. `systemctl enable --now adapter-indexer@mainnet` and check
-   `curl http://127.0.0.1:8789/api/overview`.
-3. In `deploy/Caddyfile.adapter`, replace the apex `redir` with
-   `import adapterscan 8789`, commit, re-run `setup.sh` (or edit the box's
-   Caddyfile the same way and `systemctl reload caddy`).
-
-The GitHub Action restarts the mainnet instance automatically once it is
-enabled.
+2. `systemctl restart adapter-indexer@hub` and check Ethereum shows in
+   `curl http://127.0.0.1:8792/api/overview`.
 
 ## Deploys
 
