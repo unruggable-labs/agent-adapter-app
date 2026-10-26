@@ -15,7 +15,7 @@ import { startServer } from "./server.js";
  *
  *   npm run serve:sepolia
  *   npx tsx src/serve.ts robinhood
- *   npx tsx src/serve.ts base       (needs BASE_FROM_BLOCK - see below)
+ *   npx tsx src/serve.ts base
  *   npx tsx src/serve.ts mainnet    (needs MAINNET_FROM_BLOCK)
  *
  * Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791. Caddy routes each hostname's /api
@@ -56,10 +56,12 @@ const NETWORKS = {
     chainId: 8453n,
     rpcUrl: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
     adapter: "0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" as Address, // the Base proxy
-    // Same situation as mainnet: not on v0.0.17 yet, so no default cutover block.
-    fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : null,
+    // Upgraded to v0.0.17 in 0x148b82c7…0626 (Safe nonce 1); events before it are the older scheme.
+    fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : 52_991_843n,
     port: 8790,
-    pollMs: 6_000,
+    // 2 s blocks, so a poll covers ~15. mainnet.base.org rate-limits hard; BASE_RPC_URL in
+    // /etc/adapter.env for a dedicated, metered one - 30 s keeps the poll under 3k calls a day.
+    pollMs: 30_000,
   },
   robinhood: {
     chain: robinhood,

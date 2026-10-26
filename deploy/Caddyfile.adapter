@@ -56,8 +56,7 @@ robinhood.adapterscan.com {
 stats.adapterscan.com {
 	import adapterscan 8788
 }
-# Base's adapter is not on v0.0.17 yet: the app shows a notice on this host until it is, and
-# the indexer (adapter-indexer@base) starts once BASE_FROM_BLOCK is set. The route is ready.
+# Base: on v0.0.17 since block 52991843, indexed by adapter-indexer@base.
 base.adapterscan.com {
 	import adapterscan 8790
 }

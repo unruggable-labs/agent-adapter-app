@@ -10,8 +10,11 @@ What runs where:
 - `adapter-indexer@sepolia` — the Sepolia indexer (`indexer`, port 8788, localhost)
 - `adapter-indexer@robinhood` — the Robinhood Chain indexer (port 8791). The public RPC
   is rate-limited; `ROBINHOOD_RPC_URL=` in `/etc/adapter.env` for a dedicated one.
-- `adapter-indexer@base` and `adapter-indexer@mainnet` (ports 8790, 8789) — dormant until
-  those proxies run v0.0.17 (see "Mainnet" below; Base is the same with `BASE_FROM_BLOCK`)
+- `adapter-indexer@base` — the Base indexer (port 8790), from block 52991843 (the v0.0.17
+  upgrade). `mainnet.base.org` rate-limits hard: set `BASE_RPC_URL=` in `/etc/adapter.env` to a
+  dedicated endpoint before enabling it.
+- `adapter-indexer@mainnet` (port 8789) — dormant until the Ethereum proxy runs v0.0.17 (see
+  "Mainnet" below)
 - Caddy — one static `app/dist` behind two hostnames. `testnet.adapterscan.com`
   (plus the older `adapter.ens8004.xyz` and `adapter.178-105-235-22.sslip.io`)
   routes `/api/*` to the Sepolia indexer; `adapterscan.com` is Ethereum, and
