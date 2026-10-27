@@ -5,7 +5,7 @@
 #   the app on :5173 - reads Sepolia unless VITE_NETWORK says otherwise (env or app/.env.local):
 #   local = the devnet; robinhood / base / mainnet also start that chain's indexer (ports
 #   8791 / 8790 / 8789, same as the box); hub = the multichain explorer, with the hub indexer on
-#   :8792 running HUB_NETWORKS (default robinhood,base - Ethereum is skipped until its cutover)
+#   :8792 running HUB_NETWORKS (default robinhood,base,mainnet)
 #   The chain indexers run under `tsx watch`: edit anything under indexer/src and they restart
 #   and replay (a few seconds). The devnet demo doesn't, since restarting it redeploys anvil.
 # Ctrl-C stops everything.
@@ -27,7 +27,7 @@ NET="${VITE_NETWORK:-$(grep -s '^VITE_NETWORK=' app/.env.local | cut -d= -f2)}"
 (cd indexer && exec npx tsx watch --clear-screen=false src/serve.ts sepolia) &
 case "$NET" in
   robinhood|base|mainnet) (cd indexer && exec npx tsx watch --clear-screen=false src/serve.ts "$NET") & ;;
-  hub) (cd indexer && HUB_NETWORKS="${HUB_NETWORKS:-robinhood,base}" exec npx tsx watch --clear-screen=false src/serve.ts hub) & ;;
+  hub) (cd indexer && HUB_NETWORKS="${HUB_NETWORKS:-robinhood,base,mainnet}" exec npx tsx watch --clear-screen=false src/serve.ts hub) & ;;
 esac
 (cd app && exec npx vite --port 5173) &
 

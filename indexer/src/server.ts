@@ -48,6 +48,7 @@ const cards = new Map<string, { png: Buffer; at: number }>();
 const PUBLIC_SITES = [
   { slug: "robinhood", chain: { id: 4663, label: "Robinhood Chain" }, host: "robinhood.adapterscan.com", testnet: false },
   { slug: "base", chain: { id: 8453, label: "Base" }, host: "base.adapterscan.com", testnet: false },
+  { slug: "mainnet", chain: { id: 1, label: "Ethereum" }, host: "adapterscan.com", testnet: false },
   { slug: "sepolia", chain: { id: 11155111, label: "Sepolia" }, host: "testnet.adapterscan.com", testnet: true },
 ];
 

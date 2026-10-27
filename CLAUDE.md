@@ -47,8 +47,8 @@ tooltips kept to the fewest sentences that do the job.
   from the contracts repo is documented in `indexer/src/abi.ts`.
 - Contracts live in `unruggable-labs/adapter` (Prem's repo — audit-grade, don't put product
   code there). Sepolia proxy `0x7621630cB63a73a194f45A3E6801B8C6A7eC2f92`, v0.0.17 cutover
-  block 11661779. Ethereum proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336`, not yet on
-  v0.0.17 - its indexer waits on MAINNET_FROM_BLOCK.
+  block 11661779. Ethereum proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336`, v0.0.17 from block
+  26285388.
 
 ## Commands
 
@@ -66,7 +66,8 @@ the apex and each chain's own hostname) - the per-chain `@robinhood`/`@base` uni
 the cutover in deploy/README.md. A chain's SQLite file is locked by one process. Live: testnet.adapterscan.com (Sepolia),
 robinhood.adapterscan.com (Robinhood Chain, proxy 0x000000009d62675362a58911e3f32FEcf46F5E18,
 v0.0.17 from block 75810067), base.adapterscan.com (Base, proxy 0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27,
-v0.0.17 from block 52991843). Pending the v0.0.17 upgrade: the apex (Ethereum) - it shows a chain picker until then (deploy/README.md "Mainnet"). Server config is versioned in `deploy/`; box access:
+v0.0.17 from block 52991843), Ethereum (proxy 0xde152AfB7db5373F34876E1499fbD893A82dD336, v0.0.17
+from block 26285388) - all three at adapterscan.com. Server config is versioned in `deploy/`; box access:
 `ssh ens8004` (deploy) or `root@178.105.235.22` (same key, admin). RPC is PublicNode's free
 endpoint by default (`SEPOLIA_RPC_URL` in `/etc/adapter.env` overrides; beware: load-balanced
 free RPCs have been observed returning incomplete logs — serve.ts verifies backfills).

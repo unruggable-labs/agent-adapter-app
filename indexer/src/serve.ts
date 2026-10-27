@@ -21,7 +21,7 @@ import { startServer } from "./server.js";
  *
  * One chain is a chain's own site; several are the multichain explorer at adapterscan.com, which
  * also answers for each chain's own hostname with that chain alone (server.ts). In the hub a
- * chain with no cutover block yet (Ethereum before its v0.0.17 upgrade) is skipped and said so;
+ * chain with no cutover block (a new chain before its v0.0.17 upgrade) is skipped and said so;
  * on its own it refuses to start. A bad RPC (wrong chain, capped log ranges) stops the process
  * either way, with the fix in one line.
  *
@@ -52,11 +52,9 @@ const NETWORKS = {
     chainId: 1n,
     rpcUrl: process.env.MAINNET_RPC_URL ?? "https://ethereum-rpc.publicnode.com",
     adapter: "0xde152AfB7db5373F34876E1499fbD893A82dD336" as Address, // the mainnet proxy
-    // The mainnet proxy has not been upgraded to v0.0.17 yet. Events under the older scheme
-    // MUST NOT be indexed into this namespace, so there is no default: the cutover block is
-    // set in /etc/adapter.env when the upgrade lands, and until then this network refuses to
-    // start. See the Sepolia note above for why the cutover doubles as the backfill start.
-    fromBlock: process.env.MAINNET_FROM_BLOCK ? BigInt(process.env.MAINNET_FROM_BLOCK) : null,
+    // Upgraded to v0.0.17 in 0xd94bed0c…3470 (Safe nonce 3); events before it are the older
+    // scheme. See the Sepolia note above for why the cutover doubles as the backfill start.
+    fromBlock: process.env.MAINNET_FROM_BLOCK ? BigInt(process.env.MAINNET_FROM_BLOCK) : 26_285_388n,
     port: 8789,
     pollMs: 12_000,
   },
@@ -167,7 +165,11 @@ async function preflight(client: ReturnType<typeof createPublicClient>, rpcUrl: 
     throw new Error(`RPC ${rpcUrl} is chain ${actual}, not ${chainId}. Fix the *_RPC_URL in /etc/adapter.env.`);
   }
   try {
-    await client.getLogs({ address: "0x0000000000000000000000000000000000000000", fromBlock, toBlock: fromBlock + 9_999n });
+    // A full chunk, ending at the head when the cutover is younger than one: a range past the head
+    // is refused for that alone, which is not the cap this is looking for.
+    const head = await client.getBlockNumber();
+    const to = fromBlock + 9_999n < head ? fromBlock + 9_999n : head;
+    await client.getLogs({ address: "0x0000000000000000000000000000000000000000", fromBlock: to > 9_999n ? to - 9_999n : 0n, toBlock: to });
   } catch (err) {
     const said = (err as { details?: string; shortMessage?: string; message?: string });
     const detail = said.details ?? said.shortMessage ?? said.message ?? String(err);

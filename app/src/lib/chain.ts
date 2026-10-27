@@ -85,8 +85,8 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     chain: mainnet,
     personaWrites: false,
     host: "adapterscan.com",
-    status: "pending",
-    blurb: "Deployed, but the adapter on Ethereum is not on v0.0.17 yet. Opens once it is upgraded.",
+    status: "live",
+    blurb: "Mainnet. On v0.0.17 since block 26285388.",
   },
 };
 

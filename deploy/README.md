@@ -8,8 +8,8 @@ What runs where:
 
 - `/srv/adapter` — this repo, `main` branch
 - `adapter-indexer@sepolia` — the Sepolia indexer (`indexer`, port 8788, localhost)
-- `adapter-indexer@hub` — the mainnets in one process (port 8792): Robinhood Chain, Base and,
-  once its upgrade lands, Ethereum (`HUB_NETWORKS=` in `/etc/adapter.env` overrides the list).
+- `adapter-indexer@hub` — the mainnets in one process (port 8792): Robinhood Chain, Base and
+  Ethereum (`HUB_NETWORKS=` in `/etc/adapter.env` overrides the list).
   It serves adapterscan.com with every chain, and each chain's own hostname
   (`robinhood.adapterscan.com`, `base.adapterscan.com`) with that chain alone. A chain whose
   RPC fails stalls on its own and shows as `stalled` in `/api/overview`; the others carry on.
@@ -84,15 +84,12 @@ at most. To go back: disable the hub, re-enable the two units, restore the previ
 
 ## Mainnet
 
-The Ethereum proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336` is not on
-v0.0.17 yet (the Safe's nonce-3 upgrade is queued), and events under the older
-scheme must not be indexed into this namespace. Until then the hub skips it and
-says so in its log. When the upgrade lands:
-
-1. Put `MAINNET_FROM_BLOCK=<block the upgrade tx landed in>` in
-   `/etc/adapter.env` (`MAINNET_RPC_URL=` optional, PublicNode by default).
-2. `systemctl restart adapter-indexer@hub` and check Ethereum shows in
-   `curl http://127.0.0.1:8792/api/overview`.
+The Ethereum proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336` is on v0.0.17 since block
+26285388 (Safe nonce 3, tx 0xd94bed0c…3470); that is serve.ts's default cutover, and events
+before it are the older scheme. The hub runs it with the others: nothing to set
+(`MAINNET_FROM_BLOCK=` and `MAINNET_RPC_URL=` in `/etc/adapter.env` override, PublicNode by
+default). PublicNode's free tier refuses log queries far behind the head, so if the hub is down
+for days, Ethereum's catch-up needs a `MAINNET_RPC_URL` with archive access.
 
 ## Deploys
 

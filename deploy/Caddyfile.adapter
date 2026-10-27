@@ -77,7 +77,7 @@ docs.adapterscan.com {
 	}
 }
 
-# The apex: every mainnet, from the hub. Ethereum joins when MAINNET_FROM_BLOCK is set.
+# The apex: every mainnet, from the hub.
 adapterscan.com, www.adapterscan.com {
 	import adapterscan 8792
 }
