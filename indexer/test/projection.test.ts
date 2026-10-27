@@ -118,6 +118,30 @@ describe("registration join", () => {
   });
 });
 
+describe("registrations from before the v0.0.17 upgrade", () => {
+  it("get the UBID their binding derives, with their history marked as the older implementation's", () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER, 1000n);
+    store.apply(ev("AgentBound", { agentId: 5n, standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, registeredBy: ALICE }, 500));
+    store.apply(ev("AgentURISet", { agentId: 5n, newURI: "ipfs://old", updatedBy: ALICE }, 600));
+    store.apply(cf("CounterfactualAgentURISet", ALICE, { newURI: "ipfs://new" }, 1000));
+    const id = store.identities.get(UBID7)!;
+    expect(id.agentIds).toEqual([5n]);
+    expect(store.isLegacy(id.created)).toBe(true);
+    expect(store.history.get(UBID7)!.map((h) => [h.eventName, h.legacy ?? false])).toEqual([
+      ["AgentBound", true],
+      ["AgentURISet", true],
+      ["CounterfactualAgentURISet", false],
+    ]);
+  });
+
+  it("are nothing special on a chain indexed from v0.0.17", () => {
+    const store = freshStore();
+    store.apply(ev("AgentBound", { agentId: 5n, standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, registeredBy: ALICE }, 500));
+    expect(store.isLegacy(store.identities.get(UBID7)!.created)).toBe(false);
+    expect(store.history.get(UBID7)![0].legacy).toBeUndefined();
+  });
+});
+
 describe("wallet UBID", () => {
   it("verifies only under mutual pointing", () => {
     const store = freshStore();

@@ -195,6 +195,9 @@ export class ViewCache {
       },
       /** When the holder was read; null until the worker reaches this identity. */
       advisoryAt: h?.at ?? null,
+      /** Registered by the adapter's implementation before v0.0.17, which emitted no UBID: this one
+       *  is derived from the binding, as every UBID is (ProjectionStore.upgradeBlock). */
+      legacy: this.store.isLegacy(id.created),
     };
   }
 

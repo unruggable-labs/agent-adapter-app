@@ -52,9 +52,13 @@ const NETWORKS = {
     chainId: 1n,
     rpcUrl: process.env.MAINNET_RPC_URL ?? "https://ethereum-rpc.publicnode.com",
     adapter: "0xde152AfB7db5373F34876E1499fbD893A82dD336" as Address, // the mainnet proxy
-    // Upgraded to v0.0.17 in 0xd94bed0c…3470 (Safe nonce 3); events before it are the older
-    // scheme. See the Sepolia note above for why the cutover doubles as the backfill start.
-    fromBlock: process.env.MAINNET_FROM_BLOCK ? BigInt(process.env.MAINNET_FROM_BLOCK) : 26_285_388n,
+    // History from the proxy's deployment (0xf4d34051…f519). Unlike Sepolia's, the implementation
+    // before v0.0.17 only registered agents, with the same events and the same binding hash
+    // (checked against bindingHashOf for every agent it bound), so its registrations are live
+    // agents and are indexed. Upgraded to v0.0.17 in 0xd94bed0c…3470 (Safe nonce 3); the
+    // earlier events are marked as the older implementation's (ProjectionStore.upgradeBlock).
+    fromBlock: process.env.MAINNET_FROM_BLOCK ? BigInt(process.env.MAINNET_FROM_BLOCK) : 24_821_152n,
+    upgradeBlock: 26_285_388n,
     port: 8789,
     pollMs: 12_000,
   },
@@ -64,8 +68,11 @@ const NETWORKS = {
     // PublicNode, as elsewhere: mainnet.base.org answers a handful of calls and then 429s.
     rpcUrl: process.env.BASE_RPC_URL ?? "https://base-rpc.publicnode.com",
     adapter: "0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" as Address, // the Base proxy
-    // Upgraded to v0.0.17 in 0x148b82c7…0626 (Safe nonce 1); events before it are the older scheme.
-    fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : 52_991_843n,
+    // History from the proxy's deployment, for the same reason as Ethereum's: the implementation
+    // before v0.0.17 registered agents with the same events and binding hash (checked on a sample).
+    // Upgraded to v0.0.17 in 0x148b82c7…0626 (Safe nonce 1), marked as Ethereum's is.
+    fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : 44_347_671n,
+    upgradeBlock: 52_991_843n,
     port: 8790,
     host: "base.adapterscan.com",
     // 2 s blocks, so a poll covers ~15. 30 s keeps the poll under 3k calls a day, for when
@@ -127,11 +134,12 @@ async function main() {
 /** One chain up to the point of serving: the RPC checked, the stored log folded. Its first sync starts with the server. */
 async function boot(name: NetworkName, fromBlock: bigint, dataDir: string): Promise<ChainRuntime> {
   const net = NETWORKS[name];
-  console.log(`[${name}] adapter ${net.adapter} from block ${fromBlock} via ${net.rpcUrl}`);
+  console.log(`[${name}] adapter ${net.adapter} from block ${fromBlock}${"upgradeBlock" in net ? ` (v0.0.17 from ${net.upgradeBlock})` : ""} via ${net.rpcUrl}`);
   const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) }) as PublicClient;
   await preflight(client, net.rpcUrl, net.chainId, fromBlock);
-  const store = new ProjectionStore(net.chainId, net.adapter);
-  const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock });
+  const upgradeBlock = "upgradeBlock" in net && net.upgradeBlock > fromBlock ? net.upgradeBlock : null;
+  const store = new ProjectionStore(net.chainId, net.adapter, upgradeBlock);
+  const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock, upgradeBlock });
   const ingester = new Ingester(client, store, net.adapter, fromBlock, 10_000n, "blockNumbers" in net ? net.blockNumbers : "l2", {
     log,
     onReorg: (r) => console.warn(`[${name}] Reorg: the chain dropped block ${r.previousHead}; rewound to ${r.fork}, ${r.droppedEvents} events refolded away`),

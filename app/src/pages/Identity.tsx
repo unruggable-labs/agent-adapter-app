@@ -148,7 +148,14 @@ export function IdentityPage({ ubid }: { ubid: string }) {
               ) : <span className="t3">not set</span>}
             </dd>
             <dt>ERC-8004 agent</dt>
-            <dd>{id.agentIds.length ? <AgentIds ids={id.agentIds} chain={id.chain} /> : <span className="t3">not registered</span>}</dd>
+            <dd>
+              <span className="row wrap" style={{ gap: 8 }}>
+                {id.agentIds.length ? <AgentIds ids={id.agentIds} chain={id.chain} /> : <span className="t3">not registered</span>}
+                {id.legacy && (
+                  <Badge tip="Registered before the adapter was upgraded to v0.0.17. That version didn't put the UBID in its events, but the record has one all the same: it's worked out from what the record is bound to, and the contract's stored binding agrees.">before v0.0.17</Badge>
+                )}
+              </span>
+            </dd>
             <dt>Last event</dt>
             <dd className="small t2">
               {id.lastEvent
@@ -293,6 +300,7 @@ function HistoryPanel({ id }: { id: Identity }) {
                     <td className="td-wrap">
                       {h.outcome !== "applied" && <Badge tone={h.outcome === "dropped" ? "danger" : "warn"}>{h.outcome}</Badge>}
                       {h.outcome !== "applied" && " "}
+                      {h.legacy && <><Badge tip="Emitted before the adapter's v0.0.17 upgrade. The same event, without the UBID in it - the UBID comes from the binding.">before v0.0.17</Badge>{" "}</>}
                       <span className="small"><Effect text={h.effect} chain={id.chain} /></span>
                     </td>
                     <td>

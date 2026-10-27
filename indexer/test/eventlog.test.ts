@@ -44,12 +44,28 @@ describe("event log", () => {
     expect(log.checkpoint()).toBeNull();
   });
 
-  it("refuses to be reused for a different adapter, chain or cutover", () => {
+  it("refuses to be reused for a different adapter or chain", () => {
     const path = `/tmp/claude-501/eventlog-${process.pid}-${Date.now()}.sqlite`;
     new EventLog(path, identity).close();
     expect(() => new EventLog(path, identity).close()).not.toThrow();
-    expect(() => new EventLog(path, { ...identity, fromBlock: 101n })).toThrow(/fromBlock=100.*wants fromBlock=101/);
     expect(() => new EventLog(path, { ...identity, chainId: 1n })).toThrow(/chainId/);
+    expect(() => new EventLog(path, { ...identity, adapter: "0x0000000000000000000000000000000000000001" })).toThrow(/adapter/);
+  });
+
+  it("reads the chain again when the start block moves, and notes the upgrade block", () => {
+    const path = `/tmp/claude-501/eventlog-${process.pid}-${Date.now()}-from.sqlite`;
+    const first = new EventLog(path, identity);
+    first.append([ev(101, 0)], { number: 110n, hash: h(110) });
+    first.close();
+    const kept = new EventLog(path, identity);
+    expect(kept.count()).toBe(1);
+    kept.close();
+    const earlier = new EventLog(path, { ...identity, fromBlock: 50n, upgradeBlock: 100n });
+    expect(earlier.count()).toBe(0);
+    expect(earlier.checkpoint()).toBeNull();
+    const meta = Object.fromEntries((earlier.connection.prepare("SELECT key, value FROM meta").all() as { key: string; value: string }[]).map((r) => [r.key, r.value]));
+    expect(meta).toMatchObject({ fromBlock: "50", upgradeBlock: "100" });
+    earlier.close();
   });
 
   it("replays a log larger than one chunk, in order, with several events per block", () => {

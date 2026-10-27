@@ -21,6 +21,15 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
   `AgentBound` whose stored binding shares the coordinates **joins** the counterfactual history —
   one identity row, both statuses. No link assertion exists; the join is by construction.
 - **(contract)** `Standard` and `AttestationType` numbering is identity-critical and append-only.
+- **H-1 (deployment).** Where an adapter ran an earlier implementation before v0.0.17 (Ethereum,
+  Base), the log starts at the proxy's deployment, not the upgrade. That implementation only
+  registered agents, with the same `AgentBound` / `AgentURISet` / `AgentWalletSet` / `MetadataSet`
+  events and the same stored binding hash (checked against `bindingHashOf` for every Ethereum
+  agent and a sample of Base's), so its agents are live and keep their UBIDs. Its events carry no
+  UBID - neither does v0.0.17's `AgentBound` - and the UBID is derived from the coordinates as
+  for any `AgentBound`. The upgrade block is kept in the log's meta (`upgradeBlock`); history
+  entries before it carry `legacy: true` and identities created before it `legacy: true`.
+  Sepolia's earlier implementation used another event scheme: its log starts at the upgrade.
 
 ## 2. Ordering and integrity
 

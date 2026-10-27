@@ -55,6 +55,9 @@ export interface LogIdentity {
   chainId: bigint;
   adapter: Address;
   fromBlock: bigint;
+  /** The adapter's v0.0.17 upgrade block, where the log starts before it (ProjectionStore.upgradeBlock).
+   *  Kept in meta so the file says which of its events the older implementation emitted. */
+  upgradeBlock?: bigint | null;
 }
 
 const SCHEMA = "2";
@@ -117,18 +120,19 @@ export class EventLog {
       ) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS blocks (number INTEGER PRIMARY KEY, hash TEXT NOT NULL, timestamp INTEGER);
     `);
-    // A log is for one adapter on one chain from one cutover. Anything else is a different log,
-    // and the fix is a re-index, not a guess - say so and stop. The schema version is ours to
-    // move: an older file is migrated in place.
+    // A log is for one adapter on one chain. Another chain or adapter is a different file, and the
+    // fix is the right file, not a guess - say so and stop. Another start block is the same chain
+    // read from somewhere else: the events go and the next sync reads them again (the advisories
+    // are about the chain, not the log, and stay). The schema version is ours to move: an older
+    // file is migrated in place.
     const want: Record<string, string> = {
       chainId: identity.chainId.toString(),
       adapter: this.adapter,
-      fromBlock: identity.fromBlock.toString(),
     };
+    const put = this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)");
     const rows = this.db.prepare("SELECT key, value FROM meta").all() as { key: string; value: string }[];
     const have = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     if (rows.length === 0) {
-      const put = this.db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)");
       for (const [k, v] of Object.entries({ schema: SCHEMA, ...want })) put.run(k, v);
     } else {
       for (const [k, v] of Object.entries(want)) {
@@ -138,9 +142,16 @@ export class EventLog {
               `It is only a copy of the chain: delete the file to re-index.`,
           );
       }
+      if (have.fromBlock !== undefined && have.fromBlock !== identity.fromBlock.toString()) {
+        console.log(`${path}: the log started at block ${have.fromBlock}; this run starts at ${identity.fromBlock}. Reading the chain again from there.`);
+        this.db.exec("BEGIN; DELETE FROM events; DELETE FROM blocks; DELETE FROM meta WHERE key = 'checkpoint'; COMMIT;");
+      }
       if (have.schema === "1") this.migrateFrom1();
       else if (have.schema !== SCHEMA) throw new Error(`${path} has event log schema ${have.schema}; this build reads ${SCHEMA}. Delete the file to re-index.`);
     }
+    put.run("fromBlock", identity.fromBlock.toString());
+    if (identity.upgradeBlock != null) put.run("upgradeBlock", identity.upgradeBlock.toString());
+    else this.db.prepare("DELETE FROM meta WHERE key = 'upgradeBlock'").run();
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS events_name_block ON events (event_name, block_number);
       CREATE INDEX IF NOT EXISTS events_ubid ON events (ubid);

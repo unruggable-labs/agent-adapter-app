@@ -26,6 +26,12 @@ export function Deployments() {
         </table>
       </div>
 
+      <p className="hint">
+        On Ethereum and Base the adapter ran an earlier version before v0.0.17. That version registered ERC-8004 agents
+        the same way, so those agents are live, keep their UBIDs, and show on Adapterscan, marked "before v0.0.17".
+        Adapterscan reads both chains from the proxy's deployment.
+      </p>
+
       <H2 id="registries">ERC-8004 identity registries</H2>
       <table className="table">
         <thead><tr><th>Chain</th><th>IdentityRegistry</th></tr></thead>

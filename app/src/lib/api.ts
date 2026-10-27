@@ -6,6 +6,8 @@ export interface ChainOverview {
   label: string;
   chainId: string;
   adapter: Address;
+  /** Where the adapter went to v0.0.17, when the indexed history starts before it (Ethereum, Base). */
+  upgradeBlock?: string | null;
   identities: number;
   agents: number;
   projects: number;
@@ -102,6 +104,9 @@ export interface Identity {
   agentIds: string[];
   reputation: Reputation;
   trustBase: TrustBase | null;
+  /** Registered by the adapter before its v0.0.17 upgrade. That version emitted no UBID; this one is
+   *  derived from the binding, as every UBID is. Older indexers omit it. */
+  legacy?: boolean;
   flags: {
     currentlyOwnerless: boolean | null;
     collectionAuthoredAfterOwner: boolean;
@@ -126,6 +131,8 @@ export interface HistoryEntry {
   actor: Address | null;
   effect: string;
   outcome: "applied" | "dropped" | "inert";
+  /** Emitted by the adapter before its v0.0.17 upgrade. */
+  legacy?: true;
 }
 
 export interface AttestationRow {

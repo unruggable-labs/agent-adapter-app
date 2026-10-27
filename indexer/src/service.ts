@@ -43,6 +43,8 @@ function chainOverview(c: ApiChain) {
     label: c.label,
     chainId: c.chainId.toString(),
     adapter: c.adapter,
+    /** Where the adapter went to v0.0.17, when the indexed history starts before it; null otherwise. */
+    upgradeBlock: c.store.upgradeBlock,
     identities: c.store.identities.size,
     agents: c.store.agents.size,
     /** Distinct collections and contracts identities are bound to - one collection with a hundred agents counts once. */

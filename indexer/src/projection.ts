@@ -39,6 +39,8 @@ export interface HistoryEntry {
   /** What it did, in plain words. */
   effect: string;
   outcome: "applied" | "dropped" | "inert";
+  /** Emitted before the adapter's v0.0.17 upgrade (see ProjectionStore.upgradeBlock). */
+  legacy?: true;
 }
 
 export type EmitterClass = "collection" | "owner-or-delegate" | "self" | "external";
@@ -126,6 +128,15 @@ function later(a: OrderKey, b: OrderKey): boolean {
 export class ProjectionStore {
   readonly chainId: bigint;
   readonly adapter: Address;
+  /**
+   * The block the adapter was upgraded to v0.0.17 in, where its history starts earlier than that
+   * (Ethereum, Base). Registrations before it came from the older implementation, which emitted
+   * the same registration events (AgentBound, AgentURISet, AgentWalletSet, MetadataSet) and stored
+   * the same binding hash, but never a UBID in any event - the UBID is derived from the binding's
+   * coordinates, as it is for v0.0.17's AgentBound. History entries before it are marked `legacy`.
+   * Null: everything indexed is v0.0.17.
+   */
+  readonly upgradeBlock: bigint | null;
 
   identities = new Map<Hex, IdentityState>();
   agents = new Map<bigint, AgentState>();
@@ -140,9 +151,15 @@ export class ProjectionStore {
 
   private lastApplied: OrderKey | null = null;
 
-  constructor(chainId: bigint, adapter: Address) {
+  constructor(chainId: bigint, adapter: Address, upgradeBlock: bigint | null = null) {
     this.chainId = chainId;
     this.adapter = adapter.toLowerCase() as Address;
+    this.upgradeBlock = upgradeBlock;
+  }
+
+  /** Did the older implementation emit this? See upgradeBlock. */
+  isLegacy(order: OrderKey): boolean {
+    return this.upgradeBlock !== null && order.blockNumber < this.upgradeBlock;
   }
 
   /** Back to empty, in place - the first step of a reorg rewind, before the log is folded again.
@@ -216,7 +233,7 @@ export class ProjectionStore {
   private record(ubid: Hex, ev: LogEvent, order: OrderKey, actor: Address | null, effect: string, outcome: HistoryEntry["outcome"] = "applied"): void {
     const key = ubid.toLowerCase() as Hex;
     const list = this.history.get(key) ?? [];
-    list.push({ order, transactionHash: ev.transactionHash ?? null, eventName: ev.eventName, actor, effect, outcome });
+    list.push({ order, transactionHash: ev.transactionHash ?? null, eventName: ev.eventName, actor, effect, outcome, ...(this.isLegacy(order) ? { legacy: true as const } : {}) });
     this.history.set(key, list);
   }
 
