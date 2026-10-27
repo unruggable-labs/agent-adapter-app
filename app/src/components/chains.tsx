@@ -109,7 +109,15 @@ export function ChainFilter() {
       <button className={chain === null ? "active" : ""} onClick={() => pick(null)}>All chains</button>
       {chains.map((c) => (
         <button key={c.chain} className={chain === c.chain ? "active" : ""} onClick={() => pick(c.chain)}>
-          <span className="row" style={{ gap: 6 }}><ChainIcon id={c.chain} size={14} />{chainLabel(c.chain)}</span>
+          <span className="row" style={{ gap: 6 }}>
+            <ChainIcon id={c.chain} size={14} />
+            {chainLabel(c.chain)}
+            {c.state !== "live" && (
+              <span className="chain-state" title={c.state === "stalled" ? "The indexer hasn't heard from this chain's RPC for a while. Its records are as of the last block it read." : "Still catching up with the chain."}>
+                {c.state}
+              </span>
+            )}
+          </span>
         </button>
       ))}
     </div>

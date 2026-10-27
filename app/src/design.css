@@ -780,7 +780,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .chain-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-2); white-space: nowrap; vertical-align: middle; }
 .chain-stack { display: inline-flex; }
 .chain-stack > * + * { margin-left: -6px; }
-.nav-item .chain-state { font-size: 11px; color: var(--warn); }
+.seg .chain-state { font-size: 11px; color: var(--warn); }
 
 /* ------------------------------------------------------------------ stats */
 .stats-tiles { grid-template-columns: repeat(4, 1fr); }

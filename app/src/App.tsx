@@ -7,8 +7,7 @@ import { SearchBar } from "./components/search";
 import { MenuButton, NavBackdrop, NavClose, useNavDrawer } from "./components/shell";
 import { Modal } from "./components/ui";
 import { AppProvider, useApp } from "./lib/app-state";
-import { ACTORS, chainLabel, DOCS_URL, HOME, HOME_ID, IS_HUB, MAINNETS, NETWORKS, PERSONA_WRITES, shortHex, STATS_URL } from "./lib/chain";
-import { useSearchParams } from "./lib/url";
+import { ACTORS, DOCS_URL, HOME, HOME_ID, MAINNETS, NETWORKS, PERSONA_WRITES, shortHex, STATS_URL } from "./lib/chain";
 import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
 import { AttestationPage } from "./pages/Attestation";
@@ -164,7 +163,6 @@ function Shell() {
         <div className="nav-label">Registry</div>
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
-        {IS_HUB && <ChainNav />}
 
         <div className="sidebar-foot">
           <button className="btn btn-ghost btn-sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
@@ -210,27 +208,6 @@ function liveMainnets(overview: ReturnType<typeof useApp>["overview"]): string[]
  * chain still catching up, or one whose indexer has stopped hearing from its RPC, says so - its
  * records are still shown, as of the last block it read.
  */
-function ChainNav() {
-  const { overview, route, navigate } = useApp();
-  const params = useSearchParams();
-  const chains = overview?.chains ?? [];
-  if (chains.length < 2) return null;
-  const on = route === "/identities" || route === "/" ? params.get("chain") : null;
-  return (
-    <>
-      <div className="nav-label">Chains</div>
-      {chains.map((c) => (
-        <button key={c.chain} className={`nav-item ${on === c.chain ? "active" : ""}`} onClick={() => navigate(`/identities?chain=${c.chain}`)}>
-          <ChainIcon id={c.chain} size={16} />
-          {chainLabel(c.chain)}
-          {c.state !== "live" && <span className="chain-state" title={c.state === "stalled" ? "The indexer hasn't heard from this chain's RPC for a while. Its records are as of the last block it read." : "Still catching up with the chain."}>{c.state}</span>}
-          <span className="count">{c.identities.toLocaleString()}</span>
-        </button>
-      ))}
-    </>
-  );
-}
-
 export default function App() {
   return (
     <AppProvider>
