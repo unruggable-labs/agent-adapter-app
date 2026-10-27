@@ -68,7 +68,7 @@ docs.adapterscan.com {
 	root * /srv/adapter/app/dist
 	@markdown path *.md
 	header @markdown Content-Type "text/markdown; charset=utf-8"
-	try_files /docs{path} /docs{path}.html {path} /docs.html
+	try_files /docs{path} /docs{path}.html /docs{path}index.html {path} /docs.html
 	file_server
 	header {
 		-Server
