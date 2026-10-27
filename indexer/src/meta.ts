@@ -12,7 +12,7 @@ export interface PageMeta {
   type?: "website" | "profile";
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
 export function withMeta(template: string, m: PageMeta): string {
   const tags = [

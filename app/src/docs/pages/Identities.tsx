@@ -1,4 +1,5 @@
 import { Code, H2, Note } from "../Docs";
+import { doc } from "../route";
 
 export function Identities() {
   return (
@@ -53,8 +54,8 @@ export function Identities() {
       <ul className="claim-list">
         <li><b>Agent URI</b> - where the agent's card lives, an ERC-8004 registration file.</li>
         <li><b>Metadata</b> - key-value pairs, bytes-valued. <span className="mono">name</span> is what the explorer shows when it decodes as text.</li>
-        <li><b>Operating wallet</b> - the address the agent signs from, once the wallet has confirmed it. See <a href="#/wallets">Operating wallets</a>.</li>
-        <li><b>Reputation</b> - stars, ratings, reviews and transaction records from anyone. See <a href="#/reputation">Reputation</a>.</li>
+        <li><b>Operating wallet</b> - the address the agent signs from, once the wallet has confirmed it. See <a href={doc("wallets")}>Operating wallets</a>.</li>
+        <li><b>Reputation</b> - stars, ratings, reviews and transaction records from anyone. See <a href={doc("reputation")}>Reputation</a>.</li>
       </ul>
       <Note>
         <b>Latest wins.</b> A counterfactual record is whatever the most recent events say. A new claim restates

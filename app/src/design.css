@@ -809,6 +809,11 @@ input, textarea, select { font: inherit; color: inherit; }
 .compare-toggle input { margin: 0; accent-color: var(--accent); }
 .table tr.is-compared td { background: var(--accent-bg); }
 
+/* ------------------------------------------------------------------ plain summary
+   The few lines the indexer puts in a page's body for a fetch that runs no JavaScript
+   (indexer/src/plain.ts). The app replaces them when it boots; a browser never shows them. */
+.plain-page { display: none; }
+
 /* ------------------------------------------------------------------ wordmark */
 .wordmark { font-family: var(--mono); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-1); }
 .wordmark-suffix { color: var(--text-3); }

@@ -1,4 +1,5 @@
 import { Code, H2, Note } from "../Docs";
+import { doc } from "../route";
 
 export function Reference() {
   return (
@@ -7,7 +8,7 @@ export function Reference() {
       <p className="page-sub">The entry points, grouped by what they do. The audited source is the source of truth; this page is the map.</p>
       <Note>
         Full signatures, natspec and errors: <a href="https://github.com/unruggable-labs/adapter" target="_blank" rel="noopener noreferrer">unruggable-labs/adapter</a>,
-        <span className="mono"> src/AdapterImplementation.sol</span> and the interfaces under <span className="mono">src/interfaces/</span>. Use proxy addresses for integrations - see <a href="#/deployments">Deployments</a>.
+        <span className="mono"> src/AdapterImplementation.sol</span> and the interfaces under <span className="mono">src/interfaces/</span>. Use proxy addresses for integrations - see <a href={doc("deployments")}>Deployments</a>.
       </Note>
 
       <H2 id="read">Read</H2>
@@ -18,7 +19,7 @@ isController(uint256 agentId, address account) view returns (bool)
 identityRegistry() view returns (address)                    // an immutable; there is no setter`}</Code>
 
       <H2 id="claim">Counterfactual writes</H2>
-      <p>Authority-checked, emit-only. See <a href="#/counterfactual">Counterfactual registration</a> for the list and the indexing rules.</p>
+      <p>Authority-checked, emit-only. See <a href={doc("counterfactual")}>Counterfactual registration</a> for the list and the indexing rules.</p>
 
       <H2 id="register">Full registration and registry writes</H2>
       <Code lang="solidity">{`register(uint8 standard, address boundAddress, uint256 tokenId, string agentURI) returns (uint256 agentId)
@@ -61,7 +62,7 @@ Attested, AttestationRevoked`}</Code>
         <span className="mono">upgradeToAndCall</span>, owner-only (a Safe). There is no <span className="mono">setIdentityRegistry</span>:
         the registry is an immutable baked into the implementation. An upgrade could still ship an
         implementation with a different one; the code does not guard against that, so it is an operator
-        rule. See <a href="#/trust">Trust and security</a>.
+        rule. See <a href={doc("trust")}>Trust and security</a>.
       </p>
     </>
   );

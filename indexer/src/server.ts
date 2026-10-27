@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { isAddress, type Address, type Hex } from "viem";
 import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
 import { withMeta } from "./meta.js";
+import { llmsTxt, plainBody, withBody } from "./plain.js";
 import { fetchContent } from "./gateway.js";
 import { attestationView, findIdentity } from "./queries.js";
 import type { ChainRuntime } from "./runtime.js";
@@ -214,6 +215,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
       }
 
       // ---- crawlers' housekeeping
+      if (url.pathname === "/llms.txt") return send(200, "text/plain; charset=utf-8", llmsTxt(origin, scope));
       if (url.pathname === "/robots.txt") return send(200, "text/plain", `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
       if (url.pathname === "/sitemap.xml") {
         const urls = ["/", "/attestations", ...scope.flatMap((c) => [...c.store.identities.keys()].map((u) => `/identity/${u}`))];
@@ -222,11 +224,13 @@ export function startServer(chains: ChainRuntime[], port: number) {
       }
 
       // ---- the page shell, with tags for what the path is about
-      const html = shell();
-      if (!html) {
+      const built = shell();
+      if (!built) {
         if (url.pathname === "/" || url.pathname === "/index.html") return send(200, "text/html", readFileSync(legacyUi, "utf8"));
         return send(404, "application/json", JSON.stringify({ error: "not found" }));
       }
+      // A few lines about what the path is about, for a fetch that runs no JavaScript (plain.ts).
+      const html = withBody(built, plainBody(scope, url.pathname));
       const pageUrl = `${origin}${url.pathname}`;
       if ((m = /^\/identity\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname))) {
         const found = findIdentity(scope, m[1]);

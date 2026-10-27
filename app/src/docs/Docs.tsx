@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { Brand } from "../components/brand";
 import { CodeBlock } from "../components/code";
 import { ChainGrid } from "../components/chains";
@@ -15,24 +15,27 @@ import { Reputation } from "./pages/Reputation";
 import { Standards } from "./pages/Standards";
 import { Trust } from "./pages/Trust";
 import { Wallets } from "./pages/Wallets";
+import { doc, DOCS_BASE, go, useDocsRoute } from "./route";
 
 /**
  * The documentation site: the same design system as the explorer, in a reading register. One
- * static build serves both; this is the docs entry. Pages are hash routes so a link can point at
- * one, and the model page keeps its selected part in the hash too (#/model/wallet).
+ * static build serves both; this is the docs entry. Pages are paths (route.ts), and the model page
+ * keeps its selected part in the path too (/model/wallet). The build also writes each page as
+ * plain HTML and Markdown from these same components, with an llms.txt (scripts/prerender-docs.ts).
  */
 
-interface Page {
+export interface Page {
   slug: string;
   title: string;
-  render: (sub?: string) => ReactNode;
+  /** `all`: every part of an interactive page at once - what the Markdown copy shows. */
+  render: (sub?: string, all?: boolean) => ReactNode;
 }
 
-const GROUPS: { label: string; pages: Page[] }[] = [
+export const GROUPS: { label: string; pages: Page[] }[] = [
   {
     label: "Understand",
     pages: [
-      { slug: "model", title: "Agent identity", render: (sub) => <Model part={sub} /> },
+      { slug: "model", title: "Agent identity", render: (sub, all) => <Model part={sub} all={all} /> },
       { slug: "identities", title: "Identities and UBIDs", render: () => <Identities /> },
       { slug: "standards", title: "Controllers and standards", render: () => <Standards /> },
       { slug: "wallets", title: "Operating wallets", render: () => <Wallets /> },
@@ -51,26 +54,23 @@ const GROUPS: { label: string; pages: Page[] }[] = [
   },
   { label: "Project", pages: [{ slug: "license", title: "License", render: () => <License /> }] },
 ];
-const ALL = GROUPS.flatMap((g) => g.pages);
+export const ALL = GROUPS.flatMap((g) => g.pages);
 
-function useHashRoute(): [string, string | undefined] {
-  const read = () => location.hash.replace(/^#\/?/, "").split("/");
-  const [parts, setParts] = useState<string[]>(read);
-  useEffect(() => {
-    const on = () => {
-      setParts(read());
-      window.scrollTo({ top: 0 });
-    };
-    window.addEventListener("hashchange", on);
-    return () => window.removeEventListener("hashchange", on);
-  }, []);
-  return [parts[0] || "model", parts[1]];
+/** A click on a link to another docs page changes the route in place; anything else is a normal link. */
+function followInPlace(e: MouseEvent) {
+  const a = (e.target as HTMLElement).closest("a");
+  if (!a || a.target || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  const href = a.getAttribute("href") ?? "";
+  if (!href.startsWith(DOCS_BASE) || href.startsWith("//")) return;
+  e.preventDefault();
+  go(href);
 }
 
-export function Docs() {
-  const [slug, sub] = useHashRoute();
+/** `at`: the path to render, for the prerender, which has no location. */
+export function Docs({ at }: { at?: string } = {}) {
+  const [slug, sub] = useDocsRoute(at);
   const page = ALL.find((p) => p.slug === slug) ?? ALL[0];
-  const [theme, setTheme] = useState(localStorage.getItem("aa-theme") ?? "light");
+  const [theme, setTheme] = useState(() => (typeof localStorage === "undefined" ? "light" : localStorage.getItem("aa-theme") ?? "light"));
   const [pickChain, setPickChain] = useState(false);
   const [navOpen, setNavOpen] = useNavDrawer(slug);
   useEffect(() => {
@@ -82,11 +82,11 @@ export function Docs() {
   const next = ALL[i + 1];
 
   return (
-    <div className={`shell${navOpen ? " nav-open" : ""}`}>
+    <div className={`shell${navOpen ? " nav-open" : ""}`} onClick={followInPlace}>
       <NavBackdrop onClick={() => setNavOpen(false)} />
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}>
+          <a className="brand" href={doc("model")} style={{ textDecoration: "none", color: "inherit" }}>
             <Brand suffix="Docs" />
           </a>
           <NavClose onClick={() => setNavOpen(false)} />
@@ -95,7 +95,7 @@ export function Docs() {
           <div key={g.label}>
             <div className="nav-label">{g.label}</div>
             {g.pages.map((p) => (
-              <a key={p.slug} className={`nav-item${p.slug === page.slug ? " active" : ""}`} href={`#/${p.slug}`} style={{ textDecoration: "none" }}>
+              <a key={p.slug} className={`nav-item${p.slug === page.slug ? " active" : ""}`} href={doc(p.slug)} style={{ textDecoration: "none" }}>
                 {p.title}
               </a>
             ))}
@@ -116,14 +116,14 @@ export function Docs() {
       <main className="main">
         <header className="mobile-bar">
           <MenuButton onClick={() => setNavOpen(true)} />
-          <a className="brand" href="#/model" style={{ textDecoration: "none", color: "inherit" }}><Brand suffix="Docs" /></a>
+          <a className="brand" href={doc("model")} style={{ textDecoration: "none", color: "inherit" }}><Brand suffix="Docs" /></a>
         </header>
         <div className="main-scroll">
           <div className="page docs-page fade-in" key={page.slug}>
             {page.render(sub)}
             <nav className="docs-pager">
-              {prev ? <a href={`#/${prev.slug}`}>← {prev.title}</a> : <span />}
-              {next ? <a href={`#/${next.slug}`}>{next.title} →</a> : <span />}
+              {prev ? <a href={doc(prev.slug)}>← {prev.title}</a> : <span />}
+              {next ? <a href={doc(next.slug)}>{next.title} →</a> : <span />}
             </nav>
           </div>
         </div>
@@ -134,11 +134,11 @@ export function Docs() {
 
 /** A section heading with an anchor, for the longer pages. */
 export function H2({ id, children }: { id: string; children: ReactNode }) {
-  return <h2 className="h-section docs-h2" id={id}><a href={`#${location.hash.slice(1).split("#")[0]}`} style={{ color: "inherit", textDecoration: "none" }}>{children}</a></h2>;
+  return <h2 className="h-section docs-h2" id={id}><a href={`#${id}`} style={{ color: "inherit", textDecoration: "none" }}>{children}</a></h2>;
 }
 
-export function Code({ children }: { children: string; lang?: string }) {
-  return <CodeBlock code={children} />;
+export function Code({ children, lang }: { children: string; lang?: string }) {
+  return <CodeBlock code={children} lang={lang} />;
 }
 
 export function Note({ children, tone = "" }: { children: ReactNode; tone?: string }) {

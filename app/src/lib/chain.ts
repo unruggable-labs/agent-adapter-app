@@ -227,9 +227,9 @@ export const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
 const SCAN_SLUGS: Record<number, string> = { 1: "ethereum", 11155111: "sepolia", 8453: "base", 4663: "robinhood-chain" };
 
 /** The explorer and the docs are one build on two hostnames; each links to the other. In dev both
- *  are served by Vite: the docs at /docs.html. */
+ *  are served by Vite: the docs under /docs/. */
 const IS_DOCS_HOST = location.hostname.startsWith("docs.");
-export const DOCS_URL: string = import.meta.env.DEV ? "/docs.html" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www|base|robinhood|stats)\./, "")}`;
+export const DOCS_URL: string = import.meta.env.DEV ? "/docs/" : IS_DOCS_HOST ? "/" : `https://docs.${location.hostname.replace(/^(testnet|www|base|robinhood|stats)\./, "")}`;
 /** The usage page across every chain. In dev, this chain's own /stats stands in. */
 export const STATS_URL: string = import.meta.env.DEV ? "/stats" : `https://stats.${location.hostname.replace(/^(testnet|www|base|robinhood|docs|stats)\./, "")}`;
 

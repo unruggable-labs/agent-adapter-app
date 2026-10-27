@@ -8,7 +8,19 @@ import { defineConfig } from "vite";
 const DEV_PORT: Record<string, number> = { local: 8787, sepolia: 8788, mainnet: 8789, base: 8790, robinhood: 8791, stats: 8788 };
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // The docs' pages are paths (src/docs/route.ts); in dev they live under /docs/, beside the explorer's.
+      name: "docs-routes",
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          if (req.url && /^\/docs(\/|$)/.test(req.url)) req.url = "/docs.html";
+          next();
+        });
+      },
+    },
+  ],
   build: {
     rollupOptions: {
       input: { main: resolve(__dirname, "index.html"), docs: resolve(__dirname, "docs.html") },

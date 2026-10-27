@@ -11,6 +11,7 @@ export function Deployments() {
   return (
     <>
       <h1 className="page-title">Deployments</h1>
+      <p className="page-sub">Where the adapter lives on each chain, and the addresses it reads.</p>
 
       <H2 id="proxies">Adapter proxies</H2>
       <div className="table-scroll">

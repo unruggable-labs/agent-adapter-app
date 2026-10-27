@@ -1,4 +1,5 @@
 import { Code, H2, Note } from "../Docs";
+import { doc } from "../route";
 
 const SEPOLIA = "0x7621630cB63a73a194f45A3E6801B8C6A7eC2f92";
 
@@ -61,7 +62,7 @@ await wallet.writeContract({
   address: ADAPTER, abi, functionName: "counterfactualSetAgentWalletAndUBID",
   args: [ERC721, NFT, TOKEN_ID],
 });`}</Code>
-      <p>If it's a different address, the controller names it and that wallet confirms - see <a href="#/wallets">Operating wallets</a>.</p>
+      <p>If it's a different address, the controller names it and that wallet confirms - see <a href={doc("wallets")}>Operating wallets</a>.</p>
 
       <H2 id="attest">4. Say something about an agent</H2>
       <Code lang="ts">{`import { concatHex } from "viem";

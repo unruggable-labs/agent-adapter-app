@@ -190,3 +190,35 @@ describe("a chain fails on its own", () => {
     r.stop();
   });
 });
+
+describe("plain pages, for a fetch that runs no JavaScript", async () => {
+  const { llmsTxt, plainBody, withBody } = await import("../src/plain.js");
+  const a = chain("robinhood", 4663n, 1000, 1);
+  const b = chain("base", 8453n, 1000, 1);
+  a.register(10, 7n);
+  a.star(20, BOB, a.ubid(7n));
+  const scope = [a.scope, b.scope];
+
+  it("says what an identity is, with its chain, and links its JSON", () => {
+    const body = plainBody(scope, `/identity/${a.ubid(7n)}`)!;
+    expect(body).toContain('class="plain-page"');
+    expect(body).toContain("on robinhood");
+    expect(body).toContain("1 star");
+    expect(body).toContain(`/api/identity/${a.ubid(7n)}`);
+    expect(withBody('<div id="root"></div>', body)).toContain(`<div id="root">${body}</div>`);
+  });
+
+  it("has nothing to add for an unknown identity or path", () => {
+    expect(plainBody(scope, `/identity/${b.ubid(9n)}`)).toBeNull();
+    expect(plainBody(scope, "/create")).toBeNull();
+    expect(withBody('<div id="root"></div>', null)).toBe('<div id="root"></div>');
+  });
+
+  it("lists every chain and the API in llms.txt", () => {
+    const txt = llmsTxt("https://adapterscan.com", scope);
+    expect(txt).toMatch(/^# Adapterscan\n\n> /);
+    expect(txt).toContain("`robinhood`, chain id 4663");
+    expect(txt).toContain("`base`, chain id 8453");
+    expect(txt).toContain("GET https://adapterscan.com/api/wallet/<address>");
+  });
+});

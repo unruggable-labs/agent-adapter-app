@@ -66,9 +66,9 @@ export function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function CodeBlock({ code, copy = true }: { code: string; copy?: boolean }) {
+export function CodeBlock({ code, copy = true, lang }: { code: string; copy?: boolean; lang?: string }) {
   return (
-    <div className="codeblock">
+    <div className="codeblock" data-lang={lang}>
       {copy && <div className="codeblock-bar"><CopyButton text={code} /></div>}
       <pre><Highlighted code={code} /></pre>
     </div>

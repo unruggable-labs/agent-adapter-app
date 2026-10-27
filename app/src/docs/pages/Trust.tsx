@@ -1,4 +1,5 @@
 import { H2 } from "../Docs";
+import { doc } from "../route";
 
 export function Trust() {
   const qa: { q: string; a: React.ReactNode }[] = [
@@ -16,7 +17,7 @@ export function Trust() {
     },
     {
       q: "Can someone impersonate an agent's wallet?",
-      a: <>A wallet can claim to work for any agent, and an agent can name any wallet. Neither alone is shown as verified. Only when the profile names the wallet and the wallet points back does the explorer call the link verified. See <a href="#/wallets">Operating wallets</a>.</>,
+      a: <>A wallet can claim to work for any agent, and an agent can name any wallet. Neither alone is shown as verified. Only when the profile names the wallet and the wallet points back does the explorer call the link verified. See <a href={doc("wallets")}>Operating wallets</a>.</>,
     },
     {
       q: "Can reviews be deleted?",

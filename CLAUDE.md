@@ -35,7 +35,12 @@ tooltips kept to the fewest sentences that do the job.
   default + dark toggle). Two entries in one build: `index.html` (the explorer) and `docs.html`
   (`src/docs/`, the documentation site at docs.adapterscan.com - the model page, the protocol
   concepts, a quickstart, the contract map and deployments; the contract repo stays the source
-  of truth and the docs link to it). Dev-only: local-devnet network + anvil persona writes, chosen with
+  of truth and the docs link to it). Docs pages are paths (`src/docs/route.ts`; under /docs/ in dev),
+  and `npm run build` also renders each one to plain HTML and Markdown with llms.txt and
+  llms-full.txt (`scripts/prerender-docs.mjs`, from the same components) - a fetch with no
+  JavaScript gets the words. The explorer's pages get the same from the indexer: a short plain
+  summary in the body (`indexer/src/plain.ts`, hidden by CSS once the app boots) and /llms.txt
+  describing the JSON API. Dev-only: local-devnet network + anvil persona writes, chosen with
   VITE_NETWORK=local; VITE_NETWORK=hub is the multichain explorer against a local hub (:8792). Production picks Sepolia or Ethereum from the hostname; writes go through the user's
   connected wallet (wagmi + Reown AppKit, needs VITE_WC_PROJECT_ID). Personas are devnet-only.
 - `contracts/` + `indexer/artifacts/` — vendored demo mock + build artifacts; regeneration

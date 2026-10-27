@@ -49,7 +49,9 @@ curl -fsSL https://raw.githubusercontent.com/unruggable-labs/agent-adapter-app/m
 
 A records → 178.105.235.22 for `adapterscan.com`, `www.adapterscan.com`,
 `testnet.adapterscan.com`, `robinhood.adapterscan.com`, `base.adapterscan.com` and
-`docs.adapterscan.com` (the documentation site, same build, entered through `docs.html`).
+`docs.adapterscan.com` (the documentation site, same build, entered through `docs.html`; the
+build also writes each page as plain HTML and Markdown with an `llms.txt` under `dist/docs/`,
+which the Caddy block serves - a change to that block needs `setup.sh` re-run).
 One hostname per chain: the app reads its network from the hostname, Caddy routes each
 `/api` to that chain's indexer (sepolia 8788, mainnet 8789, base 8790, robinhood 8791).
 The apex is the chain picker until Ethereum's adapter is upgraded. Caddy issues certificates on first request, so each

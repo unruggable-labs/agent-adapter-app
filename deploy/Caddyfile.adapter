@@ -60,11 +60,15 @@ stats.adapterscan.com {
 	import adapterscan 8792
 }
 
-# The documentation site: the same build, entered through docs.html.
+# The documentation site: the same build, entered through docs.html. The build also writes every
+# page as plain HTML and Markdown under docs/ (app/scripts/prerender-docs.mjs), so a fetch with no
+# JavaScript gets the words: /wallets is docs/wallets.html, /wallets.md and /llms.txt are files there.
 docs.adapterscan.com {
 	encode gzip zstd
 	root * /srv/adapter/app/dist
-	try_files {path} /docs.html
+	@markdown path *.md
+	header @markdown Content-Type "text/markdown; charset=utf-8"
+	try_files /docs{path} /docs{path}.html {path} /docs.html
 	file_server
 	header {
 		-Server
