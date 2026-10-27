@@ -130,10 +130,11 @@ export class ProjectionStore {
   readonly adapter: Address;
   /**
    * The block the adapter was upgraded to v0.0.17 in, where its history starts earlier than that
-   * (Ethereum, Base). Registrations before it came from the older implementation, which emitted
-   * the same registration events (AgentBound, AgentURISet, AgentWalletSet, MetadataSet) and stored
-   * the same binding hash, but never a UBID in any event - the UBID is derived from the binding's
-   * coordinates, as it is for v0.0.17's AgentBound. History entries before it are marked `legacy`.
+   * (Ethereum, Base). Registrations before it came from older implementations, which emitted the
+   * same registration events (AgentBound, AgentURISet, AgentWalletSet, MetadataSet) and stored the
+   * same binding hash, with no UBID in them - the UBID is derived from the binding's coordinates,
+   * as it is for v0.0.17's AgentBound. Their counterfactual claims hashed UBIDs another way and
+   * fail I-1 like any mismatched claim (SPEC H-1). History entries before it are marked `legacy`.
    * Null: everything indexed is v0.0.17.
    */
   readonly upgradeBlock: bigint | null;

@@ -52,10 +52,9 @@ const NETWORKS = {
     chainId: 1n,
     rpcUrl: process.env.MAINNET_RPC_URL ?? "https://ethereum-rpc.publicnode.com",
     adapter: "0xde152AfB7db5373F34876E1499fbD893A82dD336" as Address, // the mainnet proxy
-    // History from the proxy's deployment (0xf4d34051…f519). Unlike Sepolia's, the implementation
-    // before v0.0.17 only registered agents, with the same events and the same binding hash
-    // (checked against bindingHashOf for every agent it bound), so its registrations are live
-    // agents and are indexed. Upgraded to v0.0.17 in 0xd94bed0c…3470 (Safe nonce 3); the
+    // History from the proxy's deployment (0xf4d34051…f519). Unlike Sepolia's, the implementations
+    // before v0.0.17 registered agents with the same events and the same binding hash (checked
+    // against bindingHashOf), so their registrations are live agents and are indexed (SPEC H-1). Upgraded to v0.0.17 in 0xd94bed0c…3470 (Safe nonce 3); the
     // earlier events are marked as the older implementation's (ProjectionStore.upgradeBlock).
     fromBlock: process.env.MAINNET_FROM_BLOCK ? BigInt(process.env.MAINNET_FROM_BLOCK) : 24_821_152n,
     upgradeBlock: 26_285_388n,
@@ -68,8 +67,8 @@ const NETWORKS = {
     // PublicNode, as elsewhere: mainnet.base.org answers a handful of calls and then 429s.
     rpcUrl: process.env.BASE_RPC_URL ?? "https://base-rpc.publicnode.com",
     adapter: "0x270d25D2c59A8bcA1B0f40ad95fF7806c0025c27" as Address, // the Base proxy
-    // History from the proxy's deployment, for the same reason as Ethereum's: the implementation
-    // before v0.0.17 registered agents with the same events and binding hash (checked on a sample).
+    // History from the proxy's deployment, for the same reason as Ethereum's (checked on a sample).
+    // One counterfactual claim from then hashed its UBID the old way and is dropped (SPEC H-1).
     // Upgraded to v0.0.17 in 0x148b82c7…0626 (Safe nonce 1), marked as Ethereum's is.
     fromBlock: process.env.BASE_FROM_BLOCK ? BigInt(process.env.BASE_FROM_BLOCK) : 44_347_671n,
     upgradeBlock: 52_991_843n,

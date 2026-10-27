@@ -22,10 +22,13 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
   one identity row, both statuses. No link assertion exists; the join is by construction.
 - **(contract)** `Standard` and `AttestationType` numbering is identity-critical and append-only.
 - **H-1 (deployment).** Where an adapter ran an earlier implementation before v0.0.17 (Ethereum,
-  Base), the log starts at the proxy's deployment, not the upgrade. That implementation only
-  registered agents, with the same `AgentBound` / `AgentURISet` / `AgentWalletSet` / `MetadataSet`
-  events and the same stored binding hash (checked against `bindingHashOf` for every Ethereum
-  agent and a sample of Base's), so its agents are live and keep their UBIDs. Its events carry no
+  Base), the log starts at the proxy's deployment, not the upgrade. Those implementations
+  registered agents with the same `AgentBound` / `AgentURISet` / `AgentWalletSet` / `MetadataSet`
+  events and the same stored binding hash (checked against `bindingHashOf` for the last day of
+  Ethereum's and a sample of Base's), so their agents are live and keep their UBIDs. Their
+  counterfactual claims used an older UBID formula: Base has one (block 48675160, a test claim
+  for `https://example.com/agent.json`), and I-1 drops it, as it should - its hash names no
+  binding under v0.0.17. Its events carry no
   UBID - neither does v0.0.17's `AgentBound` - and the UBID is derived from the coordinates as
   for any `AgentBound`. The upgrade block is kept in the log's meta (`upgradeBlock`); history
   entries before it carry `legacy: true` and identities created before it `legacy: true`.
