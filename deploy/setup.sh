@@ -60,8 +60,9 @@ $SUDO install -m 0644 /tmp/Caddyfile.adapterscan /etc/caddy/Caddyfile
 $SUDO systemctl reload caddy
 
 echo "== 6/6 services =="
-# Chains on v0.0.17 with a known cutover start now; the others only once /etc/adapter.env
-# carries their <NAME>_FROM_BLOCK (see serve.ts). Ports: sepolia 8788, mainnet 8789, base 8790, robinhood 8791.
+# Sepolia runs alone; the mainnets run in the hub (see serve.ts). A chain's event log is locked by
+# the process that has it open, so the per-chain mainnet units from before the hub are retired
+# first. Ports: sepolia 8788, hub 8792.
 start_indexer() { # name port - a start replays the chain, so wait for the API rather than a fixed sleep
   $SUDO systemctl enable --now "adapter-indexer@$1"
   for i in $(seq 1 24); do
@@ -71,8 +72,7 @@ start_indexer() { # name port - a start replays the chain, so wait for the API r
   done
   echo "adapter-indexer@$1 did not come up; last log lines:"; $SUDO journalctl -u "adapter-indexer@$1" -n 20 --no-pager; return 1
 }
+for NET in robinhood base mainnet; do $SUDO systemctl disable --now "adapter-indexer@$NET" 2>/dev/null || true; done
 start_indexer sepolia 8788
-start_indexer robinhood 8791
-grep -qs '^BASE_FROM_BLOCK=.' /etc/adapter.env && start_indexer base 8790
-grep -qs '^MAINNET_FROM_BLOCK=.' /etc/adapter.env && start_indexer mainnet 8789
-echo "== done: testnet. / robinhood.adapterscan.com live; apex is the chain picker =="
+start_indexer hub 8792
+echo "== done: testnet.adapterscan.com is Sepolia; adapterscan.com is every mainnet the hub runs =="

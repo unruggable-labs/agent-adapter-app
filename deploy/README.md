@@ -67,21 +67,17 @@ root (or as deploy with a sudo password), not through the GitHub Action.
 ## Cutover to the hub (once, needs sudo)
 
 The hub opens the same `data/<network>.sqlite` files the per-chain indexers have open, and
-each file is locked by one process, so stop those first. In order:
-
-1. `systemctl disable --now adapter-indexer@robinhood adapter-indexer@base`
-2. `systemctl enable --now adapter-indexer@hub` and wait for
-   `curl -s http://127.0.0.1:8792/api/overview` to list both chains as `live`. The files
-   carry over: no re-index, only what came after their checkpoints.
-3. Re-run `deploy/setup.sh` (or install `Caddyfile.adapter` the way it does and
-   `systemctl reload caddy`): the apex and `stats.` move to 8792, and `robinhood.` and
-   `base.` redirect to the apex on the same path.
+each file is locked by one process. Re-running `deploy/setup.sh` does the whole cutover: it
+installs `Caddyfile.adapter` (the apex and `stats.` move to 8792, `robinhood.` and `base.`
+redirect to the apex on the same path), disables `@robinhood`/`@base`/`@mainnet`, then enables
+`@hub` and waits for its API. The files carry over: no re-index, only what came after their
+checkpoints. Check `curl -s http://127.0.0.1:8792/api/overview` lists both chains as `live`.
 
 Do this straight after the deploy that ships the multichain app: that build treats the apex as
 the explorer for every mainnet, which needs the hub behind it.
 
-Between 1 and 3 the mainnet sites show the plain shell (Caddy's `handle_errors`), seconds at
-most. To go back: disable the hub, re-enable the two units, restore the previous Caddyfile
+While the hub starts the mainnet sites show the plain shell (Caddy's `handle_errors`), seconds
+at most. To go back: disable the hub, re-enable the two units, restore the previous Caddyfile
 (`/etc/caddy/Caddyfile.bak.*`).
 
 ## Mainnet
