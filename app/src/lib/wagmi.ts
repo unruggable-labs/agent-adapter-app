@@ -60,6 +60,9 @@ if (adapter && projectId) {
     adapters: [adapter],
     networks,
     defaultNetwork: networks[0],
+    // A wallet on any chain is fine until it signs something: a write switches it then (tx.ts).
+    // Without this AppKit asks for a switch the moment a wallet on another chain reconnects.
+    allowUnsupportedChain: true,
     projectId,
     metadata: {
       name: "Adapterscan",

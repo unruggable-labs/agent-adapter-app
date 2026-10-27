@@ -46,11 +46,6 @@ function WalletControl() {
   const { switchChain } = useSwitchChain();
   const wrongChain = signer !== null && HOME !== null && chain?.id !== HOME.chain.id;
 
-  // a chain's own site: nudge the wallet onto its chain as soon as it connects
-  useEffect(() => {
-    if (wrongChain && HOME) switchChain({ chainId: HOME.chain.id });
-  }, [signer?.address]);
-
   if (PERSONA_WRITES)
     return (
       <label className="row" style={{ gap: 8 }}>
