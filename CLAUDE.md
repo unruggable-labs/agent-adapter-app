@@ -26,7 +26,8 @@ tooltips kept to the fewest sentences that do the job.
   API core (a request for a chain's own hostname sees that chain alone); `views.ts` = identity views, with a worker that reads the chain facts around each
   identity (holder, name, trust base, card, cited transactions) and keeps them in the SQLite file
   (`advisories.ts`); `watch.ts` follows the bound contracts' transfer/upgrade/metadata events to
-  say what to re-read. No request and no page view reads the chain; `stats.ts` = usage over the event log's fact columns and block timestamps for
+  say what to re-read; `pictures.ts` keeps our own small WebP copy of every picture the worker
+  reads (`data/pictures`, served at `/pic/<key>.webp`; the API hands out that path once it exists). No request and no page view reads the chain; `stats.ts` = usage over the event log's fact columns and block timestamps for
   `/api/stats/*` and the `/stats` page (stats.adapterscan.com shows every chain combined, the page
   fanning out to each chain's API). `server.ts` also serves the built
   app's HTML for page paths with title/description/social-card tags filled in (`meta.ts`), the

@@ -1,5 +1,7 @@
 import { Resvg } from "@resvg/resvg-js";
+import sharp from "sharp";
 import { fetchContent } from "./gateway.js";
+import { readPicture } from "./pictures.js";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import satori from "satori";
@@ -98,6 +100,12 @@ async function imageData(url: string | null): Promise<string | null> {
   if (!url) return null;
   if (url.startsWith("data:image/png") || url.startsWith("data:image/jpeg")) return url;
   try {
+    // Our copy (pictures.ts) is WebP, which satori can't draw: it goes in as a PNG.
+    const pic = /^\/pic\/([0-9a-f]{40})\.webp$/.exec(url);
+    if (pic) {
+      const webp = await readPicture(pic[1]);
+      return webp ? `data:image/png;base64,${(await sharp(webp).png().toBuffer()).toString("base64")}` : null;
+    }
     // Our own /ipfs and /ar paths come straight from the gateway cache; http(s) is fetched.
     const own = /^\/(ipfs|ar)\/(.+)$/.exec(url);
     let type: string;

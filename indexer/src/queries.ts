@@ -1,6 +1,7 @@
 import type { Address, Hex } from "viem";
 import type { AttestationRecord, IdentityState, OrderKey, ProjectionStore } from "./projection.js";
 import { ACCOUNT_STANDARDS, ATTESTATION_TYPE_NAMES, AttestationType, Standard, STANDARD_NAMES } from "./ubid.js";
+import { shownPicture } from "./pictures.js";
 import type { IdentityView, ViewCache } from "./views.js";
 
 /**
@@ -369,12 +370,12 @@ function collectionRow(c: ChainScope, address: Address, ids: IdentityState[]): C
     address,
     name: facts?.collection?.name ?? facts?.name ?? `${address.slice(0, 6)}…${address.slice(-4)}`,
     description: facts?.collection?.description ?? null,
-    image: facts?.collection?.image ?? previews[0] ?? null,
+    image: shownPicture(facts?.collection?.image ?? previews[0] ?? null),
     externalLink: facts?.collection?.externalLink ?? null,
     standardName: STANDARD_NAMES[standard],
     identities: ids.length,
     registered: ids.filter((i) => i.agentIds.length > 0).length,
-    previews,
+    previews: previews.map((p) => shownPicture(p)!),
     latest: newest[0].created,
   };
 }

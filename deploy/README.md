@@ -27,7 +27,10 @@ What runs where:
   deploy's `git reset --hard`; `ADAPTER_DATA_DIR=` in `/etc/adapter.env` moves it).
   A restart folds from the file and syncs from its checkpoint; a reorg truncates the
   log at the fork point and refolds. The file is only a copy of the chain: delete it
-  to re-index from the cutover block. `/etc/adapter.env` is optional
+  to re-index from the cutover block. Next to it, `data/cache` (ipfs/ar documents) and
+  `data/pictures` (our small copy of every picture shown, about 50 KB each - a GB or two at
+  the mainnets' size) are only caches: deleting them costs a re-fetch, nothing else.
+  `/etc/adapter.env` is optional
   (`SEPOLIA_RPC_URL=` to use a dedicated RPC).
 - `stats.adapterscan.com` is the usage page across every chain: an A record to the box, the
   Caddy block in `Caddyfile.adapter` (applied by `setup.sh`), nothing else - the page asks each

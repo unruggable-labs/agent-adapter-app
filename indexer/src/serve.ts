@@ -5,6 +5,7 @@ import { createPublicClient, http, type Address, type PublicClient } from "viem"
 import { base, mainnet, robinhood, sepolia } from "viem/chains";
 import { EventLog } from "./eventlog.js";
 import { configureGatewayCache } from "./gateway.js";
+import { configurePictures } from "./pictures.js";
 import { Ingester } from "./ingest.js";
 import { ProjectionStore } from "./projection.js";
 import { ChainRuntime } from "./runtime.js";
@@ -111,6 +112,7 @@ async function main() {
   const dataDir = process.env.ADAPTER_DATA_DIR ?? fileURLToPath(new URL("../data", import.meta.url));
   mkdirSync(dataDir, { recursive: true });
   configureGatewayCache(join(dataDir, "cache")); // ipfs/ar content, under its address
+  configurePictures(join(dataDir, "pictures")); // our small copy of every picture shown (pictures.ts)
 
   const chains: ChainRuntime[] = [];
   for (const name of names) {

@@ -7,6 +7,7 @@ import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import { llmsTxt, plainBody, withBody } from "./plain.js";
 import { fetchContent } from "./gateway.js";
+import { readPicture } from "./pictures.js";
 import { attestationView, collectionView, findIdentity, listCollections } from "./queries.js";
 import type { ChainRuntime } from "./runtime.js";
 import { overview as statsOverview, series as statsSeries } from "./stats.js";
@@ -103,6 +104,14 @@ export function startServer(chains: ChainRuntime[], port: number) {
         if (!got) return send(404, "text/plain", "not available from any gateway right now");
         if (!/^image\//.test(got.type)) return send(415, "text/plain", "not an image");
         return send(200, got.type, got.body, { "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" });
+      }
+
+      // ---- our copies of the pictures (pictures.ts). Saved by the worker; a request only reads the disk.
+      if ((c = /^\/pic\/([0-9a-f]{40})\.webp$/.exec(url.pathname))) {
+        const pic = await readPicture(c[1]);
+        if (!pic) return send(404, "text/plain", "no copy of this picture yet");
+        // A web picture is saved again after a day, so a day is as long as a browser may keep it.
+        return send(200, "image/webp", pic, { "cache-control": "public, max-age=86400", "x-content-type-options": "nosniff" });
       }
 
       // ---- built assets (production: Caddy serves these; here for a complete local preview)

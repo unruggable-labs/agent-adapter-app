@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Address, Hex } from "viem";
+import { shownPicture } from "./pictures.js";
 import type { ProjectionStore } from "./projection.js";
 import { ATTESTATION_TYPE_NAMES, STANDARD_NAMES } from "./ubid.js";
 import type { ViewCache } from "./views.js";
@@ -296,7 +297,7 @@ export function projects(db: DatabaseSync, store: ProjectionStore, views: ViewCa
     return {
       address: c.address,
       name: advisory?.collection?.name ?? summary?.contractName ?? null,
-      image: advisory?.collection?.image ?? summary?.card?.image ?? null,
+      image: shownPicture(advisory?.collection?.image ?? summary?.card?.image ?? null),
       website: advisory?.collection?.externalLink ?? null,
       standards: [...(p?.standards ?? [])],
       identities: c.identities,

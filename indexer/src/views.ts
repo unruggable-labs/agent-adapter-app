@@ -3,6 +3,7 @@ import { AdvisoryStore, type CardFact, type ContractFacts, type HolderFact, type
 import { collectionFor, type Collection } from "./collection.js";
 import { cardKey, resolveCard, type Card } from "./images.js";
 import { contractName, labelsFrom } from "./names.js";
+import { shownPicture, warmPictures } from "./pictures.js";
 import type { IdentityState, ProjectionStore } from "./projection.js";
 import { probeTrustBase, type TrustBase } from "./trustbase.js";
 import { SINGLE_OWNER_TOKEN_STANDARDS, Standard, STANDARD_NAMES } from "./ubid.js";
@@ -128,6 +129,13 @@ export class ViewCache {
   /** Start the worker. The tick only matters when the queue has drained: a finished read pumps the next. */
   start() {
     if (this.timer) return;
+    // The pictures of what was read before this process started: any without a copy yet get one.
+    // Collections first (few, and on the home page), then the newest records, as the lists show them.
+    const ids = [...this.store.identities.values()].reverse();
+    warmPictures([
+      ...new Set(ids.map((id) => this.advisories.contract(id.boundAddress)?.collection?.image)),
+      ...ids.map((id) => this.advisories.card(id.ubid)?.card?.image),
+    ]);
     this.timer = setInterval(() => this.pump(), this.opts.tickMs);
     this.timer.unref?.();
     this.pump();
@@ -193,10 +201,11 @@ export class ViewCache {
     return {
       ...id,
       ...labelsFrom(c?.name ?? null, id, card?.agentName),
-      // The token's own picture; the collection's where the token has none (yet).
-      image: card?.image ?? c?.collection?.image ?? null,
+      // The token's own picture; the collection's where the token has none (yet). Our copy of
+      // it once the worker has saved one (pictures.ts).
+      image: shownPicture(card?.image ?? c?.collection?.image ?? null),
       card,
-      collection: c?.collection ?? null,
+      collection: c?.collection ? { ...c.collection, image: shownPicture(c.collection.image) } : null,
       standardName: STANDARD_NAMES[id.standard],
       currentControllerHolder: this.holder(id),
       reputation: this.store.reputation(id.ubid),
@@ -260,6 +269,8 @@ export class ViewCache {
     );
 
     this.advisories.write({ holders, contracts, cards });
+    // Our own copy of each picture just read, saved in the background (pictures.ts).
+    warmPictures([...[...cards.values()].map((f) => f.card?.image), ...[...contracts.values()].map((f) => f.collection?.image)]);
     for (const id of ids) {
       // A holder the RPC failed to read keeps its mark and its old reading, and is tried again later.
       if (holders.has(id.ubid)) {
