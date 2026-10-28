@@ -257,7 +257,9 @@ export class ViewCache {
         contractName(this.client, address),
         collectionFor(this.client, address).catch(() => null),
       ]);
-      contracts.set(address, { trustBase, name, collection, at: Date.now() });
+      // As with cards: a collection document we couldn't reach this time keeps the one we had.
+      const had = this.advisories.contract(address);
+      contracts.set(address, { trustBase, name: name ?? had?.name ?? null, collection: collection ?? had?.collection ?? null, at: Date.now() });
     }
 
     const cards = new Map<Hex, CardFact>();
@@ -265,7 +267,12 @@ export class ViewCache {
     await Promise.all(
       ids
         .filter((id) => everything || this.cardDue(id, now))
-        .map(async (id) => cards.set(id.ubid, { key: cardKey(id), card: await resolveCard(this.client, id, registry), at: Date.now() })),
+        .map(async (id) => {
+          // Nothing found is often nothing reachable (a gateway down, a server out): the card we
+          // had stays, and is read again with the rest the next day.
+          const card = (await resolveCard(this.client, id, registry)) ?? this.advisories.card(id.ubid)?.card ?? null;
+          cards.set(id.ubid, { key: cardKey(id), card, at: Date.now() });
+        }),
     );
 
     this.advisories.write({ holders, contracts, cards });

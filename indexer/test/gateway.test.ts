@@ -35,12 +35,12 @@ describe("content gateway", () => {
     setGatewayFetch(async (input) => {
       const url = String(input);
       calls.push(url);
-      if (url.startsWith("https://ipfs.io/")) return reply(429, Buffer.from("slow down"), "text/plain");
+      if (url.startsWith("https://ipfs.filebase.io/")) return reply(429, Buffer.from("slow down"), "text/plain");
       return reply(200, png);
     });
     const first = await fetchContent("ipfs", "bafyone/a.png");
     expect(first).toEqual({ body: png, type: "image/png" });
-    expect(calls).toEqual(["https://ipfs.io/ipfs/bafyone/a.png", "https://dweb.link/ipfs/bafyone/a.png"]);
+    expect(calls).toEqual(["https://ipfs.filebase.io/ipfs/bafyone/a.png", "https://gateway.pinata.cloud/ipfs/bafyone/a.png"]);
 
     // the same address again: from disk, no network
     calls.length = 0;
@@ -49,7 +49,7 @@ describe("content gateway", () => {
 
     // a different address: the rate-limited gateway is resting, so the next one is asked first
     await fetchContent("ipfs", "bafytwo/b.png");
-    expect(calls).toEqual(["https://dweb.link/ipfs/bafytwo/b.png"]);
+    expect(calls).toEqual(["https://gateway.pinata.cloud/ipfs/bafytwo/b.png"]);
   });
 
   it("gives up when no gateway has it, and does not ask again for a while", async () => {
@@ -76,6 +76,21 @@ describe("content gateway", () => {
     limited = false;
     resetGatewayCooldowns();
     expect(await fetchContent("ar", "busy")).toEqual({ body: png, type: "image/png" });
+  });
+
+  it("asks a project's own gateway first for the content it named, and not for anything else", async () => {
+    setGatewayFetch(async (input) => {
+      calls.push(String(input));
+      return String(input).startsWith("https://punks.example/") ? reply(200, png) : reply(504, Buffer.from("timeout"), "text/plain");
+    });
+    expect(parseContentUri("https://punks.example/ipfs/bafyhive/161.webp")).toEqual({ scheme: "ipfs", path: "bafyhive/161.webp" });
+    expect(await fetchContent("ipfs", "bafyhive/161.webp")).toEqual({ body: png, type: "image/png" });
+    expect(calls).toEqual(["https://punks.example/ipfs/bafyhive/161.webp"]);
+    // A public gateway in a URI is just a spelling: nothing is remembered for it.
+    parseContentUri("https://dweb.link/ipfs/bafyother/1.png");
+    calls.length = 0;
+    await fetchContent("ipfs", "bafyother/1.png");
+    expect(calls[0]).toBe("https://ipfs.filebase.io/ipfs/bafyother/1.png");
   });
 
   it("dedupes concurrent requests for one address", async () => {
