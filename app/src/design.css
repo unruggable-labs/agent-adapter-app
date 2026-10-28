@@ -372,6 +372,12 @@ input, textarea, select { font: inherit; color: inherit; }
   border-color: color-mix(in srgb, var(--accent) 86%, var(--text-1));
   color: #fff;
 }
+/* The way in, without the accent: a black button. Solid on the light theme; on the dark one black
+   on black, darker than the surface it sits on, its edge and its full-white label saying it's live. */
+.btn-solid { background: var(--text-1); border-color: var(--text-1); color: var(--surface-1); font-weight: 550; }
+.btn-solid:hover:not(:disabled) { background: color-mix(in srgb, var(--text-1) 82%, var(--surface-1)); border-color: color-mix(in srgb, var(--text-1) 82%, var(--surface-1)); }
+[data-theme="dark"] .btn-solid { background: #000; border-color: color-mix(in srgb, var(--text-1) 28%, transparent); color: var(--text-1); }
+[data-theme="dark"] .btn-solid:hover:not(:disabled) { background: #000; border-color: color-mix(in srgb, var(--text-1) 55%, transparent); }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 /* Matches .btn:hover:not(:disabled)'s specificity so it still wins by being declared later. */
 .btn-ghost:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; color: var(--text-1); }
