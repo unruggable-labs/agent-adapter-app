@@ -4,6 +4,7 @@ import { CodeBlock } from "../components/code";
 import { ChainGrid } from "../components/chains";
 import { MenuButton, NavBackdrop, NavClose, useNavDrawer } from "../components/shell";
 import { Modal } from "../components/ui";
+import { Api } from "./pages/Api";
 import { Counterfactual } from "./pages/Counterfactual";
 import { Deployments } from "./pages/Deployments";
 import { Identities } from "./pages/Identities";
@@ -47,6 +48,7 @@ export const GROUPS: { label: string; pages: Page[] }[] = [
     label: "Build",
     pages: [
       { slug: "quickstart", title: "Quickstart", render: () => <Quickstart /> },
+      { slug: "api", title: "Explorer API", render: () => <Api /> },
       { slug: "counterfactual", title: "Counterfactual registration", render: () => <Counterfactual /> },
       { slug: "reference", title: "Contract reference", render: () => <Reference /> },
       { slug: "deployments", title: "Deployments", render: () => <Deployments /> },

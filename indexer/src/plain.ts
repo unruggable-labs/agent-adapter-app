@@ -207,6 +207,7 @@ A UBID is a profile's permanent id: a hash of the chain, the adapter and what th
 
 ## Docs
 
+- [This API, with examples](${DOCS}/api.md)
 - [How it works, the contracts, and how to build on them](${DOCS}/llms.txt)
 - [All of the docs in one file](${DOCS}/llms-full.txt)
 `;

@@ -42,6 +42,11 @@ td.addRule("note", {
   filter: (n) => /\bcallout\b/.test(n.getAttribute?.("class") ?? ""),
   replacement: (c) => `\n\n${c.trim().split("\n").map((l) => `> ${l}`.trimEnd()).join("\n")}\n\n`,
 });
+// Inline names - a call, a field, a path - are code in Markdown too.
+td.addRule("mono", {
+  filter: (n) => n.nodeName === "SPAN" && /(^|\s)mono(\s|$)/.test(n.getAttribute?.("class") ?? ""),
+  replacement: (c) => (c.trim() ? `\`${c.replace(/`/g, "")}\`` : c),
+});
 // The model page's parts: name and what it is, as a heading and a line.
 td.addRule("part", {
   filter: (n) => /(^|\s)model-detail-(name|what)(\s|$)/.test(n.getAttribute?.("class") ?? ""),
