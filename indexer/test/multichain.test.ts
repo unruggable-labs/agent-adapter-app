@@ -143,7 +143,10 @@ describe("several chains", () => {
     ]);
     const one = await api("overview?chain=fast");
     expect([one.identities, one.chainId, one.adapter]).toEqual([2, "8453", ADAPTER]);
-    expect((await api("identities?chain=fast")).length).toBe(2); // ?chain= alone is still the whole list, of that chain
+    // Every list is a page, a bare one included.
+    expect((await api("identities?chain=fast")).total).toBe(2);
+    expect((await api("identities")).items).toHaveLength(4);
+    expect((await api("attestations")).limit).toBe(25);
     expect((await api(`identity/${fast.ubid(7n)}`)).chain).toBe("fast");
     expect((await handleApi([slow.scope, fast.scope], "stats/overview")).status).toBe(400);
     expect((await handleApi([slow.scope, fast.scope], "overview?chain=nope")).status).toBe(400);

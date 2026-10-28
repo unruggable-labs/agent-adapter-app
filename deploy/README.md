@@ -32,6 +32,10 @@ What runs where:
   the mainnets' size) are only caches: deleting them costs a re-fetch, nothing else.
   `/etc/adapter.env` is optional
   (`SEPOLIA_RPC_URL=` to use a dedicated RPC).
+- The API is public and rate-limited per caller (`indexer/src/ratelimit.ts`: 300 requests a
+  minute, bursts of 60; social cards and CSV 20; pictures 1,200). Requests from the box itself
+  aren't limited, and neither are ones sending `X-Adapterscan-Key: <ADAPTER_API_KEY>` - set
+  `ADAPTER_API_KEY=` in `/etc/adapter.env` for our own tools. Never put it in the app.
 - `stats.adapterscan.com` is the usage page across every chain: an A record to the box, the
   Caddy block in `Caddyfile.adapter` (applied by `setup.sh`), nothing else - the page asks each
   chain's API itself.

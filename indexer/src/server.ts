@@ -8,6 +8,7 @@ import { withMeta } from "./meta.js";
 import { llmsTxt, plainBody, withBody } from "./plain.js";
 import { fetchContent } from "./gateway.js";
 import { readPicture } from "./pictures.js";
+import { limitClassOf, limitHeaders, RateLimiter } from "./ratelimit.js";
 import { attestationView, collectionView, findIdentity, listCollections } from "./queries.js";
 import type { ChainRuntime } from "./runtime.js";
 import { overview as statsOverview, series as statsSeries } from "./stats.js";
@@ -67,16 +68,29 @@ export function startServer(chains: ChainRuntime[], port: number) {
     return own.length ? own : chains;
   };
   const cardOf = (c: ChainRuntime) => ({ id: Number(c.chainId), label: c.label });
+  const limiter = new RateLimiter();
+  // Our own calls to another of our sites go with the key, so the box isn't limited by itself.
+  const ownKey: Record<string, string> = process.env.ADAPTER_API_KEY ? { "x-adapterscan-key": process.env.ADAPTER_API_KEY } : {};
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const host = (req.headers["x-forwarded-host"] as string | undefined) ?? req.headers.host ?? "localhost";
     const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
     const origin = `${proto}://${host}`;
+    // The fair-use limit (ratelimit.ts): every answer says what's left; over it, a 429 and when to come back.
+    const cls = limitClassOf(url.pathname, url.search);
+    const verdict = cls ? limiter.check(limiter.callerOf(req), cls) : null;
+    const limited = verdict ? limitHeaders(verdict) : {};
     const send = (status: number, type: string, body: string | Buffer, extra: Record<string, string> = {}) => {
-      res.writeHead(status, { "content-type": type, ...extra });
+      res.writeHead(status, { "content-type": type, ...limited, ...extra });
       res.end(body);
     };
+    if (verdict && !verdict.ok) {
+      return send(429, "application/json", JSON.stringify({ error: "rate limited", retryAfterSeconds: verdict.retryAfterSeconds, limitPerMinute: verdict.limit, docs: `${origin}/llms.txt` }), {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "retry-after, ratelimit-limit, ratelimit-remaining, ratelimit-reset",
+      });
+    }
     const cached = async (key: string, render: () => Promise<Buffer>) => {
       const hit = cards.get(key);
       if (hit && Date.now() - hit.at < CARD_TTL_MS) return hit.png;
@@ -93,7 +107,10 @@ export function startServer(chains: ChainRuntime[], port: number) {
       // ---- the API
       if (url.pathname.startsWith("/api/")) {
         const { status, body, type } = await handleApi(scope, url.pathname.slice("/api/".length) + url.search);
-        return send(status, type ?? "application/json", body, { "access-control-allow-origin": "*" });
+        return send(status, type ?? "application/json", body, {
+          "access-control-allow-origin": "*",
+          "access-control-expose-headers": "retry-after, ratelimit-limit, ratelimit-remaining, ratelimit-reset",
+        });
       }
 
       // ---- content-addressed images, from our gateway cache (see gateway.ts). Immutable by
@@ -192,8 +209,8 @@ export function startServer(chains: ChainRuntime[], port: number) {
               try {
                 const q = `from=${window.from}&to=${window.to}`;
                 const [o, w] = await Promise.all([
-                  fetch(`https://${s.host}/api/stats/overview?${q}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.json()),
-                  fetch(`https://${s.host}/api/stats/series?metric=identities&bucket=week&${q}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.json()),
+                  fetch(`https://${s.host}/api/stats/overview?${q}`, { signal: AbortSignal.timeout(4000), headers: ownKey }).then((r) => r.json()),
+                  fetch(`https://${s.host}/api/stats/series?metric=identities&bucket=week&${q}`, { signal: AbortSignal.timeout(4000), headers: ownKey }).then((r) => r.json()),
                 ]);
                 return { identities: o.figures.identities.value as number, projects: o.figures.projects.value as number, attestations: o.figures.attestations.value as number, weekly: w.series[0].points as { t: string; v: number }[] };
               } catch {

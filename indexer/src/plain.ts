@@ -176,6 +176,8 @@ export function llmsTxt(origin: string, scope: Scope[]): string {
 
 Everything below is a plain GET that answers JSON. No key, no sign-in, CORS open. The site's pages show the same data.
 
+Fair use: 300 requests a minute per address, in bursts of up to 60. Every answer carries \`RateLimit-Remaining\` and \`RateLimit-Reset\`; over the limit you get a 429 with \`Retry-After\` (seconds). Lists answer 25 rows a page (\`limit\` up to 200, \`offset\` to page through). If you need more than that, ask.
+
 ${several ? "This site covers several chains. Every row says which chain it's on, and `?chain=<slug>` on any request narrows it to one (or a comma-separated few)." : `This site covers ${scope[0]?.label ?? "one chain"}.`}
 
 ${chains}

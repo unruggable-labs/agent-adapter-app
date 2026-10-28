@@ -14,8 +14,10 @@ import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
  *    search?q= · address/<addr> · wallet/<addr> · txref/<hash> · attestations[?limit&offset&type&standard&attester&ubid]
  *    collections[?limit&offset&q&sort=newest] · collection/<addr> (its tokens: identities?bound=<addr>)
  *    attestation/<id> · stats/overview?from&to · stats/series?metric&bucket&from&to&by&project · stats/projects?...[&format=csv]
- *  `identities` and `attestations` with no query string return the whole list, as they always
- *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts.
+ *  `identities` and `attestations` answer a page: { items, total, offset, limit }, 25 rows unless
+ *  `limit` says otherwise (at most 200). See queries.ts. They used to answer the whole registry
+ *  with no query string; at tens of thousands of records that was one request costing as much as
+ *  thousands, so it's a page too now.
  *  `stats/*` is per chain: with several chains it needs `?chain=` to name one. */
 
 export interface ApiChain extends ChainScope {
@@ -94,8 +96,7 @@ export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiRe
     };
   }
   if (head === "identities") {
-    if (params.size > 0) return { status: 200, body: toJson(listIdentities(chains, params)) };
-    return { status: 200, body: toJson(chains.flatMap((c) => [...c.store.identities.values()].map((id) => ({ ...c.views.view(id), chain: c.slug })))) };
+    return { status: 200, body: toJson(listIdentities(chains, params)) };
   }
   if (head === "collections") {
     return { status: 200, body: toJson(listCollections(chains, params)) };
@@ -181,20 +182,8 @@ export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiRe
     return { status: 200, body: toJson(v) };
   }
   if (head === "attestations") {
-    if (params.size > 0) return { status: 200, body: toJson(listAttestations(chains, params)) };
-    return {
-      status: 200,
-      body: toJson(
-        chains.flatMap((c) =>
-          [...c.store.attestations.values()].map((a) => ({
-            ...a,
-            chain: c.slug,
-            typeName: ATTESTATION_TYPE_NAMES[a.attestationType],
-            resolved: c.store.identities.has(a.ubid),
-          })),
-        ),
-      ),
-    };
+    return { status: 200, body: toJson(listAttestations(chains, params)) };
   }
+
   return { status: 404, body: toJson({ error: "not found" }) };
 }

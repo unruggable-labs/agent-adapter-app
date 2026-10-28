@@ -93,8 +93,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    // A hidden tab doesn't poll; it catches up the moment it is looked at again.
-    const t = setInterval(() => !document.hidden && refresh(), 4000);
+    // A hidden tab doesn't poll; it catches up the moment it is looked at again. Every 12 s while
+    // it's in view: the indexer reads new blocks every 12-30 s, so sooner shows nothing new, and
+    // every visitor's poll counts toward the API's per-address limit (indexer/src/ratelimit.ts).
+    const t = setInterval(() => !document.hidden && refresh(), 12_000);
     const onShow = () => !document.hidden && refresh();
     document.addEventListener("visibilitychange", onShow);
     return () => {
