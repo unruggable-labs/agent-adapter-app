@@ -924,7 +924,12 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 a.tile:hover { border-color: var(--border-strong); transform: translateY(-1px); }
 .tile.is-loading { aspect-ratio: 1 / 1.22; background: var(--surface-2); animation: skel-pulse 1.4s ease-in-out infinite; }
-.tile-img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface-2); image-rendering: auto; }
+.tile-img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface-2); }
+/* A picture on its way: the square pulses, then the picture fades in over it. */
+.tile-img-frame { position: relative; overflow: hidden; }
+.tile-img-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.25s ease; }
+.tile-img-frame img.is-loaded { opacity: 1; }
+.tile-img-frame.is-pulsing { animation: skel-pulse 1.4s ease-in-out infinite; }
 .tile-body { display: flex; flex-direction: column; gap: 4px; padding: 9px 11px 10px; border-top: 1px solid var(--border); }
 .tile-name { font-weight: 550; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-meta { font-size: 11.5px; color: var(--text-3); gap: 6px; }
@@ -932,4 +937,4 @@ a.tile:hover { border-color: var(--border-strong); transform: translateY(-1px); 
 .collection-pic { flex: 0 0 96px; width: 96px; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--border); }
 .collection-desc { color: var(--text-2); font-size: 13px; margin: 6px 0 0; max-width: 720px; white-space: pre-line; }
 @media (max-width: 620px) { .collection-pic { flex-basis: 64px; width: 64px; } }
-@media (prefers-reduced-motion: reduce) { .tile.is-loading { animation: none; } a.tile:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tile.is-loading, .tile-img-frame.is-pulsing { animation: none; } .tile-img-frame img { transition: none; } a.tile:hover { transform: none; } }

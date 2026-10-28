@@ -22,12 +22,11 @@ import { StatsPage } from "./pages/Stats";
 function NavItem({ to, label, count }: { to: string; label: string; count?: number }) {
   const { route, navigate } = useApp();
   // Identities is home: "/" and every profile page light it up. A statement's page lights up
-  // Attestations, the list it was opened from, and a collection's page Collections.
+  // Attestations, the list it was opened from.
   const active =
     route === to ||
     (to === "/identities" && (route === "/" || route.startsWith("/identity"))) ||
     (to === "/attestations" && route.startsWith("/attestation")) ||
-    (to === "/collections" && route.startsWith("/collection")) ||
     (to !== "/identities" && route.startsWith(to));
   return (
     <button className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(to)}>
@@ -162,7 +161,6 @@ function Shell() {
 
         <div className="nav-label">Registry</div>
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
-        <NavItem to="/collections" label="Collections" />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
 
         <div className="sidebar-foot">

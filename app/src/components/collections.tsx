@@ -8,11 +8,27 @@ import { markBackground, registrationOf, RegistrationMark } from "./ui";
 /** Where a collection's page is. A contract is a collection on one chain, so the chain is in the path. */
 export const collectionPath = (c: { chain: string; address: string }) => `/collection/${c.chain}/${c.address}`;
 
-/** A square picture that fills its tile, or the seed's mark where there is none (or it won't load). */
+/** A square picture that fills its tile, or the seed's mark where there is none (or it won't load).
+ *  The square pulses until the picture arrives, then the picture fades in over it. */
 export function TileImage({ image, seed }: { image: string | null | undefined; seed: string }) {
-  const [broken, setBroken] = useState(false);
-  if (image && !broken) return <img className="tile-img" src={image} alt="" loading="lazy" onError={() => setBroken(true)} />;
-  return <span className="tile-img" aria-hidden style={{ background: markBackground(seed) }} />;
+  // Which picture finished, and how: a new picture is loading until it says otherwise.
+  const [done, setDone] = useState<{ src: string; ok: boolean } | null>(null);
+  const state = done && done.src === image ? (done.ok ? "loaded" : "broken") : "loading";
+  if (!image || state === "broken") return <span className="tile-img" aria-hidden style={{ background: markBackground(seed) }} />;
+  return (
+    <span className={`tile-img tile-img-frame${state === "loading" ? " is-pulsing" : ""}`}>
+      <img
+        // A cached picture can finish before React attaches onLoad: check once it's in the page.
+        ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === "loading") setDone({ src: image, ok: true }); }}
+        className={state === "loaded" ? "is-loaded" : undefined}
+        src={image}
+        alt=""
+        loading="lazy"
+        onLoad={() => setDone({ src: image, ok: true })}
+        onError={() => setDone({ src: image, ok: false })}
+      />
+    </span>
+  );
 }
 
 /** A collection as a tile: its picture, name, chain and how many agents are bound to it. */
