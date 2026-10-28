@@ -31,14 +31,16 @@ const GATEWAYS: Record<Scheme, string[]> = {
     "https://4everland.io/ipfs/",
     "https://ipfs.filebase.io/ipfs/",
   ],
-  ar: ["https://arweave.net/", "https://ar-io.net/"],
+  // ar-io.net stopped resolving in 2026; ardrive.net is slower (seconds) but serves the same data.
+  ar: ["https://arweave.net/", "https://ardrive.net/"],
 };
 
 const TIMEOUT_MS = 8_000;
 const MAX_BYTES = 10_000_000;
 /** A gateway that rate-limits or errors rests this long before it is tried again. */
 const COOLDOWN_MS = 5 * 60_000;
-/** A path no gateway could serve is not asked again for this long. */
+/** A path the gateways answered they don't have is not asked again for this long. A path we
+ *  couldn't ask about (every gateway resting or failing) is not remembered at all. */
 const MISS_TTL_MS = 10 * 60_000;
 /** Upstream fetches in flight at once, across every caller - a page of 25 avatars must not become 25 parallel gateway hits. */
 const MAX_CONCURRENT = 6;
@@ -61,6 +63,10 @@ export function configureGatewayCache(dir: string): void {
 /** Tests swap the network out. */
 export function setGatewayFetch(f: typeof fetch): void {
   fetchImpl = f;
+}
+/** Tests: the gateways are back from their rest. */
+export function resetGatewayCooldowns(): void {
+  cooldown.clear();
 }
 export function resetGatewayState(): void {
   cacheDir = null;
@@ -101,9 +107,9 @@ export async function fetchContent(scheme: Scheme, path: string): Promise<Conten
   const running = inflight.get(key);
   if (running) return running;
   const task = withSlot(() => fetchFromGateways(scheme, path))
-    .then(async (got) => {
+    .then(async ({ got, answered }) => {
       if (got) await writeCache(key, got);
-      else {
+      else if (answered) {
         if (misses.size > 10_000) misses.clear();
         misses.set(key, Date.now());
       }
@@ -114,28 +120,38 @@ export async function fetchContent(scheme: Scheme, path: string): Promise<Conten
   return task;
 }
 
-async function fetchFromGateways(scheme: Scheme, path: string): Promise<Content | null> {
+/** What the gateways gave, and whether any of them actually answered for this path - a "not
+ *  here" is an answer; a rate limit, a 5xx, a timeout or a gateway we skipped while it rests is not. */
+async function fetchFromGateways(scheme: Scheme, path: string): Promise<{ got: Content | null; answered: boolean }> {
   const now = Date.now();
+  let answered = false;
   for (const base of GATEWAYS[scheme]) {
     if ((cooldown.get(base) ?? 0) > now) continue;
     try {
       const res = await fetchImpl(base + path, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "follow" });
       if (res.status === 429 || res.status >= 500) {
-        cooldown.set(base, Date.now() + COOLDOWN_MS);
+        cooldown.set(base, Date.now() + restFor(res));
         continue;
       }
+      answered = true;
       if (!res.ok) continue; // a 404 here may be a 200 elsewhere - content propagates unevenly
       const length = Number(res.headers.get("content-length") ?? 0);
-      if (length > MAX_BYTES) return null;
+      if (length > MAX_BYTES) return { got: null, answered };
       const body = Buffer.from(await res.arrayBuffer());
-      if (body.length > MAX_BYTES) return null;
+      if (body.length > MAX_BYTES) return { got: null, answered };
       const type = (res.headers.get("content-type") ?? "application/octet-stream").split(";")[0].trim();
-      return { body, type };
+      return { got: { body, type }, answered };
     } catch {
       cooldown.set(base, Date.now() + COOLDOWN_MS / 5); // a timeout rests it briefly
     }
   }
-  return null;
+  return { got: null, answered };
+}
+
+/** How long a gateway that pushed back rests: what its Retry-After asks (10 s to the full rest), else the full rest. */
+function restFor(res: Response): number {
+  const seconds = Number(res.headers.get("retry-after"));
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(COOLDOWN_MS, Math.max(10_000, seconds * 1000)) : COOLDOWN_MS;
 }
 
 // ---- a small concurrency gate

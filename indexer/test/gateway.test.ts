@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { configureGatewayCache, fetchContent, parseContentUri, proxyPath, resetGatewayState, setGatewayFetch } from "../src/gateway.js";
+import { configureGatewayCache, fetchContent, parseContentUri, proxyPath, resetGatewayCooldowns, resetGatewayState, setGatewayFetch } from "../src/gateway.js";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const reply = (status: number, body: Buffer = Buffer.alloc(0), type = "image/png") =>
@@ -62,6 +62,20 @@ describe("content gateway", () => {
     expect(asked).toBeGreaterThan(1); // every gateway was tried
     expect(await fetchContent("ipfs", "bafymissing")).toBeNull();
     expect(calls.length).toBe(asked); // remembered as a miss
+  });
+
+  it("doesn't remember a miss it never asked about: every gateway was resting or failing", async () => {
+    let limited = true;
+    setGatewayFetch(async (input) => {
+      calls.push(String(input));
+      return limited ? reply(429, Buffer.from("slow down"), "text/plain") : reply(200, png);
+    });
+    expect(await fetchContent("ar", "busy")).toBeNull();
+    expect(calls).toEqual(["https://arweave.net/busy", "https://ardrive.net/busy"]);
+    // Once the gateways are back, the same path is asked again rather than held as a miss.
+    limited = false;
+    resetGatewayCooldowns();
+    expect(await fetchContent("ar", "busy")).toEqual({ body: png, type: "image/png" });
   });
 
   it("dedupes concurrent requests for one address", async () => {
