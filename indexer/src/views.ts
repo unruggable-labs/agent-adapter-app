@@ -67,6 +67,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO32 = `0x${"00".repeat(32)}`;
 const OWNER_OF_ABI = [{ type: "function", name: "ownerOf", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }] }] as const;
 const OWNER_ABI = [{ type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const;
+const REGISTRY_ABI = [{ type: "function", name: "identityRegistry", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const;
 type ContractCall = { address: Address; abi: typeof OWNER_OF_ABI | typeof OWNER_ABI; functionName: "ownerOf" | "owner"; args?: readonly [bigint] };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** One-call-each reads in flight at once, where there is no Multicall3: a metered RPC counts requests per second. */
@@ -110,6 +111,19 @@ export class ViewCache {
 
   /** Whether holder reads go through Multicall3. Off where the chain has none, or once it failed. */
   private multicall: boolean;
+
+  /** The ERC-8004 registry the adapter mints on, read from the adapter once it answers. */
+  private registryAddress: Address | null = null;
+  private async registry(): Promise<Address | null> {
+    if (this.registryAddress) return this.registryAddress;
+    try {
+      const a = (await this.client.readContract({ address: this.store.adapter, abi: REGISTRY_ABI, functionName: "identityRegistry" })) as Address;
+      if (a && a !== ZERO_ADDRESS) this.registryAddress = a;
+    } catch {
+      // the RPC or an adapter without it: cards go without the registry's URI, and the next batch asks again
+    }
+    return this.registryAddress;
+  }
 
   /** Start the worker. The tick only matters when the queue has drained: a finished read pumps the next. */
   start() {
@@ -167,7 +181,8 @@ export class ViewCache {
   /** The cheap part of a view - labels, holder, card - for listing and searching without folding the reputation. */
   summary(id: IdentityState) {
     const c = this.advisories.contract(id.boundAddress);
-    return { ...labelsFrom(c?.name ?? null, id), holder: this.holder(id), card: this.cardOf(id) };
+    const card = this.cardOf(id);
+    return { ...labelsFrom(c?.name ?? null, id, card?.agentName), holder: this.holder(id), card };
   }
 
   /** The view, now, from what is stored. Never reads the chain. */
@@ -177,7 +192,7 @@ export class ViewCache {
     const card = this.cardOf(id);
     return {
       ...id,
-      ...labelsFrom(c?.name ?? null, id),
+      ...labelsFrom(c?.name ?? null, id, card?.agentName),
       // The token's own picture; the collection's where the token has none (yet).
       image: card?.image ?? c?.collection?.image ?? null,
       card,
@@ -237,10 +252,11 @@ export class ViewCache {
     }
 
     const cards = new Map<Hex, CardFact>();
+    const registry = await this.registry();
     await Promise.all(
       ids
         .filter((id) => everything || this.cardDue(id, now))
-        .map(async (id) => cards.set(id.ubid, { key: cardKey(id), card: await resolveCard(this.client, id), at: Date.now() })),
+        .map(async (id) => cards.set(id.ubid, { key: cardKey(id), card: await resolveCard(this.client, id, registry), at: Date.now() })),
     );
 
     this.advisories.write({ holders, contracts, cards });

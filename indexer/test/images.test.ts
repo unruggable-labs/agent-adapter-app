@@ -23,6 +23,7 @@ function identity(over: Partial<IdentityState>): IdentityState {
     boundAddress: `0x${(n + 0x1000).toString(16).padStart(40, "0")}`,
     tokenId: 7n,
     agentURI: null,
+    agentIds: [],
     metadata: new Map(),
     ...over,
   } as IdentityState;
@@ -77,6 +78,22 @@ describe("identity images", () => {
       name: "Punk #7",
       description: "Trades punks, politely.",
       source: "token",
+      agentName: "PunkBot",
     });
+  });
+
+  it("reads a minted agent's registration file from the registry when the adapter never emitted its URI", async () => {
+    const registry = "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432";
+    const asked: unknown[] = [];
+    const c = {
+      readContract: async ({ address, args }: { address: string; args: readonly unknown[] }) => {
+        if (address !== registry) return json({ name: "Normie #93", image: "https://normies.example/93.png" });
+        asked.push(args[0]);
+        return json({ name: "Normie #93 - Mina", description: "Chain-native dreamer." });
+      },
+    } as unknown as PublicClient;
+    const card = await resolveCard(c, identity({ tokenId: 93n, agentIds: [32340n] }), registry);
+    expect(asked).toEqual([32340n]);
+    expect(card).toMatchObject({ name: "Normie #93", agentName: "Normie #93 - Mina", image: "https://normies.example/93.png", description: "Chain-native dreamer." });
   });
 });

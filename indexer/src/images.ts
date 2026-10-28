@@ -24,25 +24,31 @@ export interface Card {
   description: string | null;
   /** Which document it came from. */
   source: "token" | "agent";
+  /** The `name` in the agent's own registration file, which can differ from the token's: what the
+   *  agent is called, where the token's name is what the NFT is called. */
+  agentName?: string | null;
 }
 
 const TOKEN_URI_ABI = [{ type: "function", name: "tokenURI", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
 const URI_ABI = [{ type: "function", name: "uri", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
 
-/** What a card is resolved from. A record whose key changed (a new agent URI) has a stale card. */
+/** What a card is resolved from. A record whose key changed (a new agent URI) has a stale card.
+ *  The leading version is bumped when what a card holds changes, so every stored card is read again. */
 export function cardKey(id: IdentityState): string {
-  return `${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
+  return `2:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
 }
 
-/** Read the card from the chain and the web, now. The view worker's call; never a request's. */
-export async function resolveCard(client: PublicClient, id: IdentityState): Promise<Card | null> {
-  return resolve(client, id).catch(() => null);
+/** Read the card from the chain and the web, now. The view worker's call; never a request's.
+ *  `registry` is the ERC-8004 registry the adapter mints on, for agents whose URI it never emitted. */
+export async function resolveCard(client: PublicClient, id: IdentityState, registry: Address | null = null): Promise<Card | null> {
+  return resolve(client, id, registry).catch(() => null);
 }
 
-async function resolve(client: PublicClient, id: IdentityState): Promise<Card | null> {
+async function resolve(client: PublicClient, id: IdentityState, registry: Address | null): Promise<Card | null> {
   const tokenUri = await tokenMetadataUri(client, id).catch(() => null);
   const token = tokenUri ? await cardIn(tokenUri, "token").catch(() => null) : null;
-  const agent = id.agentURI ? await cardIn(id.agentURI, "agent").catch(() => null) : null;
+  const agentUri = id.agentURI ?? (await registryUri(client, id, registry).catch(() => null));
+  const agent = agentUri ? await cardIn(agentUri, "agent").catch(() => null) : null;
   if (!token && !agent) return null;
   // The token's card leads; the agent card fills anything it left blank.
   return {
@@ -50,7 +56,21 @@ async function resolve(client: PublicClient, id: IdentityState): Promise<Card | 
     name: token?.name ?? agent?.name ?? null,
     description: token?.description ?? agent?.description ?? null,
     source: token ? "token" : "agent",
+    agentName: agent?.name ?? null,
   };
+}
+
+/**
+ * The agent's URI as the ERC-8004 registry has it. `register(..., agentURI)` hands the URI to the
+ * registry, which says so in its own event; the adapter's AgentBound doesn't carry it, so a
+ * minted agent's registration file is only on the registry until an AgentURISet. The newest
+ * agent id is the one the binding points at now.
+ */
+async function registryUri(client: PublicClient, id: IdentityState, registry: Address | null): Promise<string | null> {
+  const agentId = id.agentIds.at(-1);
+  if (!registry || agentId === undefined) return null;
+  const uri = (await client.readContract({ address: registry, abi: TOKEN_URI_ABI, functionName: "tokenURI", args: [agentId] })) as string;
+  return uri || null;
 }
 
 /** Where a token's metadata lives, per standard. ERC-1155 URIs may carry a `{id}` slot that takes

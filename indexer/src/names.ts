@@ -7,7 +7,8 @@ import { ACCOUNT_STANDARDS } from "./ubid.js";
  *  - subjectLabel: what the bound thing is called — collection `name()` + token id for token
  *    subjects, the contract's `name()` (or short address) for account subjects.
  *  - agentName: what the agent calls itself — the identity's own `name` metadata entry, when
- *    it decodes as printable UTF-8. Claims, not truth: it is caller-supplied like the rest.
+ *    it decodes as printable UTF-8, else the `name` in its registration file (the agent card).
+ *    Claims, not truth: it is caller-supplied like the rest.
  */
 
 /** The collection or contract's `name()`, from the chain. The view worker reads it and keeps it in the advisory store. */
@@ -51,14 +52,15 @@ function decodeUtf8Metadata(value: `0x${string}` | undefined): string | null {
   }
 }
 
-/** The labels, given the contract's name (or null while it is unknown). No chain reads: callers
- *  pass the name the worker fetched, so a request never waits on one. */
+/** The labels, given the contract's name (or null while it is unknown) and the agent card's name.
+ *  No chain reads: callers pass what the worker fetched, so a request never waits on one. */
 export function labelsFrom(
   name: string | null,
   id: IdentityState,
+  cardName: string | null = null,
 ): { subjectLabel: string; agentName: string | null; contractName: string | null } {
   const subjectLabel = ACCOUNT_STANDARDS.has(id.standard)
     ? (name ?? `Account ${short(id.boundAddress)}`)
     : `${name ?? short(id.boundAddress)} #${shortTokenId(id.tokenId)}`;
-  return { subjectLabel, agentName: decodeUtf8Metadata(id.metadata.get("name")), contractName: name };
+  return { subjectLabel, agentName: decodeUtf8Metadata(id.metadata.get("name")) ?? cardName, contractName: name };
 }
