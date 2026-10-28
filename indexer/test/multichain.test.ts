@@ -2,7 +2,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, describe, expect, it } from "vitest";
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore, type LogEvent, type OrderKey } from "../src/projection.js";
-import { addressView, attestationView, listAttestations, listIdentities, search, type ChainScope } from "../src/queries.js";
+import { addressView, attestationView, collectionView, listAttestations, listCollections, listIdentities, search, type ChainScope } from "../src/queries.js";
 import { ChainRuntime } from "../src/runtime.js";
 import { startServer } from "../src/server.js";
 import { handleApi, type ApiChain } from "../src/service.js";
@@ -91,6 +91,32 @@ describe("several chains", () => {
       ["slow", true],
       ["fast", false],
     ]);
+  });
+
+  it("lists collections per chain, the most identities first, without account bindings", () => {
+    const page = listCollections(chains, p({ limit: "10" }));
+    // PUNKS on each chain is its own collection; BOB's ACCOUNT record is no collection.
+    expect(page.total).toBe(2);
+    expect(page.items.map((r) => [r.chain, r.identities])).toEqual([
+      ["fast", 2],
+      ["slow", 1],
+    ]);
+    expect(page.items[0]).toMatchObject({ address: PUNKS, standardName: "ERC721", registered: 0 });
+    // Newest first: the slow chain's token (t = 1120) is older than the fast chain's newest (t = 1200).
+    expect(listCollections(chains, p({ sort: "newest" })).items.map((r) => r.chain)).toEqual(["fast", "slow"]);
+    expect(listCollections(chains, p({ q: "0xcf7e" })).total).toBe(2);
+    expect(listCollections(chains, p({ q: "nothing like it" })).total).toBe(0);
+    expect(collectionView(chains, PUNKS.toUpperCase().replace("0X", "0x")).map((r) => r.chain)).toEqual(["slow", "fast"]);
+    expect(collectionView(chains, BOB)).toEqual([]);
+  });
+
+  it("the collection API: a page, one collection, 404 for a contract nothing is bound to", async () => {
+    const list = JSON.parse((await handleApi(chains as ApiChain[], "collections?limit=5")).body);
+    expect(list.total).toBe(2);
+    const one = await handleApi(chains as ApiChain[], `collection/${PUNKS}?chain=fast`);
+    expect(JSON.parse(one.body).collections.map((r: { chain: string }) => r.chain)).toEqual(["fast"]);
+    expect((await handleApi(chains as ApiChain[], `collection/${BOB}`)).status).toBe(404);
+    expect((await handleApi(chains as ApiChain[], "collection/nope")).status).toBe(400);
   });
 
   it("searches every chain, an address once", () => {

@@ -1,4 +1,5 @@
 import { ChainFilter, ChainTag, useChainParam } from "../components/chains";
+import { CollectionTile } from "../components/collections";
 import { Addr, ControllerCell, Pager, registrationOf, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
@@ -31,6 +32,7 @@ export function IdentitiesPage() {
       </p>
 
       <StatPanels />
+      {page === 0 && !chain && <CollectionStrip />}
       {IS_HUB && <div style={{ marginBottom: 12 }}><ChainFilter /></div>}
 
       <div className="card card-table table-scroll">
@@ -81,6 +83,29 @@ export function IdentitiesPage() {
           <span />
         )}
         <Pager offset={page * PAGE_SIZE} limit={PAGE_SIZE} total={total} onChange={(o) => setPage(o / PAGE_SIZE)} />
+      </div>
+    </div>
+  );
+}
+
+const STRIP = 6;
+
+/**
+ * The biggest collections, as pictures, on the first page: a way in that isn't a table. Picked by
+ * the numbers (the most agents), not by hand. Draws nothing until there are some.
+ */
+function CollectionStrip() {
+  const { navigate } = useApp();
+  const { data } = useLive(() => api.collections({ limit: STRIP }), []);
+  if (data && data.items.length === 0) return null;
+  return (
+    <div style={{ margin: "4px 0 18px" }}>
+      <div className="row spread" style={{ marginBottom: 8 }}>
+        <div className="section-label" style={{ margin: 0 }}>Top collections</div>
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate("/collections")}>All {data ? data.total.toLocaleString() : ""} collections →</button>
+      </div>
+      <div className="tile-grid tile-strip">
+        {data ? data.items.map((c) => <CollectionTile key={`${c.chain}:${c.address}`} c={c} />) : Array.from({ length: STRIP }, (_, i) => <div key={i} className="tile is-loading" />)}
       </div>
     </div>
   );

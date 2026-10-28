@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { AttestationRecord, IdentityState, OrderKey, ProjectionStore } from "./projection.js";
-import { ATTESTATION_TYPE_NAMES, AttestationType, Standard, STANDARD_NAMES } from "./ubid.js";
+import { ACCOUNT_STANDARDS, ATTESTATION_TYPE_NAMES, AttestationType, Standard, STANDARD_NAMES } from "./ubid.js";
 import type { IdentityView, ViewCache } from "./views.js";
 
 /**
@@ -301,4 +301,98 @@ export function addressView(chains: ChainScope[], raw: string) {
     statements: statements.map(({ c, row }) => attestationRow(c, row)),
     byChain: byChain.filter((b) => present.has(b.chain)).map(({ chain, self, operates }) => ({ chain, self, operates })),
   };
+}
+
+/**
+ * A collection: a token contract identities are bound to, on one chain. Its name and picture are
+ * what the contract says about itself (contractURI, else name()), with its newest tokens'
+ * pictures for a preview. Account-style bindings (an address, a contract's owner or admins) are
+ * not collections: they are one identity each, and their address page says what they are.
+ */
+export interface CollectionRow {
+  chain: string;
+  address: Address;
+  name: string;
+  description: string | null;
+  image: string | null;
+  externalLink: string | null;
+  /** The standard most of its identities are bound under. */
+  standardName: string;
+  identities: number;
+  /** Identities with an ERC-8004 agent minted. */
+  registered: number;
+  /** Up to four of its newest tokens' pictures. */
+  previews: string[];
+  /** Its newest identity. */
+  latest: OrderKey;
+}
+
+const PREVIEWS = 4;
+
+/** Every collection on these chains, unsorted. One pass over the identities: cheap reads only (summary). */
+function collections(chains: ChainScope[]): { c: ChainScope; row: CollectionRow }[] {
+  const out: { c: ChainScope; row: CollectionRow }[] = [];
+  for (const c of chains) {
+    const groups = new Map<Address, IdentityState[]>();
+    for (const id of c.store.identities.values()) {
+      if (ACCOUNT_STANDARDS.has(id.standard)) continue;
+      const g = groups.get(id.boundAddress);
+      if (g) g.push(id);
+      else groups.set(id.boundAddress, [id]);
+    }
+    for (const [address, ids] of groups) out.push({ c, row: collectionRow(c, address, ids) });
+  }
+  return out;
+}
+
+function collectionRow(c: ChainScope, address: Address, ids: IdentityState[]): CollectionRow {
+  const facts = c.views.advisories.contract(address);
+  const newest = [...ids].sort((a, b) => newestFirst(a.created, b.created));
+  const previews: string[] = [];
+  for (const id of newest) {
+    const image = c.views.summary(id).card?.image;
+    if (image && !previews.includes(image)) previews.push(image);
+    if (previews.length === PREVIEWS) break;
+  }
+  const byStandard = new Map<number, number>();
+  for (const id of ids) byStandard.set(id.standard, (byStandard.get(id.standard) ?? 0) + 1);
+  const standard = [...byStandard].sort((a, b) => b[1] - a[1])[0][0];
+  return {
+    chain: c.slug,
+    address,
+    name: facts?.collection?.name ?? facts?.name ?? `${address.slice(0, 6)}…${address.slice(-4)}`,
+    description: facts?.collection?.description ?? null,
+    image: facts?.collection?.image ?? previews[0] ?? null,
+    externalLink: facts?.collection?.externalLink ?? null,
+    standardName: STANDARD_NAMES[standard],
+    identities: ids.length,
+    registered: ids.filter((i) => i.agentIds.length > 0).length,
+    previews,
+    latest: newest[0].created,
+  };
+}
+
+/**
+ * A page of collections, the biggest first (most identities; a tie goes to the one with the
+ * newer identity). `sort=newest` puts the one with the newest identity first. `q` matches the
+ * name or the address.
+ */
+export function listCollections(chains: ChainScope[], p: URLSearchParams): Page<CollectionRow> {
+  const { limit, offset } = paging(p);
+  const q = p.get("q")?.trim().toLowerCase();
+  let rows = collections(chains);
+  if (q) rows = rows.filter(({ row }) => row.address.startsWith(q) || row.name.toLowerCase().includes(q));
+  const time = ({ c, row }: { c: ChainScope; row: CollectionRow }) => c.timeOf(row.latest) ?? 0;
+  const newer = (a: (typeof rows)[number], b: (typeof rows)[number]) => time(b) - time(a) || newestFirst(a.row.latest, b.row.latest);
+  rows.sort(p.get("sort") === "newest" ? newer : (a, b) => b.row.identities - a.row.identities || newer(a, b));
+  return { items: rows.slice(offset, offset + limit).map(({ row }) => row), total: rows.length, offset, limit };
+}
+
+/** One contract as a collection, on each chain it is one on. Empty when it is nowhere. */
+export function collectionView(chains: ChainScope[], raw: string): CollectionRow[] {
+  const address = raw.toLowerCase() as Address;
+  return chains.flatMap((c) => {
+    const ids = [...c.store.identities.values()].filter((i) => i.boundAddress === address && !ACCOUNT_STANDARDS.has(i.standard));
+    return ids.length ? [collectionRow(c, address, ids)] : [];
+  });
 }

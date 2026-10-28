@@ -908,3 +908,28 @@ input, textarea, select { font: inherit; color: inherit; }
   .docs-pager { flex-direction: column; gap: 8px; }
   .chains-card { padding: 20px 16px; }
 }
+
+/* ------------------------------------------------------------------ collections
+   Pictures first: a collection, and its tokens, as a grid of square tiles. */
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+/* The home strip: one row of the biggest, never a second. */
+.tile-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .tile-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); } .tile-strip > :nth-child(n + 5) { display: none; } }
+@media (max-width: 620px) { .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .tile-strip > :nth-child(n + 3) { display: none; } }
+.tile {
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1); overflow: hidden; color: inherit; text-decoration: none;
+  transition: border-color 0.12s, transform 0.12s;
+}
+a.tile:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.tile.is-loading { aspect-ratio: 1 / 1.22; background: var(--surface-2); animation: skel-pulse 1.4s ease-in-out infinite; }
+.tile-img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface-2); image-rendering: auto; }
+.tile-body { display: flex; flex-direction: column; gap: 4px; padding: 9px 11px 10px; border-top: 1px solid var(--border); }
+.tile-name { font-weight: 550; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-meta { font-size: 11.5px; color: var(--text-3); gap: 6px; }
+.collection-head { display: flex; gap: 18px; align-items: flex-start; }
+.collection-pic { flex: 0 0 96px; width: 96px; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--border); }
+.collection-desc { color: var(--text-2); font-size: 13px; margin: 6px 0 0; max-width: 720px; white-space: pre-line; }
+@media (max-width: 620px) { .collection-pic { flex-basis: 64px; width: 64px; } }
+@media (prefers-reduced-motion: reduce) { .tile.is-loading { animation: none; } a.tile:hover { transform: none; } }

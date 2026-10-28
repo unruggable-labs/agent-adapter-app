@@ -198,6 +198,32 @@ export interface AddressView {
   byChain?: { chain: string; self: Identity | null; operates: { identity: Identity; verified: boolean } | null }[];
 }
 
+/** A token contract identities are bound to, on one chain - see /api/collections. */
+export interface CollectionRow {
+  chain: string;
+  address: Address;
+  /** What it calls itself: its contractURI name, else name(), else the short address. */
+  name: string;
+  description: string | null;
+  /** Its own picture, else its newest token's. */
+  image: string | null;
+  externalLink: string | null;
+  standardName: string;
+  identities: number;
+  registered: number;
+  /** Up to four of its newest tokens' pictures. */
+  previews: string[];
+  latest: Order;
+}
+
+export interface CollectionsQuery {
+  chain?: string[];
+  limit?: number;
+  offset?: number;
+  q?: string;
+  sort?: "newest";
+}
+
 export interface IdentitiesQuery {
   /** Only these chains (slugs). */
   chain?: string[];
@@ -323,6 +349,14 @@ export const api = {
   /** A page of identities, newest first. */
   identities: (query: IdentitiesQuery = {}) => get<Page<Identity>>(`/identities${qs(query)}`),
   identity: (ubid: string) => getOrNotFound<Identity>(`/identity/${ubid}`),
+  /** A page of collections, the most identities first. */
+  collections: (query: CollectionsQuery = {}) => get<Page<CollectionRow>>(`/collections${qs(query)}`),
+  /** One contract as a collection on one chain; NotFound when nothing is bound to its tokens there. */
+  collection: (address: string, chain: string) =>
+    getOrNotFound<{ collections: CollectionRow[] }>(`/collection/${address}?chain=${encodeURIComponent(chain)}`).then((r) => {
+      if (!r.collections[0]) throw new NotFound(address);
+      return r.collections[0];
+    }),
   history: (ubid: string) => get<HistoryEntry[]>(`/history/${ubid}`),
   /** A page of statements, newest first, each with the identity it is about. */
   attestations: (query: AttestationsQuery = {}) => get<Page<AttestationRow>>(`/attestations${qs(query)}`),

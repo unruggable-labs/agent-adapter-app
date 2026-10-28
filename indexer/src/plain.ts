@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import { esc } from "./meta.js";
-import { addressView, attestationView, findIdentity, listAttestations, listIdentities, type ChainScope } from "./queries.js";
+import { addressView, attestationView, collectionView, findIdentity, listAttestations, listCollections, listIdentities, type ChainScope } from "./queries.js";
 import { STANDARD_NAMES } from "./ubid.js";
 
 /**
@@ -32,6 +32,8 @@ export function plainBody(scope: Scope[], pathname: string): string | null {
   if ((m = /^\/identity\/(0x[0-9a-fA-F]{64})$/.exec(pathname))) return identity(scope, m[1]);
   if ((m = /^\/address\/(0x[0-9a-fA-F]{40})$/.exec(pathname))) return address(scope, m[1]);
   if ((m = /^\/attestation\/(0x[0-9a-fA-F]{64})$/.exec(pathname))) return attestation(scope, m[1] as Hex);
+  if ((m = /^\/collection\/([a-z0-9-]+)\/(0x[0-9a-fA-F]{40})$/.exec(pathname))) return collection(scope, m[1], m[2]);
+  if (pathname === "/collections") return collectionList(scope);
   if (pathname === "/identities") return identities(scope);
   if (pathname === "/attestations") return attestations(scope);
   if (pathname === "/") return home(scope);
@@ -105,6 +107,29 @@ function attestation(scope: Scope[], id: Hex): string | null {
   );
 }
 
+function collection(scope: Scope[], chain: string, address: string): string | null {
+  const c = scope.find((x) => x.slug === chain);
+  const row = c ? collectionView([c], address)[0] : undefined;
+  if (!c || !row) return null;
+  const tokens = listIdentities([c], new URLSearchParams({ bound: row.address, limit: "25" }));
+  return page(
+    `<h1>${esc(row.name)}</h1>` +
+      (row.description ? `<p>${esc(row.description)}</p>` : "") +
+      `<p>A collection on ${esc(c.label)}: ${plural(row.identities, "agent profile")} bound to its tokens, ${row.registered.toLocaleString("en")} with an ERC-8004 agent minted. Contract ${addr(row.address)}, ${esc(row.standardName)}.</p>` +
+      `<h2>Newest first</h2><ul>${tokens.items.map((i) => `<li>${link(`/identity/${i.ubid}`, i.agentName ?? i.subjectLabel)}</li>`).join("")}</ul>` +
+      json(`/api/identities?bound=${row.address}&chain=${c.slug}&limit=25&offset=0`),
+  );
+}
+
+function collectionList(scope: Scope[]): string {
+  const p = listCollections(scope, new URLSearchParams({ limit: "50" }));
+  return page(
+    `<h1>Collections, the most agents first</h1><p>${plural(p.total, "collection")} with agent profiles across ${chainList(scope)}.</p>` +
+      `<ul>${p.items.map((r) => `<li>${link(`/collection/${r.chain}/${r.address}`, r.name)} on ${esc(labelOf(scope, r.chain))}: ${plural(r.identities, "profile")}</li>`).join("")}</ul>` +
+      json("/api/collections?limit=50&offset=0"),
+  );
+}
+
 function identities(scope: Scope[]): string {
   const p = listIdentities(scope, new URLSearchParams({ limit: "25" }));
   return page(
@@ -129,7 +154,7 @@ function home(scope: Scope[]): string {
   return page(
     `<h1>Adapterscan</h1><p>Profiles and reviews for AI agents. The wallets agents do business with get a lookup: who operates this, and are they any good?</p>` +
       `<p>${plural(ids, "profile")} and ${plural(statements, "statement")} on ${chainList(scope)}.</p>` +
-      `<ul><li>${link("/identities", "Profiles")}</li><li>${link("/attestations", "Statements")}</li><li>${link("/llms.txt", "For agents: the JSON API")}</li><li>${link(DOCS, "Documentation")}</li></ul>`,
+      `<ul><li>${link("/identities", "Profiles")}</li><li>${link("/collections", "Collections")}</li><li>${link("/attestations", "Statements")}</li><li>${link("/llms.txt", "For agents: the JSON API")}</li><li>${link(DOCS, "Documentation")}</li></ul>`,
   );
 }
 
@@ -172,9 +197,11 @@ ${api("attestation/<id>", "one statement, with the fields its id is computed fro
 
 ${api("identities?limit=25&offset=0", "profiles, newest first. Filters: `q`, `standard`, `bound` (a contract), `tokenId`.")}
 ${api("attestations?limit=25&offset=0", "statements, newest first. Filters: `type`, `standard`, `attester`, `ubid`.")}
+${api("collections?limit=25&offset=0", "the collections agent profiles are bound to, the most profiles first: name, picture, counts. `sort=newest` for the newest first, `q` to match a name or address.")}
+${api("collection/<contract>", "one collection, on each chain it's on. Its profiles: `identities?bound=<contract>`.")}
 ${api("overview", "totals, and each chain's figures and indexing status.")}
 
-A UBID is a profile's permanent id: a hash of the chain, the adapter and what the profile is bound to. Pages are at ${origin}/identity/<ubid>, ${origin}/address/<address> and ${origin}/attestation/<id>.
+A UBID is a profile's permanent id: a hash of the chain, the adapter and what the profile is bound to. Pages are at ${origin}/identity/<ubid>, ${origin}/address/<address>, ${origin}/collection/<chain>/<contract> and ${origin}/attestation/<id>.
 
 ## Docs
 

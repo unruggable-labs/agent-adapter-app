@@ -12,6 +12,8 @@ import { appKitEnabled } from "./lib/wagmi";
 import { AddressPage } from "./pages/Address";
 import { AttestationPage } from "./pages/Attestation";
 import { AttestationsPage } from "./pages/Attestations";
+import { CollectionPage } from "./pages/Collection";
+import { CollectionsPage } from "./pages/Collections";
 import { CreatePage } from "./pages/Create";
 import { IdentitiesPage } from "./pages/Identities";
 import { IdentityPage } from "./pages/Identity";
@@ -20,11 +22,12 @@ import { StatsPage } from "./pages/Stats";
 function NavItem({ to, label, count }: { to: string; label: string; count?: number }) {
   const { route, navigate } = useApp();
   // Identities is home: "/" and every profile page light it up. A statement's page lights up
-  // Attestations, the list it was opened from.
+  // Attestations, the list it was opened from, and a collection's page Collections.
   const active =
     route === to ||
     (to === "/identities" && (route === "/" || route.startsWith("/identity"))) ||
     (to === "/attestations" && route.startsWith("/attestation")) ||
+    (to === "/collections" && route.startsWith("/collection")) ||
     (to !== "/identities" && route.startsWith(to));
   return (
     <button className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(to)}>
@@ -132,6 +135,8 @@ function Shell() {
   if (route.startsWith("/identity/")) page = <IdentityPage ubid={route.split("/")[2]} />;
   else if (route.startsWith("/address/")) page = <AddressPage address={route.split("/")[2]} />;
   else if (route.startsWith("/attestations")) page = <AttestationsPage />;
+  else if (route.startsWith("/collections")) page = <CollectionsPage />;
+  else if (route.startsWith("/collection/")) page = <CollectionPage chain={route.split("/")[2]} address={route.split("/")[3] ?? ""} />;
   else if (route.startsWith("/attestation/")) page = <AttestationPage id={route.split("/")[2]} />;
   else if (route.startsWith("/create")) page = <CreatePage />;
   else if (route.startsWith("/stats")) page = HOME_ID ? <StatsPage chains={[HOME_ID]} /> : <StatsPage chains={liveMainnets(overview)} allChains />;
@@ -157,6 +162,7 @@ function Shell() {
 
         <div className="nav-label">Registry</div>
         <NavItem to="/identities" label="Identities" count={overview?.identities} />
+        <NavItem to="/collections" label="Collections" />
         <NavItem to="/attestations" label="Attestations" count={overview?.attestations} />
 
         <div className="sidebar-foot">

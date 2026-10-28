@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { EventLog } from "./eventlog.js";
-import { addressView, attestationView, findIdentity, listAttestations, listIdentities, search, type ChainScope } from "./queries.js";
+import { addressView, attestationView, collectionView, findIdentity, listAttestations, listCollections, listIdentities, search, type ChainScope } from "./queries.js";
 import type { ChainStatus } from "./runtime.js";
 import { BUCKETS, METRICS, overview as statsOverview, projects as statsProjects, projectsCsv, series as statsSeries, windowFrom, type Bucket, type Metric, type ProjectRow } from "./stats.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
@@ -12,6 +12,7 @@ import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
  *  Subpaths are relative, with their query string:
  *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
  *    search?q= · address/<addr> · wallet/<addr> · txref/<hash> · attestations[?limit&offset&type&standard&attester&ubid]
+ *    collections[?limit&offset&q&sort=newest] · collection/<addr> (its tokens: identities?bound=<addr>)
  *    attestation/<id> · stats/overview?from&to · stats/series?metric&bucket&from&to&by&project · stats/projects?...[&format=csv]
  *  `identities` and `attestations` with no query string return the whole list, as they always
  *  did; with any parameter they return a page: { items, total, offset, limit }. See queries.ts.
@@ -95,6 +96,15 @@ export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiRe
   if (head === "identities") {
     if (params.size > 0) return { status: 200, body: toJson(listIdentities(chains, params)) };
     return { status: 200, body: toJson(chains.flatMap((c) => [...c.store.identities.values()].map((id) => ({ ...c.views.view(id), chain: c.slug })))) };
+  }
+  if (head === "collections") {
+    return { status: 200, body: toJson(listCollections(chains, params)) };
+  }
+  if (head === "collection" && arg) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(arg)) return { status: 400, body: toJson({ error: "not an address", address: arg }) };
+    const rows = collectionView(chains, arg);
+    if (!rows.length) return { status: 404, body: toJson({ error: "no identities are bound to this contract's tokens", address: arg.toLowerCase() }) };
+    return { status: 200, body: toJson({ collections: rows }) };
   }
   if (head === "search") {
     return { status: 200, body: toJson({ hits: search(chains, params.get("q") ?? "") }) };

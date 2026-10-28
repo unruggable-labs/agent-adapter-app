@@ -7,7 +7,7 @@ import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import { llmsTxt, plainBody, withBody } from "./plain.js";
 import { fetchContent } from "./gateway.js";
-import { attestationView, findIdentity } from "./queries.js";
+import { attestationView, collectionView, findIdentity, listCollections } from "./queries.js";
 import type { ChainRuntime } from "./runtime.js";
 import { overview as statsOverview, series as statsSeries } from "./stats.js";
 import { handleApi } from "./service.js";
@@ -219,7 +219,13 @@ export function startServer(chains: ChainRuntime[], port: number) {
       if (url.pathname === "/llms.txt") return send(200, "text/plain; charset=utf-8", llmsTxt(origin, scope));
       if (url.pathname === "/robots.txt") return send(200, "text/plain", `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
       if (url.pathname === "/sitemap.xml") {
-        const urls = ["/", "/attestations", ...scope.flatMap((c) => [...c.store.identities.keys()].map((u) => `/identity/${u}`))];
+        const urls = [
+          "/",
+          "/attestations",
+          "/collections",
+          ...listCollections(scope, new URLSearchParams({ limit: "200" })).items.map((r) => `/collection/${r.chain}/${r.address}`),
+          ...scope.flatMap((c) => [...c.store.identities.keys()].map((u) => `/identity/${u}`)),
+        ];
         const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${origin}${u}</loc></url>`).join("\n")}\n</urlset>\n`;
         return send(200, "application/xml", xml);
       }
@@ -281,6 +287,26 @@ export function startServer(chains: ChainRuntime[], port: number) {
             type: "website",
           }));
         }
+      }
+      if ((m = /^\/collection\/([a-z0-9-]+)\/(0x[0-9a-fA-F]{40})$/.exec(url.pathname))) {
+        const c = scope.find((x) => x.slug === m![1]);
+        const row = c ? collectionView([c], m[2])[0] : undefined;
+        if (c && row) {
+          return send(200, "text/html", withMeta(html, {
+            title: `${row.name} · Collection on ${c.label} · Adapterscan`,
+            description: `${row.name} on ${c.label}: ${row.identities.toLocaleString("en")} agent ${row.identities === 1 ? "profile" : "profiles"} bound to its tokens. ${row.description ? row.description.slice(0, 140) : TAGLINE}`,
+            url: pageUrl,
+            image: `${origin}/og/default.png`,
+          }));
+        }
+      }
+      if (url.pathname === "/collections") {
+        return send(200, "text/html", withMeta(html, {
+          title: `Collections${onScope} · Adapterscan`,
+          description: `The collections agent profiles are bound to${onScope}, the most agents first. ${TAGLINE}`,
+          url: pageUrl,
+          image: `${origin}/og/default.png`,
+        }));
       }
       if ((m = /^\/address\/(0x[0-9a-fA-F]{40})$/.exec(url.pathname)) && isAddress(m[1])) {
         const a = m[1].toLowerCase();

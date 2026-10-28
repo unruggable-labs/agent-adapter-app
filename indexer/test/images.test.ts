@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PublicClient } from "viem";
+import { parseCollection } from "../src/collection.js";
 import { resolveCard } from "../src/images.js";
 import type { IdentityState } from "../src/projection.js";
 import { Standard } from "../src/ubid.js";
@@ -95,5 +96,13 @@ describe("identity images", () => {
     const card = await resolveCard(c, identity({ tokenId: 93n, agentIds: [32340n] }), registry);
     expect(asked).toEqual([32340n]);
     expect(card).toMatchObject({ name: "Normie #93", agentName: "Normie #93 - Mina", image: "https://normies.example/93.png", description: "Chain-native dreamer." });
+  });
+});
+
+describe("collection documents", () => {
+  it("keeps an inline image whole, however long", () => {
+    const svg = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${"<rect/>".repeat(1000)}</svg>`).toString("base64")}`;
+    expect(svg.length).toBeGreaterThan(2000);
+    expect(parseCollection({ name: "Delphi", image: svg })?.image).toBe(svg);
   });
 });

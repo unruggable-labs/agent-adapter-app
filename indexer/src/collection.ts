@@ -32,7 +32,8 @@ export function parseCollection(json: unknown): Collection | null {
   if (!json || typeof json !== "object") return null;
   const doc = json as Record<string, unknown>;
   const str = (v: unknown, max: number) => (typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, max) : null);
-  const image = str(doc.image ?? doc.image_url ?? doc.imageUrl, 2000);
+  // An inline data: image (an on-chain SVG) is the whole picture, so it can't be cut like a URL.
+  const image = str(doc.image ?? doc.image_url ?? doc.imageUrl, 200_000);
   const link = str(doc.external_link ?? doc.external_url ?? doc.externalLink, 2000);
   const value: Collection = {
     name: str(doc.name, 80),

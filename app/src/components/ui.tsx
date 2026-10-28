@@ -10,11 +10,6 @@ export function Avatar({ seed, image, size = 26 }: { seed: string; image?: strin
   if (image && !broken) {
     return <img className="avatar-img" src={image} alt="" width={size} height={size} style={{ width: size, height: size }} onError={() => setBroken(true)} />;
   }
-  const a = parseInt(seed.slice(2, 8) || "0", 16);
-  const b = parseInt(seed.slice(8, 14) || "0", 16);
-  const h1 = a % 360;
-  const h2 = (h1 + 50 + (b % 90)) % 360;
-  const angle = (a + b) % 360;
   return (
     <span
       aria-hidden
@@ -24,11 +19,21 @@ export function Avatar({ seed, image, size = 26 }: { seed: string; image?: strin
         borderRadius: "38%",
         flexShrink: 0,
         display: "inline-block",
-        background: `linear-gradient(${angle}deg, hsl(${h1} 72% 58%), hsl(${h2} 70% 42%))`,
+        background: markBackground(seed),
         boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
       }}
     />
   );
+}
+
+/** The mark's gradient for a seed: the same seed, the same colours, wherever it is drawn. */
+export function markBackground(seed: string): string {
+  const a = parseInt(seed.slice(2, 8) || "0", 16);
+  const b = parseInt(seed.slice(8, 14) || "0", 16);
+  const h1 = a % 360;
+  const h2 = (h1 + 50 + (b % 90)) % 360;
+  const angle = (a + b) % 360;
+  return `linear-gradient(${angle}deg, hsl(${h1} 72% 58%), hsl(${h2} 70% 42%))`;
 }
 
 /**

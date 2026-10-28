@@ -6,6 +6,7 @@ import { useApp, useLive } from "../lib/app-state";
 import { usePageParam } from "../lib/url";
 import { displayName, explorerAddressUrl, explorerName, HOME_ID, IS_HUB, plural, pluralise, STANDARD_NAMES } from "../lib/chain";
 import { ChainTag } from "../components/chains";
+import { collectionPath } from "../components/collections";
 
 const BOUND_PAGE = 25;
 /** Everything but ACCOUNT: an address's own identity is shown under Agent, not among what is bound to it. */
@@ -104,7 +105,12 @@ export function AddressPage({ address }: { address: string }) {
 
         {boundTotal > 0 && (
           <Section label={`Bound to this address · ${boundTotal} ${boundTotal === 1 ? "identity" : "identities"}`}>
-            <p className="t2 small" style={{ margin: "0 0 8px" }}>This address is a contract that identities are bound to - a collection, or a contract controlled by its owner or admins.</p>
+            <p className="t2 small" style={{ margin: "0 0 8px" }}>
+              This address is a contract that identities are bound to - a collection, or a contract controlled by its owner or admins.
+              {bound?.items[0] && bound.items[0].standard <= 4 && (
+                <> <a href={collectionPath({ chain: bound.items[0].chain, address: addr })} onClick={(e) => { e.preventDefault(); navigate(collectionPath({ chain: bound.items[0].chain, address: addr })); }}>See it as a collection →</a></>
+              )}
+            </p>
             {bound ? <IdentityTable rows={bound.items.map((id) => ({ id }))} /> : <Spinner />}
             <div className="row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
               <Pager offset={boundOffset} limit={BOUND_PAGE} total={boundTotal} onChange={(o) => setBoundPage(o / BOUND_PAGE)} />

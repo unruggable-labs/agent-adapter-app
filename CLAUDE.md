@@ -20,7 +20,8 @@ tooltips kept to the fewest sentences that do the job.
   `SPEC.md` documents the projection rules. `serve.ts` = the indexer entrypoint, one chain or
   several in one process (`serve.ts hub` = the mainnets, adapterscan.com); `runtime.ts` = one chain
   running (poller, worker, watcher, status), failing on its own; `queries.ts`/`service.ts` answer
-  for a list of chains, rows tagged with their chain, lists merged by block time;
+  for a list of chains, rows tagged with their chain, lists merged by block time (collections are
+  token contracts grouped from the identities, per chain: `/collections`, `/collection/<chain>/<addr>`);
   `run-demo.ts` = anvil devnet + seeded scenario + assertions; `service.ts` = host-agnostic
   API core (a request for a chain's own hostname sees that chain alone); `views.ts` = identity views, with a worker that reads the chain facts around each
   identity (holder, name, trust base, card, cited transactions) and keeps them in the SQLite file
