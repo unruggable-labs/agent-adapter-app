@@ -145,7 +145,6 @@ export function IdentitiesPage() {
               placeholder="Any registration"
               render={(r) => <span className="row" style={{ gap: 6 }}><RegistrationMark r={REGISTRATION_MARK[r]} />{REGISTRATION_LABEL[r]}</span>}
             />
-            <span className="hint">On-chain means an ERC-8004 agent is minted. Counterfactual means it's claimed in the event log, with nothing minted.</span>
           </div>
           <div className="field">
             <label>Standard</label>

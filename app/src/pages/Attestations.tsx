@@ -40,19 +40,19 @@ export function AttestationsPage() {
     <div className="page page-wide fade-in">
       <div className="page-head">
         <h1 className="page-title">Attestations</h1>
-        <div className="head-actions">
-          <button className={`btn btn-sm${active ? " is-active" : ""}`} onClick={() => setShowFilters(true)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" />
-            </svg>
-            Filter{active > 0 && <span className="num"> · {active}</span>}
-          </button>
-        </div>
       </div>
       <p className="page-sub">
         Public statements about agents.
       </p>
-      {IS_HUB && <div style={{ marginBottom: 12 }}><ChainFilter /></div>}
+      <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        {IS_HUB && <ChainFilter />}
+        <button className={`btn btn-sm${active ? " is-active" : ""}`} onClick={() => setShowFilters(true)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" />
+          </svg>
+          Filter{active > 0 && <span className="num"> · {active}</span>}
+        </button>
+      </div>
 
       <div className="card card-table table-scroll">
         <table className="table clickable">
