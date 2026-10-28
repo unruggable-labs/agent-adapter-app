@@ -230,6 +230,8 @@ export interface IdentitiesQuery {
   limit?: number;
   offset?: number;
   standard?: string[];
+  /** How the identities exist: an ERC-8004 agent minted, a counterfactual claim, or neither yet. */
+  registration?: ("registered" | "counterfactual" | "unclaimed")[];
   bound?: string;
   tokenId?: string;
   q?: string;

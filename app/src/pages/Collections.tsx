@@ -56,7 +56,7 @@ export function CollectionsPage() {
           <button className={!sort ? "active" : ""} onClick={() => pickSort(null)}>Most agents</button>
           <button className={sort === "newest" ? "active" : ""} onClick={() => pickSort("newest")}>Newest</button>
         </div>
-        <input className="input" style={{ maxWidth: 260 }} placeholder="Name or contract address" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Find a collection" />
+        <input className="input" style={{ maxWidth: 260, padding: "6px 10px" }} placeholder="Name or contract address" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Find a collection" />
       </div>
 
       {data && data.total === 0 ? (

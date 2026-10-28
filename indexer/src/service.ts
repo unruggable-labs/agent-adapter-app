@@ -10,7 +10,7 @@ import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
  *  It answers for a list of chains - one for a chain's own site, several for the multichain
  *  explorer - and rows say which chain they're on. `?chain=a,b` narrows any request to those.
  *  Subpaths are relative, with their query string:
- *    overview · identities[?limit&offset&standard&bound&tokenId&q] · identity/<ubid> · history/<ubid>
+ *    overview · identities[?limit&offset&standard&registration&bound&tokenId&q] · identity/<ubid> · history/<ubid>
  *    search?q= · address/<addr> · wallet/<addr> · txref/<hash> · attestations[?limit&offset&type&standard&attester&ubid]
  *    collections[?limit&offset&q&sort=newest] · collection/<addr> (its tokens: identities?bound=<addr>)
  *    attestation/<id> · stats/overview?from&to · stats/series?metric&bucket&from&to&by&project · stats/projects?...[&format=csv]

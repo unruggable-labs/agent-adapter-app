@@ -71,6 +71,13 @@ describe("several chains", () => {
     expect(listIdentities(chains, p({ limit: "1", offset: "2" })).items[0].ubid).toBe(slow.ubid(7n));
   });
 
+  it("filters by how an identity exists", () => {
+    // Every record here is a counterfactual claim; none has an ERC-8004 agent minted.
+    expect(listIdentities(chains, p({ registration: "counterfactual" })).total).toBe(4);
+    expect(listIdentities(chains, p({ registration: "registered" })).total).toBe(0);
+    expect(listIdentities(chains, p({ registration: "registered,counterfactual", standard: "ACCOUNT" })).total).toBe(1);
+  });
+
   it("keeps a chain's own order even where block times are missing", () => {
     const blind = { ...slow.scope, timeOf: () => null };
     expect(listIdentities([blind], p({ limit: "10" })).items.map((i) => i.tokenId)).toEqual([0n, 7n]);

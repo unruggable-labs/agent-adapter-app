@@ -195,7 +195,7 @@ ${api("attestation/<id>", "one statement, with the fields its id is computed fro
 
 ## Lists
 
-${api("identities?limit=25&offset=0", "profiles, newest first. Filters: `q`, `standard`, `bound` (a contract), `tokenId`.")}
+${api("identities?limit=25&offset=0", "profiles, newest first. Filters: `q`, `standard`, `registration` (`registered`, `counterfactual` or `unclaimed`), `bound` (a contract), `tokenId`.")}
 ${api("attestations?limit=25&offset=0", "statements, newest first. Filters: `type`, `standard`, `attester`, `ubid`.")}
 ${api("collections?limit=25&offset=0", "the collections agent profiles are bound to, the most profiles first: name, picture, counts. `sort=newest` for the newest first, `q` to match a name or address.")}
 ${api("collection/<contract>", "one collection, on each chain it's on. Its profiles: `identities?bound=<contract>`.")}

@@ -110,10 +110,16 @@ export function findIdentity<C extends ChainScope>(chains: C[], ubid: string): {
   return null;
 }
 
-/** A page of identities, newest first. Filters: standard (names, comma-separated), bound, tokenId, q. */
+/** How an identity exists: an ERC-8004 agent minted, a counterfactual claim, or neither yet. */
+export type Registration = "registered" | "counterfactual" | "unclaimed";
+export const registrationOf = (i: IdentityState): Registration => (i.agentIds.length > 0 ? "registered" : i.claimed ? "counterfactual" : "unclaimed");
+
+/** A page of identities, newest first. Filters: standard (names, comma-separated), registration
+ *  (registered, counterfactual, unclaimed, comma-separated), bound, tokenId, q. */
 export function listIdentities(chains: ChainScope[], p: URLSearchParams): Page<ChainIdentityView> {
   const { limit, offset } = paging(p);
   const standards = names(p, "standard");
+  const registrations = names(p, "registration");
   const bound = p.get("bound")?.toLowerCase();
   const tokenId = p.get("tokenId");
   const t = tokenId && /^\d+$/.test(tokenId) ? BigInt(tokenId) : null;
@@ -123,6 +129,7 @@ export function listIdentities(chains: ChainScope[], p: URLSearchParams): Page<C
     (c) => {
       let ids = [...c.store.identities.values()];
       if (standards) ids = ids.filter((i) => standards.has(STANDARD_NAMES[i.standard]));
+      if (registrations) ids = ids.filter((i) => registrations.has(registrationOf(i)));
       if (bound) ids = ids.filter((i) => i.boundAddress === bound);
       if (t !== null) ids = ids.filter((i) => i.tokenId === t);
       if (q) ids = ids.filter((i) => (isHex(q) ? matchesHex(c.views, i, q) : matchesText(c.views, i, q)));
