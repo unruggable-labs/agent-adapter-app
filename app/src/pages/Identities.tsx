@@ -10,7 +10,8 @@ import { setSearchParams, usePageParam, useSearchParams } from "../lib/url";
 const PAGE_SIZE = 25;
 
 type RegistrationFilter = NonNullable<IdentitiesQuery["registration"]>[number];
-const REGISTRATIONS: RegistrationFilter[] = ["registered", "counterfactual", "unclaimed"];
+/** The two that matter. The API also takes `unclaimed` (settings made, nothing claimed), which is too rare to offer here. */
+const REGISTRATIONS: RegistrationFilter[] = ["registered", "counterfactual"];
 const REGISTRATION_LABEL: Record<RegistrationFilter, string> = { registered: "On-chain (ERC-8004)", counterfactual: "Counterfactual", unclaimed: "Unclaimed" };
 const REGISTRATION_MARK: Record<RegistrationFilter, Registration> = { registered: "onchain", counterfactual: "claim", unclaimed: "none" };
 

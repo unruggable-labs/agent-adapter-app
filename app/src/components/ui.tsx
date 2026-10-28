@@ -117,7 +117,7 @@ export function registrationOf(id: Identity): Registration {
 const REGISTRATION_TIP: Record<Registration, string> = {
   onchain: "On-chain: an ERC-8004 agent is minted on the shared registry for this identity.",
   claim: "Counterfactual: claimed in the event log only, nothing minted. Same UBID either way.",
-  none: "Unclaimed: this identity exists only because other events reference it.",
+  none: "Not claimed: settings were made for this token, but nobody has registered it or made a counterfactual claim.",
 };
 
 /** A small mark for the registration state: a solid chain link for on-chain, a dashed ring
@@ -281,7 +281,7 @@ export function StatusBadge({ id }: { id: Identity }) {
       </Badge>
     );
   return (
-    <Badge tone="outline" tip="No registration claim yet - this identity exists only because other events (attestations or field updates) reference it.">
+    <Badge tone="outline" tip="Not claimed: settings were made for this token, but nobody has registered it or made a counterfactual claim.">
       unclaimed
     </Badge>
   );
