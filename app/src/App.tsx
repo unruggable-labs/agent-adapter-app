@@ -155,7 +155,7 @@ function Shell() {
           <NavClose onClick={() => setNavOpen(false)} />
         </div>
 
-        <button className="btn btn-primary" style={{ margin: "2px 8px 6px" }} onClick={() => navigate("/create")}>
+        <button className="btn" style={{ margin: "2px 8px 6px" }} onClick={() => navigate("/create")}>
           + Create identity
         </button>
 
