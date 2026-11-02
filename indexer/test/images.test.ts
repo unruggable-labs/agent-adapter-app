@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PublicClient } from "viem";
 import { parseCollection } from "../src/collection.js";
-import { resolveCard } from "../src/images.js";
+import { cardKey, resolveCard } from "../src/images.js";
 import type { IdentityState } from "../src/projection.js";
 import { Standard } from "../src/ubid.js";
 
@@ -104,5 +104,13 @@ describe("collection documents", () => {
     const svg = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${"<rect/>".repeat(1000)}</svg>`).toString("base64")}`;
     expect(svg.length).toBeGreaterThan(2000);
     expect(parseCollection({ name: "Delphi", image: svg })?.image).toBe(svg);
+  });
+});
+
+
+describe("metadata cache identity", () => {
+  it("invalidates a token-only card when an ERC-8004 registration is added", () => {
+    const id = identity({});
+    expect(cardKey(id)).not.toBe(cardKey({ ...id, agentIds: [42n] }));
   });
 });

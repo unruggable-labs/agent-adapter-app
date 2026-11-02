@@ -157,6 +157,31 @@ describe("one process, several sites", () => {
   const servers: { close: () => void }[] = [];
   afterAll(() => servers.forEach((s) => s.close()));
 
+  it("regenerates a social card immediately when its SVG avatar changes", async () => {
+    const c = chain("mainnet", 1n, 1000, 1);
+    c.register(1, 1n);
+    const runtime = new ChainRuntime({ slug: "mainnet", label: "Ethereum", store: c.store, client: quiet, adapter: ADAPTER });
+    const view = runtime.views.view.bind(runtime.views);
+    let color = "red";
+    runtime.views.view = (id) => ({ ...view(id), image: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="${color}"/></svg>`)}` });
+    const server = startServer([runtime], 0);
+    servers.push(server);
+    await new Promise((r) => server.once("listening", r));
+    const port = (server.address() as AddressInfo).port;
+    const url = `http://127.0.0.1:${port}/og/identity/${c.ubid(1n)}.png`;
+    const first = await fetch(url);
+    expect(first.status, await first.clone().text()).toBe(200);
+    expect(first.headers.get("cache-control")).toBe("no-cache");
+    const red = Buffer.from(await first.arrayBuffer());
+    color = "blue";
+    const second = await fetch(url);
+    expect(second.status).toBe(200);
+    const blue = Buffer.from(await second.arrayBuffer());
+    expect(blue.equals(red)).toBe(false);
+    const unchanged = await fetch(url);
+    expect(Buffer.from(await unchanged.arrayBuffer()).equals(blue)).toBe(true);
+  }, 15_000);
+
   it("a chain's own hostname sees that chain alone; any other host sees them all", async () => {
     const a = chain("robinhood", 4663n, 1000, 1);
     const b = chain("base", 8453n, 1000, 2);

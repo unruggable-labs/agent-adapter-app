@@ -58,9 +58,10 @@ export function labelsFrom(
   name: string | null,
   id: IdentityState,
   cardName: string | null = null,
+  tokenName: string | null = null,
 ): { subjectLabel: string; agentName: string | null; contractName: string | null } {
   const subjectLabel = ACCOUNT_STANDARDS.has(id.standard)
     ? (name ?? `Account ${short(id.boundAddress)}`)
-    : `${name ?? short(id.boundAddress)} #${shortTokenId(id.tokenId)}`;
+    : tokenName ?? `${name ?? short(id.boundAddress)} #${shortTokenId(id.tokenId)}`;
   return { subjectLabel, agentName: decodeUtf8Metadata(id.metadata.get("name")) ?? cardName, contractName: name };
 }

@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { EventLog } from "./eventlog.js";
-import { addressView, attestationView, collectionView, findIdentity, listAttestations, listCollections, listIdentities, search, type ChainScope } from "./queries.js";
+import { addressView, attestationView, collectionView, findIdentity, listAttestations, listCollections, listIdentities, search, viewOf, type ChainScope } from "./queries.js";
 import type { ChainStatus } from "./runtime.js";
 import { BUCKETS, METRICS, overview as statsOverview, projects as statsProjects, projectsCsv, series as statsSeries, windowFrom, type Bucket, type Metric, type ProjectRow } from "./stats.js";
 import { ATTESTATION_TYPE_NAMES } from "./ubid.js";
@@ -117,14 +117,14 @@ export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiRe
   if (head === "identity" && arg) {
     const found = findIdentity(chains, arg);
     if (!found) return { status: 404, body: toJson({ error: "unknown identity", ubid: arg }) };
-    return { status: 200, body: toJson({ ...found.c.views.view(found.id), chain: found.c.slug }) };
+    return { status: 200, body: toJson(viewOf(found.c, found.id)) };
   }
   if (head === "history" && arg) {
     // The audit trail: every event that touched this identity, in log order, dropped and
     // inert ones included. Empty for a UBID nothing has touched.
     const key = arg.toLowerCase() as Hex;
     const c = chains.find((x) => x.store.history.has(key));
-    return { status: 200, body: toJson(c?.store.history.get(key) ?? []) };
+    return { status: 200, body: toJson((c?.store.history.get(key) ?? []).map((h) => ({ ...h, order: { ...h.order, timestamp: c!.timeOf(h.order) } }))) };
   }
   if (head === "wallet" && arg) {
     // An address can be an agent, or operate one, on more than one chain: the first chain that
@@ -148,7 +148,7 @@ export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiRe
     if (!c.log) return { status: 503, body: toJson({ error: "stats need the event log; this indexer runs without one" }) };
     const db = c.log.connection;
     const window = windowFrom(params);
-    if (arg === "overview") return { status: 200, body: toJson(statsOverview(db, c.store, window)) };
+    if (arg === "overview") return { status: 200, body: toJson({ ...statsOverview(db, c.store, window), indexed: c.status(), generatedAt: Math.floor(Date.now() / 1000) }) };
     if (arg === "series") {
       const metric = (params.get("metric") ?? "identities") as Metric;
       const bucket = (params.get("bucket") ?? "day") as Bucket;

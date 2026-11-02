@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 /**
  * A line chart drawn to one scale, in the app's own tokens. Each series is a run of points on the
@@ -51,6 +51,11 @@ function fmtDate(t: string): string {
 export function LineChart({ series, height = 280, emptyText = "Nothing in this window." }: { series: ChartSeries[]; height?: number; emptyText?: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const [box, W] = useWidth<HTMLDivElement>();
+  const tip = useRef<HTMLDivElement>(null);
+  const [tipWidth, setTipWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (tip.current) setTipWidth(tip.current.getBoundingClientRect().width);
+  }, [hover, W, series]);
   const H = height;
   const n = series[0]?.points.length ?? 0;
   const max = useMemo(() => Math.max(0, ...series.flatMap((s) => s.points.map((p) => p.v))), [series]);
@@ -108,7 +113,7 @@ export function LineChart({ series, height = 280, emptyText = "Nothing in this w
         )}
       </svg>
       {hover !== null && (
-        <div className="chart-tip" style={{ left: `${(x(hover) / W) * 100}%` }}>
+        <div ref={tip} className="chart-tip" style={{ left: Math.max(8, Math.min(x(hover) - tipWidth / 2, W - tipWidth - 8)) }}>
           <div className="chart-tip-date">{fmtDate(dates[hover].t)}</div>
           {series.map((s) => (
             <div key={s.key} className="chart-tip-row"><span className="chart-swatch" style={{ background: s.color }} />{s.label}<b className="num">{s.points[hover].v.toLocaleString()}</b></div>

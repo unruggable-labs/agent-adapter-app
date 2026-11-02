@@ -1,4 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { fetchContent } from "./gateway.js";
 import { readPicture } from "./pictures.js";
@@ -24,6 +25,16 @@ const FONTS = [
 ];
 
 const W = 1200, H = 630;
+/** Shared by the rendered-card cache and the image URL advertised to social crawlers. */
+export function previewVersion(...inputs: unknown[]): string {
+  const json = JSON.stringify(inputs, (_, value) => {
+    if (typeof value === "bigint") return value.toString();
+    if (value instanceof Map) return [...value.entries()];
+    if (value instanceof Set) return [...value];
+    return value;
+  });
+  return createHash("sha256").update(json).digest("hex");
+}
 const C = { bg: "#f7f8f9", card: "#ffffff", border: "#e5e7ea", t1: "#191b20", t2: "#5b616c", t3: "#8d939d", accent: "#4f46e5", accentBg: "#eeedfc", ok: "#0e7a47", okBg: "#e7f5ee" };
 
 type El = { type: string; props: Record<string, unknown> };
@@ -95,34 +106,36 @@ function gradientFor(seed: string): string {
   return `linear-gradient(${(a + b) % 360}deg, hsl(${h1}, 72%, 58%), hsl(${h2}, 70%, 42%))`;
 }
 
-/** A token image as a data URL satori can embed, or null - PNG/JPEG only, 3 s budget. */
-async function imageData(url: string | null): Promise<string | null> {
+/** Decode supported raster/vector formats and use the first frame of animations in social cards. */
+export async function imageData(url: string | null): Promise<string | null> {
   if (!url) return null;
-  if (url.startsWith("data:image/png") || url.startsWith("data:image/jpeg")) return url;
   try {
-    // Our copy (pictures.ts) is WebP, which satori can't draw: it goes in as a PNG.
-    const pic = /^\/pic\/([0-9a-f]{40})\.webp$/.exec(url);
-    if (pic) {
-      const webp = await readPicture(pic[1]);
-      return webp ? `data:image/png;base64,${(await sharp(webp).png().toBuffer()).toString("base64")}` : null;
-    }
-    // Our own /ipfs and /ar paths come straight from the gateway cache; http(s) is fetched.
-    const own = /^\/(ipfs|ar)\/(.+)$/.exec(url);
-    let type: string;
     let buf: Buffer;
-    if (own) {
+    const pic = /^\/pic\/([0-9a-f]{40})\.webp$/.exec(url);
+    const own = /^\/(ipfs|ar)\/(.+)$/.exec(url);
+    if (url.startsWith("data:")) {
+      const data = /^data:([^,]*),(.*)$/s.exec(url);
+      if (!data || !/^image\//i.test(data[1])) return null;
+      buf = /;base64/i.test(data[1]) ? Buffer.from(data[2], "base64") : Buffer.from(decodeURIComponent(data[2]));
+    } else if (pic) {
+      const saved = await readPicture(pic[1]);
+      if (!saved) return null;
+      buf = saved;
+    } else if (own) {
       const got = await fetchContent(own[1] as "ipfs" | "ar", own[2]);
       if (!got) return null;
-      ({ type, body: buf } = got);
+      buf = got.body;
     } else {
       if (!/^https?:/.test(url)) return null;
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      type = res.headers.get("content-type") ?? "";
-      if (!res.ok) return null;
+      if (!res.ok || Number(res.headers.get("content-length") ?? 0) > 25_000_000) return null;
       buf = Buffer.from(await res.arrayBuffer());
     }
-    if (!/^image\/(png|jpeg)/.test(type) || buf.length > 2_000_000) return null;
-    return `data:${type.split(";")[0]};base64,${buf.toString("base64")}`;
+    if (buf.length > 25_000_000) return null;
+    // Let the decoder identify the bytes: gateways often send generic MIME types.
+    const png = await sharp(buf, { limitInputPixels: 100_000_000, pages: 1 })
+      .rotate().resize(320, 320, { fit: "inside" }).png().toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
   } catch {
     return null;
   }

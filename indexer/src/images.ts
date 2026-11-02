@@ -27,6 +27,8 @@ export interface Card {
   /** The `name` in the agent's own registration file, which can differ from the token's: what the
    *  agent is called, where the token's name is what the NFT is called. */
   agentName?: string | null;
+  /** A registration file could not be read; retry without discarding known agent details. */
+  agentMetadataPending?: boolean;
 }
 
 const TOKEN_URI_ABI = [{ type: "function", name: "tokenURI", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] }] as const;
@@ -35,7 +37,7 @@ const URI_ABI = [{ type: "function", name: "uri", stateMutability: "view", input
 /** What a card is resolved from. A record whose key changed (a new agent URI) has a stale card.
  *  The leading version is bumped when what a card holds changes, so every stored card is read again. */
 export function cardKey(id: IdentityState): string {
-  return `2:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
+  return `3:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}:${id.agentIds.at(-1) ?? ""}`;
 }
 
 /** Read the card from the chain and the web, now. The view worker's call; never a request's.
@@ -49,7 +51,8 @@ async function resolve(client: PublicClient, id: IdentityState, registry: Addres
   const token = tokenUri ? await cardIn(tokenUri, "token").catch(() => null) : null;
   const agentUri = id.agentURI ?? (await registryUri(client, id, registry).catch(() => null));
   const agent = agentUri ? await cardIn(agentUri, "agent").catch(() => null) : null;
-  if (!token && !agent) return null;
+  const pending = !!(id.agentURI || id.agentIds.length) && !agent;
+  if (!token && !agent && !pending) return null;
   // The token's card leads; the agent card fills anything it left blank.
   return {
     image: token?.image ?? agent?.image ?? null,
@@ -57,6 +60,7 @@ async function resolve(client: PublicClient, id: IdentityState, registry: Addres
     description: token?.description ?? agent?.description ?? null,
     source: token ? "token" : "agent",
     agentName: agent?.name ?? null,
+    ...(pending ? { agentMetadataPending: true } : {}),
   };
 }
 

@@ -148,3 +148,26 @@ indexer's job is **disclosure**, in two tenses:
 `emitter` is the last non-indexed field on counterfactual events. If any consumer ever needs a
 filtered backfill by author class (e.g. auditing collection-authored claims at scale), indexing
 it would avoid decoding every event body. Cheap now, a topic0 cutover later.
+
+## 8. Dates, registration discovery and usage statistics (policy)
+
+- API order objects include `timestamp` in Unix seconds when the corresponding block is dated,
+  otherwise `null`. This is enrichment, never an ordering key within a chain. The app displays
+  block dates in UTC and says “Date pending” rather than estimating unknown timestamps. Historical
+  timestamp backfills retry every five minutes after the first sync; they are not boot-only work.
+- `claims` in the stats API remains the backward-compatible metric name for **explicit
+  counterfactual registrations**: the first valid `CounterfactualAgentRegistered` per UBID.
+  It includes identities subsequently minted as ERC-8004 agents. Stars and other attestations
+  never count as registrations. `registration=claimed` lists these identities, including promoted
+  ones; optional `from`/`to` filter by the first explicit counterfactual registration's block time.
+- Counterfactual fact columns are validated against the same UBID derivation as the projection.
+  Old invalid facts are repaired on startup without deleting their original events. Rejected
+  legacy claims therefore remain auditable but do not create phantom registrations in stats.
+- `references` counts distinct currently unresolved UBIDs by the date of their first attestation.
+  Feedback references do not create identity rows. `attestations?resolution=unresolved` exposes
+  those statements; with `from`/`to`, the filter uses each unresolved target's first attestation.
+  This category describes the current resolution state and can shrink when identities are created.
+- Usage windows include the current partial hour and refresh with the app's polling cycle. Stats
+  overview responses include `generatedAt` (Unix seconds) and `indexed` (the source chain status,
+  including its last successful sync). Timestamp backlogs and unavailable/stalled sources are
+  disclosed instead of implying a complete, current count.

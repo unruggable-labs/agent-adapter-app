@@ -418,6 +418,10 @@ input, textarea, select { font: inherit; color: inherit; }
   color: var(--text-2);
 }
 .addr:hover { color: var(--text-1); border-color: var(--border-strong); }
+.ubid { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-family: var(--mono); font-size: inherit; color: var(--text-2); vertical-align: middle; }
+.ubid svg { flex-shrink: 0; opacity: 0.65; }
+.ubid:hover, .ubid:focus-visible { color: var(--text-1); }
+.ubid:hover svg, .ubid:focus-visible svg { opacity: 1; }
 
 .link-hash {
   color: var(--text-2); font-size: 12px;
@@ -799,13 +803,13 @@ input, textarea, select { font: inherit; color: inherit; }
 .chart-label { fill: var(--text-3); font-size: 11px; font-family: var(--font); font-variant-numeric: tabular-nums; }
 .chart-empty { display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 12.5px; }
 .chart-tip {
-  position: absolute; top: 8px; transform: translateX(-50%); pointer-events: none; z-index: 2;
+  position: absolute; top: 8px; max-width: calc(100% - 16px); box-sizing: border-box; pointer-events: none; z-index: 2;
   background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--r-md);
-  padding: 6px 10px; font-size: 11.5px; box-shadow: var(--shadow-1); white-space: nowrap;
+  padding: 6px 10px; font-size: 11.5px; box-shadow: var(--shadow-1); overflow-wrap: anywhere;
 }
 .chart-tip-date { color: var(--text-3); margin-bottom: 2px; }
 .chart-tip-row { display: flex; align-items: center; gap: 6px; }
-.chart-tip-row b { margin-left: auto; padding-left: 12px; }
+.chart-tip-row b { margin-left: auto; padding-left: 12px; flex-shrink: 0; }
 .chart-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
 .chart-legend { gap: 12px; font-size: 11.5px; color: var(--text-2); }
 .chart-legend-item { gap: 6px; }

@@ -159,6 +159,24 @@ export class EventLog {
       CREATE INDEX IF NOT EXISTS events_actor ON events (actor);
       CREATE INDEX IF NOT EXISTS events_attestation ON events (attestation_id);
     `);
+    // Older fact columns included counterfactual events the projection correctly drops.
+    // Repair the derived columns once; the original event remains available for replay/audit.
+    if (have.counterfactualFacts !== "1") {
+      this.db.exec("BEGIN");
+      try {
+        const events = this.db.prepare("SELECT block_number, log_index, event_name, args FROM events WHERE event_name LIKE 'Counterfactual%'").all() as { block_number: number; log_index: number; event_name: string; args: string }[];
+        const update = this.db.prepare("UPDATE events SET ubid = ?, bound_address = ?, actor = ? WHERE block_number = ? AND log_index = ?");
+        for (const event of events) {
+          const facts = this.factsOf(event.event_name, decodeArgs(event.args));
+          update.run(facts.ubid, facts.boundAddress, facts.actor, event.block_number, event.log_index);
+        }
+        put.run("counterfactualFacts", "1");
+        this.db.exec("COMMIT");
+      } catch (error) {
+        this.db.exec("ROLLBACK");
+        throw error;
+      }
+    }
   }
 
   private readonly chainId: bigint;
@@ -205,8 +223,17 @@ export class EventLog {
       case "CounterfactualMetadataSet":
       case "CounterfactualMetadataBatchSet":
       case "CounterfactualAgentWalletSet":
-      case "CounterfactualAgentWalletUnset":
-        return { ...none, ubid: lower(args.ubid), boundAddress: lower(args.boundAddress) as Address | null, actor: lower(args.emitter) as Address | null };
+      case "CounterfactualAgentWalletUnset": {
+        if (typeof args.ubid !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(args.ubid)) return none;
+        try {
+          const bound = lower(args.boundAddress) as Address;
+          const ubid = computeUbid(this.chainId, this.adapter, Number(args.standard) as Standard, bound, BigInt(args.tokenId as bigint));
+          if (ubid !== lower(args.ubid)) return none;
+          return { ...none, ubid, boundAddress: bound, actor: lower(args.emitter) as Address | null };
+        } catch {
+          return none;
+        }
+      }
       case "AgentBound": {
         const bound = lower(args.boundAddress) as Address | null;
         const ubid = bound && args.tokenId !== undefined ? computeUbid(this.chainId, this.adapter, Number(args.standard) as Standard, bound, BigInt(args.tokenId as bigint)) : null;

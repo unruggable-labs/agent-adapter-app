@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { isAddress } from "viem";
-import { Badge, ControllerCell, Pager, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
+import { EventDate, Ubid, Badge, ControllerCell, Pager, registrationOf, Section, StandardBadge, Spinner, Stat, StatusBadge, Tip, TypeBadge, UbidCell } from "../components/ui";
 import { api, type Identity } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
 import { usePageParam } from "../lib/url";
@@ -124,7 +124,7 @@ export function AddressPage({ address }: { address: string }) {
           ) : (
             <div className="table-scroll">
               <table className="table clickable">
-                <thead><tr>{IS_HUB && <th>Chain</th>}<th>Type</th><th>About</th><th>Payload</th><th className="td-right">Block</th><th>State</th></tr></thead>
+                <thead><tr>{IS_HUB && <th>Chain</th>}<th>Type</th><th>About</th><th>Payload</th><th className="td-right">Date / block</th><th>State</th></tr></thead>
                 <tbody>
                   {rows.map((a) => {
                     const target = a.target ?? null;
@@ -132,9 +132,9 @@ export function AddressPage({ address }: { address: string }) {
                       <tr key={a.attestationId} onClick={() => navigate(`/attestation/${a.attestationId}`)}>
                         {IS_HUB && <td><ChainTag chain={a.chain} /></td>}
                         <td><TypeBadge name={a.typeName} /></td>
-                        <td>{target ? <span className="row" style={{ gap: 8 }}><UbidCell ubid={a.ubid} image={target.image} registration={registrationOf(target)} /><span className="t2 small">{displayName(target)}</span></span> : <span className="mono t3">{a.ubid.slice(0, 12)}…</span>}</td>
+                        <td>{target ? <span className="row" style={{ gap: 8 }}><UbidCell ubid={a.ubid} image={target.image} registration={registrationOf(target)} /><span className="t2 small">{displayName(target)}</span></span> : <Ubid value={a.ubid} />}</td>
                         <td className="mono t2" style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{payloadPreview(a)}</td>
-                        <td className="td-right num">{a.order.blockNumber}</td>
+                        <td className="td-right num"><div><EventDate timestamp={a.order.timestamp} /></div>{a.order.blockNumber}</td>
                         <td>{a.revoked ? <Badge tone="danger">revoked</Badge> : <Badge tone="ok">live</Badge>}</td>
                       </tr>
                     );

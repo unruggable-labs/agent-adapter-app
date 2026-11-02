@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore, type LogEvent } from "../src/projection.js";
-import { addressView, attestationView, listAttestations, listIdentities, search, type ChainScope } from "../src/queries.js";
+import { addressView, attestationView, listAttestations, listIdentities, search, viewOf, type ChainScope } from "../src/queries.js";
 import { AttestationType, computeAttestationId, computeUbid, Standard } from "../src/ubid.js";
 import { ViewCache } from "../src/views.js";
 
@@ -46,6 +46,28 @@ function world() {
 const params = (o: Record<string, string>) => new URLSearchParams(o);
 
 describe("queries", () => {
+  it("adds block dates to identities, feedback and statement details without mutating projection order", () => {
+    const { store, chains } = world();
+    chains[0].timeOf = (order) => 1_700_000_000 + Number(order.blockNumber);
+    const id = viewOf(chains[0], store.identities.get(UBID7)!);
+    expect(id.created.timestamp).toBe(1_700_000_001);
+    expect(store.identities.get(UBID7)!.created).toEqual({ blockNumber: 1n, logIndex: 0 });
+    const a = [...store.attestations.values()][0];
+    expect(attestationView(chains, a.attestationId)!.order.timestamp).toBe(1_700_000_004);
+  });
+
+  it("finds counterfactual registrations after minting and separates unresolved references", () => {
+    const { store, chains } = world();
+    chains[0].timeOf = (order) => Number(order.blockNumber) * 100;
+    store.apply(ev(5, "AgentBound", { agentId: 7n, standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, registeredBy: ALICE }));
+    expect(listIdentities(chains, params({ registration: "claimed", from: "100", to: "200" })).items.map((i) => i.ubid)).toEqual([UBID7]);
+    expect(listIdentities(chains, params({ registration: "counterfactual" })).items.some((i) => i.ubid === UBID7)).toBe(false);
+    const unknown = `0x${"ab".repeat(32)}` as Hex;
+    store.apply(starred(6, ALICE, unknown));
+    expect(listAttestations(chains, params({ resolution: "unresolved", from: "500", to: "700" })).items.map((a) => a.ubid)).toEqual([unknown]);
+    expect(listIdentities(chains, params({})).total).toBe(3); // feedback doesn't register an identity
+  });
+
   it("pages identities newest first, with filters", async () => {
     const { store, views, chains } = world();
     const all = listIdentities(chains, params({ limit: "10" }));
@@ -116,14 +138,14 @@ describe("queries", () => {
     // Bob stars again later (value 0): the first star is replaced, not revoked
     const second = starred(5, BOB, UBID7, "0x00");
     store.apply(second);
-    expect(attestationView(chains, first)!.supersededBy).toEqual({ attestationId: second.attestationId, order: { blockNumber: 5n, logIndex: 0 } });
+    expect(attestationView(chains, first)!.supersededBy).toEqual({ attestationId: second.attestationId, order: { blockNumber: 5n, logIndex: 0, timestamp: null } });
     expect(attestationView(chains, second.attestationId)!.supersededBy).toBeNull();
 
     // then revokes the second: revoked wins over replaced, and the revocation is on the record
     store.apply({ ...ev(6, "AttestationRevoked", { attestationId: second.attestationId, revoker: BOB }), transactionHash: `0x${"06".repeat(32)}` as Hex });
     const revoked = attestationView(chains, second.attestationId)!;
     expect(revoked.revoked).toBe(true);
-    expect(revoked.revocation).toEqual({ revoker: BOB, order: { blockNumber: 6n, logIndex: 0 }, transactionHash: `0x${"06".repeat(32)}` });
+    expect(revoked.revocation).toEqual({ revoker: BOB, order: { blockNumber: 6n, logIndex: 0, timestamp: null }, transactionHash: `0x${"06".repeat(32)}` });
     expect(revoked.supersededBy).toBeNull();
     // with the second gone, the first stands again
     expect(attestationView(chains, first)!.supersededBy).toBeNull();

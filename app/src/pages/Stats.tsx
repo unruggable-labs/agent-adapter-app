@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChartLegend, LineChart, type ChartSeries } from "../components/chart";
 import { ChainIcon } from "../components/chains";
-import { MultiSelect, Pager, Skeleton, StandardBadge, Tip } from "../components/ui";
+import { EventDate, MultiSelect, Pager, Skeleton, StandardBadge, Tip } from "../components/ui";
 import { statsApi, type ProjectRow, type StatsBucket, type StatsOverview, type StatsSeries } from "../lib/api";
 import { statsSourceFor, explorerOriginFor, NETWORKS, STANDARD_NAMES, type NetworkId } from "../lib/chain";
+import { useApp } from "../lib/app-state";
 import { usePageParam } from "../lib/url";
 
 /**
@@ -58,6 +59,7 @@ function readUrl() {
 }
 
 export function StatsPage({ chains: offered, allChains = false }: { chains: NetworkId[]; allChains?: boolean }) {
+  const { tick } = useApp();
   const initial = useMemo(readUrl, []);
   const [range, setRange] = useState<Range>(initial.range);
   const [bucketChoice, setBucketChoice] = useState<StatsBucket | "auto">(initial.bucket);
@@ -105,7 +107,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     );
   }, [data, compare, chains]);
 
-  const now = Math.floor(Date.now() / 1000 / 3600) * 3600; // to the hour, so the URL and the cache stay stable for a while
+  const now = useMemo(() => Math.floor(Date.now() / 1000) + 1, [tick]); // Include the current partial hour; refresh with the app poll
   const from = range === "7d" ? now - 7 * DAY : range === "30d" ? now - 30 * DAY : range === "90d" ? now - 90 * DAY : firstEvent ?? now - 365 * DAY;
   const window = { from, to: now };
   // Auto: days for anything up to two months, weeks up to about a year, months beyond - so "All" on a young chain still shows a shape.
@@ -155,7 +157,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     return () => {
       cancelled = true;
     };
-  }, [chains.join(","), bucket, from, now]);
+  }, [chains.join(","), bucket, from, now, tick]);
 
   // One identities series per compared project, from its own chain.
   useEffect(() => {
@@ -192,7 +194,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     if (compare.length === 0)
       return [
         { key: "identities", label: "Identities", color: "var(--accent)", points: run(total), whole: true },
-        { key: "claims", label: "Counterfactual claims", color: "var(--c-amber)", points: run(claims) },
+        { key: "claims", label: "Counterfactual registrations", color: "var(--c-amber)", points: run(claims) },
         { key: "registrations", label: "ERC-8004 registrations", color: "var(--c-emerald)", points: run(regs) },
       ];
     // Comparing: the whole as a quiet line (unless hidden, so the scale fits the projects), each project in its own colour, on the same buckets as the total.
@@ -234,6 +236,10 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
         {allChains && " Every chain is counted by its own indexer and added up here."}
       </p>
 
+      {data && <div className="row wrap small t3" style={{ gap: 12, marginBottom: 14 }}>
+        {Object.entries(data.overview).map(([chain, o]) => <span key={chain}>{NETWORKS[chain].label}: {o.indexed?.state ?? "indexed"}{o.indexed?.lastSyncAt != null && <> · synced <EventDate timestamp={o.indexed.lastSyncAt / 1000} /></>}{o.indexed?.syncedTo && <> · block {o.indexed.syncedTo}</>}</span>)}
+        <span>Refreshes every 12 seconds. Dates use UTC.</span>
+      </div>}
       {allChains && (
         <div className="row wrap" style={{ gap: 6, marginBottom: 14 }}>
           <span className="t3 small">Chains</span>
@@ -248,7 +254,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
         </div>
       )}
 
-      {error && <div className="callout callout-warn" style={{ marginBottom: 14 }}><b>Can't reach the indexer{chains.length > 1 ? "s" : ""}.</b> Retrying on the next change of view.</div>}
+      {error && <div className="callout callout-warn" style={{ marginBottom: 14 }}><b>Can't reach the indexer{chains.length > 1 ? "s" : ""}.</b> Retrying automatically.</div>}
       {data && data.failed.length > 0 && !error && (
         <div className="callout callout-warn" style={{ marginBottom: 14 }}><b>{data.failed.map((c) => NETWORKS[c].label).join(", ")} didn't answer.</b> The figures below leave {data.failed.length === 1 ? "it" : "them"} out.</div>
       )}
@@ -256,7 +262,8 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
       <div className="stat-panels stats-tiles">
         <Tile label="Identities" tip="UBIDs brought into being in the window: a counterfactual claim or an ERC-8004 registration, whichever came first." figure={figures.identities} loading={!data} />
         <Tile label="ERC-8004 registrations" tip="Agents minted on the shared registry through the adapter." figure={figures.registrations} loading={!data} />
-        <Tile label="Counterfactual claims" tip="Identities claimed in the event log without a mint." figure={figures.claims} loading={!data} />
+        <Tile href={`${explorerOriginFor(chains[0] ?? offered[0])}/identities?registration=claimed&from=${from}&to=${now}${chains.length ? `&chain=${chains.join(",")}` : ""}`} label="Counterfactual registrations" tip="First explicit counterfactual registration per identity in this window. Stars and other feedback are separate. Includes identities later minted as ERC-8004 agents." figure={figures.claims} loading={!data} />
+        <Tile label="Referenced-only identities" tip="Distinct UBIDs first mentioned in feedback in this window that still have no identity record. Stars can reference a UBID, but do not register it." figure={figures.references} loading={!data} href={`${explorerOriginFor(chains[0] ?? offered[0])}/attestations?resolution=unresolved&from=${from}&to=${now}${chains.length ? `&chain=${chains.join(",")}` : ""}`} />
         <Tile label="Attestations" tip="Stars, ratings, reviews, transaction records and account confirmations that verified." figure={figures.attestations} loading={!data} />
         <Tile label="Attesters" tip="Distinct addresses that made a statement in the window." figure={figures.attesters} loading={!data} />
         <Tile label="Wallet links" tip="Agents naming an operating wallet, and wallets pointing back at an agent." figure={figures.wallets} loading={!data} />
@@ -301,7 +308,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
 }
 
 function sumFigures(overviews: StatsOverview[]) {
-  const keys = ["identities", "registrations", "claims", "attestations", "attesters", "wallets", "projects", "active", "revocations"] as const;
+  const keys = ["identities", "registrations", "claims", "attestations", "attesters", "wallets", "projects", "active", "revocations", "references"] as const;
   const out = {} as Record<(typeof keys)[number], { value: number; prior: number }>;
   for (const k of keys) out[k] = { value: overviews.reduce((a, o) => a + (o.figures[k]?.value ?? 0), 0), prior: overviews.reduce((a, o) => a + (o.figures[k]?.prior ?? 0), 0) };
   return out;
@@ -316,13 +323,13 @@ function sumSeries(all: { t: string; v: number }[][]): { t: string; v: number }[
   return [...byT].sort(([a], [b]) => (a < b ? -1 : 1)).map(([t, v]) => ({ t, v }));
 }
 
-function Tile({ label, tip, figure, loading }: { label: string; tip: string; figure: { value: number; prior: number }; loading: boolean }) {
+function Tile({ label, tip, figure, loading, href }: { href?: string; label: string; tip: string; figure: { value: number; prior: number }; loading: boolean }) {
   const delta = figure.prior === 0 ? null : Math.round(((figure.value - figure.prior) / figure.prior) * 100);
   return (
     <div className="stat-panel">
       <div className="stat-panel-n">{loading ? <Skeleton w={40} /> : figure.value.toLocaleString()}</div>
       <div className="stat-panel-l row spread">
-        <Tip tip={tip}><span>{label}</span></Tip>
+        <Tip tip={tip}>{href ? <a className="agent-link" href={href}>{label} →</a> : <span>{label}</span>}</Tip>
         {!loading && (
           delta === null
             ? figure.value > 0 && <span className="badge badge-outline" title="Nothing in the window before this one">new</span>

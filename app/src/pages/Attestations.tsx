@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Addr, Badge, ControllerCell, Modal, MultiSelect, Pager, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
+import { EventDate, Addr, Badge, ControllerCell, Modal, MultiSelect, Pager, registrationOf, SkeletonRows, Spinner, StandardBadge, Tip, TYPE_HUE, TypeBadge, UbidCell } from "../components/ui";
 import type { Hex } from "viem";
 import { adapterOf, api, type AttestationRow } from "../lib/api";
 import { ChainFilter, ChainTag, useChainParam } from "../components/chains";
 import { useApp, useLive, settle } from "../lib/app-state";
-import { usePageParam } from "../lib/url";
+import { setSearchParams, useSearchParams, usePageParam } from "../lib/url";
 import { adapterAbi, IS_HUB, STANDARD_NAMES } from "../lib/chain";
 import { sendTx } from "../lib/tx";
 
@@ -18,13 +18,17 @@ export function AttestationsPage() {
   const [standards, setStandards] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = usePageParam();
+  const params = useSearchParams();
+  const resolution = params.get("resolution") === "unresolved" ? "unresolved" : undefined;
+  const from = params.has("from") ? Number(params.get("from")) : undefined;
+  const to = params.has("to") ? Number(params.get("to")) : undefined;
   const chain = useChainParam(); // ?chain=base on the hub
 
   // The indexer filters, orders and slices; each row comes with the identity it is about.
   const attester = mineOnly && signer ? signer.address : undefined;
   const { data, status } = useLive(
-    () => api.attestations({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, type: types, standard: standards, attester, chain: chain ? [chain] : undefined }),
-    [page, types.join(","), standards.join(","), attester, chain],
+    () => api.attestations({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, type: types, standard: standards, attester, resolution, from, to, chain: chain ? [chain] : undefined }),
+    [page, types.join(","), standards.join(","), attester, chain, resolution, from, to],
   );
   // A change of filters goes back to the first page without leaving a history entry.
   useEffect(() => {
@@ -42,10 +46,12 @@ export function AttestationsPage() {
         <h1 className="page-title">Attestations</h1>
       </div>
       <p className="page-sub">
-        Public statements about agents.
+        {resolution ? "Feedback referring to UBIDs with no identity record yet. These references are separate from counterfactual registrations." : "Public statements about agents."}
       </p>
       <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         {IS_HUB && <ChainFilter />}
+        <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={!!resolution} onChange={(e) => setSearchParams((p) => { if (e.target.checked) p.set("resolution", "unresolved"); else p.delete("resolution"); p.delete("page"); }, "replace")} /> Referenced-only identities</label>
+        {(from !== undefined || to !== undefined) && <span className="small t3">First referenced: <EventDate timestamp={from} /> – <EventDate timestamp={to} /> <button className="agent-link" onClick={() => setSearchParams((p) => { p.delete("from"); p.delete("to"); p.delete("page"); }, "replace")}>Clear dates</button></span>}
         <button className={`btn btn-sm${active ? " is-active" : ""}`} onClick={() => setShowFilters(true)}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" />
@@ -58,7 +64,7 @@ export function AttestationsPage() {
         <table className="table clickable">
           <thead>
             <tr>
-              <th><Tip tip="The identity the statement is about. The mark beside it: a chain link means an ERC-8004 agent is minted for it, a dashed ring means it is a counterfactual claim only, a dotted ring means nothing has claimed it yet.">UBID</Tip></th>{IS_HUB && <th>Chain</th>}<th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Block</th><th>State</th><th></th>
+              <th><Tip tip="The identity the statement is about. The mark beside it: a chain link means an ERC-8004 agent is minted for it, a dashed ring means it is a counterfactual claim only, a dotted ring means nothing has claimed it yet.">UBID</Tip></th>{IS_HUB && <th>Chain</th>}<th>Type</th><th>Standard</th><th>Controller</th><th>Attester</th><th>Payload</th><th className="td-right">Date / block</th><th>State</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -80,7 +86,7 @@ export function AttestationsPage() {
                   <td className="mono t2" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {payloadPreview(a)}
                   </td>
-                  <td className="td-right num">{a.order.blockNumber}</td>
+                  <td className="td-right num"><div><EventDate timestamp={a.order.timestamp} /></div><span className="t3 small">Block {a.order.blockNumber}</span></td>
                   <td>{a.revoked ? <Badge tone="danger">revoked</Badge> : <Badge tone="ok">live</Badge>}</td>
                   <td className="td-right">
                     {a.attester === signer?.address && !a.revoked && (

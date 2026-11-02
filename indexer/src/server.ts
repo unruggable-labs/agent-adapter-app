@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, type Address, type Hex } from "viem";
-import { addressCard, defaultCard, identityCard, statsCard } from "./og.js";
+import { addressCard, defaultCard, identityCard, imageData, previewVersion, statsCard } from "./og.js";
 import { withMeta } from "./meta.js";
 import { llmsTxt, plainBody, withBody } from "./plain.js";
 import { fetchContent } from "./gateway.js";
@@ -93,12 +93,14 @@ export function startServer(chains: ChainRuntime[], port: number) {
     }
     const cached = async (key: string, render: () => Promise<Buffer>) => {
       const hit = cards.get(key);
-      if (hit && Date.now() - hit.at < CARD_TTL_MS) return hit.png;
+      if (hit && Date.now() - hit.at < CARD_TTL_MS && !key.startsWith("stats:")) return hit.png;
       const png = await render();
+      for (const [oldKey, entry] of cards) if (Date.now() - entry.at >= CARD_TTL_MS) cards.delete(oldKey);
+      if (cards.size >= 500) cards.delete(cards.keys().next().value!);
       cards.set(key, { png, at: Date.now() });
       return png;
     };
-    const pngHeaders = { "cache-control": "public, max-age=300" };
+    const pngHeaders = { "cache-control": "no-cache" };
     const scope = scopeFor(host);
     // "on Base" where the page is about one chain; nothing where it spans several.
     const onScope = scope.length === 1 ? ` on ${scope[0].label}` : "";
@@ -142,14 +144,16 @@ export function startServer(chains: ChainRuntime[], port: number) {
         if (!found) return send(404, "text/plain", "no such identity");
         const { c, id } = found;
         const v = c.views.view(id);
-        const png = await cached(`identity:${id.ubid}:${id.lastEvent?.blockNumber ?? 0}:${v.reputation.stars}:${v.reputation.ratings.length}:${v.reputation.reviews.length}:${v.reputation.interactions.length}`, () =>
+        const image = await imageData(v.image);
+        const version = previewVersion(host, cardOf(c), v, image);
+        const png = await cached(`identity:${id.ubid}:${version}`, () =>
           identityCard(host, cardOf(c), {
             name: v.agentName ?? v.subjectLabel,
             ubid: id.ubid,
             standardName: v.standardName,
             agentIds: id.agentIds.map(String),
             claimed: id.claimed,
-            image: v.image,
+            image,
             ratingAverage: v.reputation.ratingAverage,
             raters: v.reputation.ratings.length,
             reviews: v.reputation.reviews.length,
@@ -173,7 +177,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
         const bound = per.reduce((n, p) => n + p.bound, 0);
         const statements = per.reduce((n, p) => n + p.statements, 0);
         const pills = (present.length ? present : per).map((p) => cardOf(p.c));
-        const png = await cached(`address:${scope.map((c) => c.slug).join(",")}:${a}:${statements}:${w?.designation?.ubid ?? ""}`, () =>
+        const png = await cached(`address:${scope.map((c) => c.slug).join(",")}:${a}:${previewVersion(host, pills, !!w?.self, w?.designation, w?.verified, bound, statements)}`, () =>
           addressCard(host, pills.length === 1 ? pills[0] : pills, {
             address: a,
             isAgent: !!w?.self,
@@ -187,7 +191,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
       if (url.pathname === "/og/stats.png") {
         // The last 90 days, by week. On the stats host every selected chain is added up: this
         // chain from its own log, the others from their public APIs. Elsewhere, this chain alone.
-        const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
+        const now = Math.floor(Date.now() / 1000) + 1;
         const window = { from: now - 90 * 86400, to: now };
         // The stats host, or a server running several chains, adds up every mainnet (or ?chains=);
         // a chain's own site shows that chain.
@@ -196,7 +200,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
         const local = (id: number) => scope.find((c) => Number(c.chainId) === id && c.log);
         const wanted = across ? PUBLIC_SITES.filter((s) => (pick ? pick.includes(s.slug) : !s.testnet)) : PUBLIC_SITES.filter((s) => local(s.chain.id));
         const sites = wanted.length ? wanted : PUBLIC_SITES.filter((s) => local(s.chain.id));
-        const key = `stats:${sites.map((s) => s.slug).join(",")}:${now}`;
+        const key = `stats:${host}:${sites.map((s) => s.slug).join(",")}:${now}`;
         const png = await cached(key, async () => {
           const parts = await Promise.all(
             sites.map(async (s) => {
@@ -235,7 +239,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
       if (url.pathname === "/og/default.png") {
         const identities = scope.reduce((n, c) => n + c.store.identities.size, 0);
         const attestations = scope.reduce((n, c) => n + c.store.attestations.size, 0);
-        const png = await cached(`default:${scope.map((c) => c.slug).join(",")}:${identities}:${attestations}`, () =>
+        const png = await cached(`default:${previewVersion(host, scope.map(cardOf), identities, attestations)}`, () =>
           defaultCard(host, scope.length === 1 ? cardOf(scope[0]) : scope.map(cardOf), { identities, attestations }),
         );
         return send(200, "image/png", png, pngHeaders);
@@ -283,7 +287,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
             title: `${name} · Agent Identity on ${chain} · Adapterscan`,
             description: `${name} on ${chain}: ${bits.join(", ")}. ${v.card?.description ? v.card.description.slice(0, 140) : "Identity, profiles, and reviews for AI agents."}`,
             url: pageUrl,
-            image: `${origin}/og/identity/${id.ubid}.png`,
+            image: `${origin}/og/identity/${id.ubid}.png?v=${previewVersion(host, cardOf(found.c), v, await imageData(v.image))}`,
             type: "profile",
           }));
         }

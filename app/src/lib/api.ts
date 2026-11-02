@@ -61,6 +61,8 @@ export interface Reputation {
 }
 
 export interface Order {
+  /** Block timestamp in unix seconds; null while historical dates are being fetched. */
+  timestamp?: number | null;
   blockNumber: string;
   logIndex: number;
 }
@@ -82,7 +84,7 @@ export interface Identity {
   image?: string | null;
   /** The token's metadata card (name, description, image), or the agent card's where the token
    *  has none. Resolved in the background like the image. */
-  card?: { image: string | null; name: string | null; description: string | null; source: "token" | "agent" } | null;
+  card?: { image: string | null; name: string | null; description: string | null; source: "token" | "agent"; agentMetadataPending?: boolean } | null;
   /** What the bound collection or contract says about itself (its contractURI): name, description,
    *  image, website. Read in the background like the card. Older indexers omit it. */
   collection?: { name: string | null; description: string | null; image: string | null; externalLink: string | null } | null;
@@ -225,19 +227,24 @@ export interface CollectionsQuery {
 }
 
 export interface IdentitiesQuery {
+  from?: number;
+  to?: number;
   /** Only these chains (slugs). */
   chain?: string[];
   limit?: number;
   offset?: number;
   standard?: string[];
   /** How the identities exist: an ERC-8004 agent minted, a counterfactual claim, or neither yet. */
-  registration?: ("registered" | "counterfactual" | "unclaimed")[];
+  registration?: ("registered" | "counterfactual" | "unclaimed" | "claimed")[];
   bound?: string;
   tokenId?: string;
   q?: string;
 }
 
 export interface AttestationsQuery {
+  from?: number;
+  to?: number;
+  resolution?: "resolved" | "unresolved";
   chain?: string[];
   limit?: number;
   offset?: number;
@@ -279,12 +286,14 @@ function qs(params: object): string {
 
 // ---- stats (see indexer/src/stats.ts)
 export type StatsBucket = "day" | "week" | "month";
-export type StatsMetric = "identities" | "registrations" | "claims" | "attestations" | "revocations" | "attesters" | "wallets" | "active";
+export type StatsMetric = "identities" | "registrations" | "claims" | "attestations" | "revocations" | "attesters" | "wallets" | "active" | "references";
 export interface StatsFigure {
   value: number;
   prior: number;
 }
 export interface StatsOverview {
+  generatedAt?: number;
+  indexed?: { state: string; syncedTo: string | null; head: string | null; lastSyncAt: number | null };
   from: number;
   to: number;
   figures: Record<StatsMetric | "projects", StatsFigure>;

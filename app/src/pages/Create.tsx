@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { encodeFunctionData, isAddress, type Address, type Hex } from "viem";
-import { Addr, Badge, Spinner, Tip } from "../components/ui";
+import { Ubid, Addr, Badge, Spinner, Tip } from "../components/ui";
 import { useApp, useLive, settle } from "../lib/app-state";
 import { adapterOf, api } from "../lib/api";
 import { ChainIcon } from "../components/chains";
@@ -277,7 +277,7 @@ function WalletFlow({ chain }: { chain: NetworkId }) {
         <p className="page-sub">This UBID is the agents's permanent identifier.</p>
         <div className="card">
           <div className="section-label">UBID</div>
-          <div className="mono" style={{ overflowWrap: "anywhere" }}>{done}</div>
+          <Ubid value={done} />
         </div>
         <div className="row" style={{ marginTop: 14 }}>
           <button className="btn btn-primary" onClick={() => navigate(`/identity/${done}`)}>Open profile</button>
@@ -353,7 +353,7 @@ function WalletFlow({ chain }: { chain: NetworkId }) {
                 : <span className="row"><Badge tone="danger">you don't pass</Badge><span className="t2 small">{authorityDetail(kind, standard, facts, signer?.address ?? null, false)}</span></span>}
             </dd>
             <dt><Tip tip="The identity's permanent name - a hash the live contract computes from the standard, the address and the token id. Same whether you claim now or register fully later.">UBID</Tip></dt>
-            <dd className="mono" style={{ overflowWrap: "anywhere" }}>{ubid ?? "-"}</dd>
+            <dd>{ubid ? <Ubid value={ubid} /> : "-"}</dd>
           </dl>
 
           {existing && (

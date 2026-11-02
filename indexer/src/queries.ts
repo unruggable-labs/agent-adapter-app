@@ -38,7 +38,11 @@ export interface Page<T> {
   limit: number;
 }
 
-export type ChainIdentityView = IdentityView & { chain: string };
+export type ChainIdentityView = IdentityView & {
+  chain: string;
+  created: OrderKey & { timestamp: number | null };
+  lastEvent: (NonNullable<IdentityView["lastEvent"]> & { timestamp: number | null }) | null;
+};
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
@@ -80,7 +84,17 @@ const names = (p: URLSearchParams, key: string): Set<string> | null => {
 
 /** The full view, saying which chain it is on. */
 export function viewOf(c: ChainScope, id: IdentityState): ChainIdentityView {
-  return { ...c.views.view(id), chain: c.slug };
+  const v = c.views.view(id);
+  return {
+    ...v, chain: c.slug,
+    created: { ...v.created, timestamp: c.timeOf(v.created) },
+    lastEvent: v.lastEvent ? { ...v.lastEvent, timestamp: c.timeOf(v.lastEvent) } : null,
+    reputation: {
+      ...v.reputation,
+      reviews: v.reputation.reviews.map((r) => ({ ...r, order: { ...r.order, timestamp: c.timeOf(r.order) } })),
+      interactions: v.reputation.interactions.map((r) => ({ ...r, order: { ...r.order, timestamp: c.timeOf(r.order) } })),
+    },
+  };
 }
 
 /** Does the identity's text - what people call it - contain the query? */
@@ -125,14 +139,23 @@ export function listIdentities(chains: ChainScope[], p: URLSearchParams): Page<C
   const tokenId = p.get("tokenId");
   const t = tokenId && /^\d+$/.test(tokenId) ? BigInt(tokenId) : null;
   const q = p.get("q")?.trim().toLowerCase();
+  const from = p.has("from") ? Number(p.get("from")) : null;
+  const to = p.has("to") ? Number(p.get("to")) : null;
   const rows = interleave(
     chains,
     (c) => {
       let ids = [...c.store.identities.values()];
       if (standards) ids = ids.filter((i) => standards.has(STANDARD_NAMES[i.standard]));
-      if (registrations) ids = ids.filter((i) => registrations.has(registrationOf(i)));
+      if (registrations) ids = ids.filter((i) => registrations.has(registrationOf(i)) || (registrations.has("claimed") && i.claimed));
       if (bound) ids = ids.filter((i) => i.boundAddress === bound);
       if (t !== null) ids = ids.filter((i) => i.tokenId === t);
+      if (from !== null || to !== null) ids = ids.filter((i) => {
+        const order = registrations?.has("claimed")
+          ? c.store.history.get(i.ubid)?.find((h) => h.eventName === "CounterfactualAgentRegistered" && h.outcome === "applied")?.order
+          : i.created;
+        const time = order ? c.timeOf(order) : null;
+        return time !== null && (from === null || time >= from) && (to === null || time < to);
+      });
       if (q) ids = ids.filter((i) => (isHex(q) ? matchesHex(c.views, i, q) : matchesText(c.views, i, q)));
       return ids;
     },
@@ -210,7 +233,7 @@ export function search(chains: ChainScope[], raw: string): SearchHit[] {
 /** One statement as the API shows it: the record, its type's name, its chain, and the identity it is about when known. */
 export function attestationRow(c: ChainScope, a: AttestationRecord) {
   const target = c.store.identities.get(a.ubid);
-  return { ...a, chain: c.slug, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? viewOf(c, target) : null };
+  return { ...a, order: { ...a.order, timestamp: c.timeOf(a.order) }, revocation: a.revocation ? { ...a.revocation, order: { ...a.revocation.order, timestamp: c.timeOf(a.revocation.order) } } : null, chain: c.slug, typeName: ATTESTATION_TYPE_NAMES[a.attestationType], resolved: !!target, target: target ? viewOf(c, target) : null };
 }
 
 /** The statement classes where one live statement per attester stands and the latest wins (spec §6).
@@ -230,7 +253,7 @@ export function attestationView(chains: ChainScope[], id: Hex) {
   const store = c.store;
   const a = store.attestations.get(key)!;
   const live = STATE_CLASSES.has(a.attestationType) ? store.liveStateValue(a.ubid, a.attester, a.attestationType) : null;
-  const supersededBy = live && live.attestationId !== a.attestationId && !a.revoked ? { attestationId: live.attestationId, order: live.order } : null;
+  const supersededBy = live && live.attestationId !== a.attestationId && !a.revoked ? { attestationId: live.attestationId, order: { ...live.order, timestamp: c.timeOf(live.order) } } : null;
   return {
     ...attestationRow(c, a),
     supersededBy,
@@ -254,6 +277,9 @@ export function listAttestations(chains: ChainScope[], p: URLSearchParams) {
   const standards = names(p, "standard");
   const attester = p.get("attester")?.toLowerCase();
   const ubid = p.get("ubid")?.toLowerCase();
+  const resolution = p.get("resolution");
+  const from = p.has("from") ? Number(p.get("from")) : null;
+  const to = p.has("to") ? Number(p.get("to")) : null;
   const rows = interleave(
     chains,
     (c) => {
@@ -266,6 +292,19 @@ export function listAttestations(chains: ChainScope[], p: URLSearchParams) {
         });
       if (attester) rows = rows.filter((a) => a.attester === attester);
       if (ubid) rows = rows.filter((a) => a.ubid === ubid);
+      if (resolution === "unresolved") rows = rows.filter((a) => !c.store.identities.has(a.ubid));
+      if (resolution === "resolved") rows = rows.filter((a) => c.store.identities.has(a.ubid));
+      if (from !== null || to !== null) {
+        const first = new Map<Hex, OrderKey>();
+        for (const a of c.store.attestations.values()) {
+          const old = first.get(a.ubid);
+          if (!old || newestFirst(a.order, old) > 0) first.set(a.ubid, a.order);
+        }
+        rows = rows.filter((a) => {
+          const time = c.timeOf(resolution === "unresolved" ? first.get(a.ubid)! : a.order);
+          return time !== null && (from === null || time >= from) && (to === null || time < to);
+        });
+      }
       return rows;
     },
     (a) => a.order,

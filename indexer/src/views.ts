@@ -190,7 +190,7 @@ export class ViewCache {
   summary(id: IdentityState) {
     const c = this.advisories.contract(id.boundAddress);
     const card = this.cardOf(id);
-    return { ...labelsFrom(c?.name ?? null, id, card?.agentName), holder: this.holder(id), card };
+    return { ...labelsFrom(c?.name ?? null, id, card?.agentName, card?.source === "token" ? card.name : null), holder: this.holder(id), card };
   }
 
   /** The view, now, from what is stored. Never reads the chain. */
@@ -200,7 +200,7 @@ export class ViewCache {
     const card = this.cardOf(id);
     return {
       ...id,
-      ...labelsFrom(c?.name ?? null, id, card?.agentName),
+      ...labelsFrom(c?.name ?? null, id, card?.agentName, card?.source === "token" ? card.name : null),
       // The token's own picture; the collection's where the token has none (yet). Our copy of
       // it once the worker has saved one (pictures.ts).
       image: shownPicture(card?.image ?? c?.collection?.image ?? null),
@@ -269,8 +269,14 @@ export class ViewCache {
         .filter((id) => everything || this.cardDue(id, now))
         .map(async (id) => {
           // Nothing found is often nothing reachable (a gateway down, a server out): the card we
-          // had stays, and is read again with the rest the next day.
-          const card = (await resolveCard(this.client, id, registry)) ?? this.advisories.card(id.ubid)?.card ?? null;
+          // had stays. Incomplete registration metadata gets a shorter retry interval.
+          const had = this.advisories.card(id.ubid);
+          const resolved = await resolveCard(this.client, id, registry);
+          const legacyKey = `2:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
+          const previous = had && (had.key === cardKey(id) || had.key === legacyKey) ? had.card : null;
+          const card = resolved?.agentMetadataPending && previous
+            ? { ...resolved, agentName: previous.agentName ?? null, description: resolved.description ?? previous.description, image: resolved.image ?? previous.image }
+            : resolved ?? previous;
           cards.set(id.ubid, { key: cardKey(id), card, at: Date.now() });
         }),
     );
@@ -301,7 +307,7 @@ export class ViewCache {
   private cardDue(id: IdentityState, now: number): boolean {
     const c = this.advisories.card(id.ubid);
     if (!c || c.key !== cardKey(id) || this.dirty.cards.has(id.ubid)) return true;
-    return now - c.at > (c.card ? this.opts.staleMs : this.opts.missStaleMs);
+    return now - c.at > (c.card?.agentMetadataPending ? this.opts.retryMs : c.card ? this.opts.staleMs : Math.min(this.opts.missStaleMs, 10 * 60_000));
   }
 
   /**
@@ -353,8 +359,9 @@ export class ViewCache {
     if (this.multicall) {
       try {
         const results = await this.client.multicall({ contracts, allowFailure: true, batchSize: 0 });
-        // Inside a batch that ran, a failed call is the contract answering - a revert - never the RPC.
-        return results.map((r) => (r.status === "success" ? (r.result as Address) : null));
+        // A batch may include failures to encode or decode a call as well as contract reverts.
+        // Only a contract answer establishes that there is no holder; retry unknown failures.
+        return results.map((r) => (r.status === "success" ? (r.result as Address) : contractAnswered(r.error) ? null : undefined));
       } catch (e) {
         if (!contractAnswered(e)) {
           this.opts.log(`Multicall3 batch failed (RPC), trying again later: ${firstLine(e)}`);

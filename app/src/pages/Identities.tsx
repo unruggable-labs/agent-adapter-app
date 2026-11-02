@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChainFilter, ChainTag, useChainParam } from "../components/chains";
 import { CollectionTile } from "../components/collections";
-import { Addr, ControllerCell, Modal, MultiSelect, Pager, registrationOf, RegistrationMark, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell, type Registration } from "../components/ui";
+import { EventDate, Addr, ControllerCell, Modal, MultiSelect, Pager, registrationOf, RegistrationMark, Skeleton, SkeletonRows, StandardBadge, StatusBadge, Tip, UbidCell, type Registration } from "../components/ui";
 import { api, type IdentitiesQuery } from "../lib/api";
 import { useApp, useLive } from "../lib/app-state";
 import { IS_HUB, STANDARD_NAMES } from "../lib/chain";
@@ -10,10 +10,10 @@ import { setSearchParams, usePageParam, useSearchParams } from "../lib/url";
 const PAGE_SIZE = 25;
 
 type RegistrationFilter = NonNullable<IdentitiesQuery["registration"]>[number];
-/** The two that matter. The API also takes `unclaimed` (settings made, nothing claimed), which is too rare to offer here. */
-const REGISTRATIONS: RegistrationFilter[] = ["registered", "counterfactual"];
-const REGISTRATION_LABEL: Record<RegistrationFilter, string> = { registered: "On-chain (ERC-8004)", counterfactual: "Counterfactual", unclaimed: "Unclaimed" };
-const REGISTRATION_MARK: Record<RegistrationFilter, Registration> = { registered: "onchain", counterfactual: "claim", unclaimed: "none" };
+/** Current status filters plus explicit registrations, including ones later minted. */
+const REGISTRATIONS: RegistrationFilter[] = ["registered", "counterfactual", "claimed", "unclaimed"];
+const REGISTRATION_LABEL: Record<RegistrationFilter, string> = { registered: "On-chain (ERC-8004)", counterfactual: "Counterfactual only", unclaimed: "Settings only", claimed: "Has counterfactual registration" };
+const REGISTRATION_MARK: Record<RegistrationFilter, Registration> = { registered: "onchain", counterfactual: "claim", unclaimed: "none", claimed: "claim" };
 
 /** A comma-separated list in the query string, as an array; only the values it may hold. */
 function listParam<T extends string>(p: URLSearchParams, key: string, allowed: readonly T[]): T[] {
@@ -40,6 +40,8 @@ export function IdentitiesPage() {
   const registration = listParam(params, "registration", REGISTRATIONS);
   const standard = listParam(params, "standard", STANDARD_NAMES);
   const q = params.get("q") ?? "";
+  const from = params.has("from") ? Number(params.get("from")) : undefined;
+  const to = params.has("to") ? Number(params.get("to")) : undefined;
   const [typed, setTyped] = useState(q);
   const [showFilters, setShowFilters] = useState(false);
   // The box writes ?q a moment after typing stops, so each key isn't a request.
@@ -48,10 +50,10 @@ export function IdentitiesPage() {
     const t = setTimeout(() => setParam("q", typed.trim()), 250);
     return () => clearTimeout(t);
   }, [typed, q]);
-  const filtered = registration.length + standard.length > 0 || q !== "";
+  const filtered = registration.length + standard.length > 0 || q !== "" || from !== undefined || to !== undefined;
   const { data, status } = useLive(
-    () => api.identities({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, chain: chain ? [chain] : undefined, registration, standard, q: q || undefined }),
-    [page, chain, registration.join(","), standard.join(","), q],
+    () => api.identities({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, chain: chain ? [chain] : undefined, registration, standard, q: q || undefined, from, to }),
+    [page, chain, registration.join(","), standard.join(","), q, from, to],
   );
   const total = data?.total ?? (filtered ? 0 : (overview?.identities ?? 0));
   const active = registration.length + standard.length;
@@ -71,6 +73,11 @@ export function IdentitiesPage() {
       </p>
 
       <StatPanels />
+      <div className="row wrap" style={{ gap: 12, marginBottom: 14 }}>
+        <button className="agent-link small" onClick={() => setParam("registration", "claimed")}>Counterfactual registrations</button>
+        <button className="agent-link small" onClick={() => navigate(`/attestations?resolution=unresolved${chain ? `&chain=${chain}` : ""}`)}>Referenced-only identities →</button>
+        {(from !== undefined || to !== undefined) && <span className="small t3">Registration window: <EventDate timestamp={from} /> – <EventDate timestamp={to} /> <button className="agent-link" onClick={() => setSearchParams((p) => { p.delete("from"); p.delete("to"); p.delete("page"); }, "replace")}>Clear dates</button></span>}
+      </div>
       {page === 0 && !chain && !filtered && <CollectionStrip />}
       <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         {IS_HUB && <ChainFilter />}
@@ -94,7 +101,7 @@ export function IdentitiesPage() {
               <th><Tip tip="The thing that controls this identity: its collection (name when known, else the contract address) and token id. For account standards, the address itself.">Controller</Tip></th>
               <th><Tip tip="How the identity exists: 'ERC-8004 #ID' means a real agent was minted on the shared registry with that id; 'counterfactual' means it lives in the event log without a mint. Both share the same UBID and history.">Registration</Tip></th>
               <th className="td-center"><Tip tip="Average of each attester's latest live 0-100 rating.">Rating</Tip></th>
-              <th className="td-center">Stars</th>
+              <th className="td-center">Stars</th><th>Created</th>
             </tr>
           </thead>
           <tbody>
@@ -107,14 +114,15 @@ export function IdentitiesPage() {
                 <td><StatusBadge id={id} /></td>
                 <td className="td-center num">{id.reputation.ratingAverage === null ? <span className="t3">—</span> : id.reputation.ratingAverage.toFixed(0)}</td>
                 <td className="td-center num">{id.reputation.stars || <span className="t3">0</span>}</td>
+                <td><EventDate timestamp={id.created?.timestamp} /></td>
               </tr>
             ))}
-            {!data && status === "loading" && <SkeletonRows widths={IS_HUB ? [0, 40, 50, 60, 60, 30, 30] : [0, 50, 60, 60, 30, 30]} />}
+            {!data && status === "loading" && <SkeletonRows widths={IS_HUB ? [0, 40, 50, 60, 60, 30, 30, 90] : [0, 50, 60, 60, 30, 30, 90]} />}
             {!data && status === "error" && (
-              <tr className="is-static"><td colSpan={IS_HUB ? 7 : 6}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
+              <tr className="is-static"><td colSpan={IS_HUB ? 8 : 7}><div className="empty">Can't reach the indexer - retrying every few seconds.</div></td></tr>
             )}
             {data && data.total === 0 && (
-              <tr className="is-static"><td colSpan={IS_HUB ? 7 : 6}><div className="empty">{filtered ? "Nothing matches these filters." : "No identities yet."}</div></td></tr>
+              <tr className="is-static"><td colSpan={IS_HUB ? 8 : 7}><div className="empty">{filtered ? "Nothing matches these filters." : "No identities yet."}</div></td></tr>
             )}
           </tbody>
         </table>
@@ -201,7 +209,7 @@ function StatPanels() {
     <div className="stat-panels">
       <div className="stat-panel">
         <div className="stat-panel-n">{n(overview?.identities)}</div>
-        <div className="stat-panel-l"><Tip tip={`Every identity the indexer knows ${IS_HUB ? "on every mainnet" : "on this network"} - claimed, registered, or referenced by an attestation.`}>UBIDs</Tip></div>
+        <div className="stat-panel-l"><Tip tip={`Every identity the indexer knows ${IS_HUB ? "on every mainnet" : "on this network"} - counterfactually registered, minted as ERC-8004, or with identity settings. Feedback alone does not create an identity record.`}>UBIDs</Tip></div>
       </div>
       <div className="stat-panel">
         <div className="stat-panel-n">{n(overview?.projects)}</div>
@@ -209,7 +217,7 @@ function StatPanels() {
       </div>
       <div className="stat-panel">
         <div className="stat-panel-n">{n(overview?.registered)}</div>
-        <div className="stat-panel-l"><Tip tip="Identities with an ERC-8004 agent minted on the shared registry. The rest are counterfactual claims.">Registered on-chain</Tip></div>
+        <div className="stat-panel-l"><Tip tip="Identities with an ERC-8004 agent minted on the shared registry. Counterfactual registrations and feedback references are separate.">Registered on-chain</Tip></div>
       </div>
       <div className="stat-panel">
         <div className="stat-panel-n">{n(overview?.attestations)}</div>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ContractFunctionRevertedError, ContractFunctionZeroDataError, HttpRequestError, type Address, type Hex, type PublicClient } from "viem";
 import { ProjectionStore, type LogEvent } from "../src/projection.js";
 import { AdvisoryStore } from "../src/advisories.js";
@@ -45,6 +45,41 @@ function fakeChain(multicall3 = false) {
 }
 
 describe("identity views", () => {
+  it("preserves a searchable agent name through a partial metadata failure and retries promptly", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    store.apply(registered(1));
+    const id = store.identities.get(UBID7)!;
+    id.agentIds = [7n];
+    const registry = "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432";
+    let available = true;
+    let name = "Normie #7 - Zori";
+    const { client } = fakeChain();
+    const read = client.readContract.bind(client);
+    (client as unknown as { readContract: (a: any) => Promise<unknown> }).readContract = async (args) => {
+      if (args.functionName === "identityRegistry") return registry;
+      if (args.functionName === "tokenURI") {
+        if (args.address === registry && !available) throw new Error("temporary metadata outage");
+        return `data:application/json,${encodeURIComponent(JSON.stringify(args.address === registry ? { name, description: "Agent description" } : { name: "Normie #7", image: "https://example.com/token.png" }))}`;
+      }
+      return read(args);
+    };
+    const views = new ViewCache(store, client, { retryMs: 100 });
+    await views.refreshMany([id]);
+    expect(views.summary(id).agentName).toBe(name);
+    available = false;
+    await views.refreshMany([id], true);
+    expect(views.summary(id).agentName).toBe(name);
+    expect(views.summary(id).card?.agentMetadataPending).toBe(true);
+    available = true;
+    name = "Zori updated";
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 101);
+    try {
+      await views.refreshMany([id]);
+      expect(views.summary(id).agentName).toBe(name);
+      expect(views.summary(id).card?.agentMetadataPending).toBeUndefined();
+    } finally { clock.mockRestore(); }
+  });
+
   it("answers from memory before the chain has been read, with the chain facts unknown", () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
     store.apply(registered(1));
@@ -174,6 +209,27 @@ describe("identity views", () => {
     (client as unknown as { multicall: unknown }).multicall = working; // the RPC recovers
     await views.refreshMany([...store.identities.values()]);
     expect(calls.filter((c) => c.startsWith("multicall")).length).toBe(3); // still batching
+  });
+
+  it("preserves the holder when an individual multicall result fails without a contract answer", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    store.apply(registered(1));
+    const { client } = fakeChain(true);
+    const views = new ViewCache(store, client);
+    await views.refreshMany([...store.identities.values()]);
+    (client as unknown as { multicall: () => Promise<unknown> }).multicall = async () => [
+      { status: "failure", error: new HttpRequestError({ url: "https://rpc.example", details: "timeout" }) },
+    ];
+    await views.refreshMany([...store.identities.values()]);
+    expect(views.views()[0].currentControllerHolder).toBe(ALICE);
+    expect(views.views()[0].flags.currentlyOwnerless).toBe(false);
+
+    (client as unknown as { multicall: () => Promise<unknown> }).multicall = async () => [
+      { status: "failure", error: new ContractFunctionRevertedError({ abi: [], functionName: "ownerOf", message: "ERC721NonexistentToken(7)" }) },
+    ];
+    await views.refreshMany([...store.identities.values()]);
+    expect(views.views()[0].currentControllerHolder).toBeNull();
+    expect(views.views()[0].flags.currentlyOwnerless).toBe(true);
   });
 
   it("a token whose ownerOf reverts is ownerless; a read the RPC dropped is not", async () => {

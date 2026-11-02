@@ -75,6 +75,7 @@ export class ChainRuntime implements ChainInfo {
   private head: bigint | null = null;
   private lastSyncAt: number | null = null;
   private error: string | null = null;
+  private dating = false;
   private timers: ReturnType<typeof setInterval>[] = [];
 
   constructor(o: RuntimeOptions) {
@@ -127,8 +128,22 @@ export class ChainRuntime implements ChainInfo {
       this.timers.push(setInterval(() => void this.scan(), this.watchMs));
       void this.scan();
       // Blocks stored before timestamps were kept get theirs now, in the background.
-      this.ingester!.backfillTimestamps().then((n) => n > 0 && this.say(`Timestamps: filled ${n} blocks stored before they were kept`)).catch(() => {});
+      void this.dateBlocks();
+      this.timers.push(setInterval(() => void this.dateBlocks(), 5 * 60_000));
     });
+  }
+
+  private async dateBlocks(): Promise<void> {
+    if (this.dating || !this.ingester) return;
+    this.dating = true;
+    try {
+      const filled = await this.ingester.backfillTimestamps();
+      if (filled > 0) this.say(`Timestamps: filled ${filled} blocks stored before they were kept`);
+    } catch (error) {
+      this.say(`Timestamps: retrying later (${error instanceof Error ? error.message : String(error)})`);
+    } finally {
+      this.dating = false;
+    }
   }
 
   stop(): void {

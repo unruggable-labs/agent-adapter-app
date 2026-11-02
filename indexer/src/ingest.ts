@@ -123,7 +123,7 @@ export class Ingester {
         const got = await Promise.all(missing.slice(i, i + 3).map(async (n) => [n, await this.block(n).catch(() => null)] as const));
         for (const [n, h] of got) if (h?.timestamp) stamps.set(n, Number(BigInt(h.timestamp)));
       }
-      if (stamps.size === 0) return filled; // the RPC isn't answering; try again next boot
+      if (stamps.size === 0) return filled; // the runtime retries later if the RPC isn't answering
       this.log.setTimestamps(stamps);
       filled += stamps.size;
       onProgress?.(filled);

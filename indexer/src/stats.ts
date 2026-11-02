@@ -16,8 +16,8 @@ import type { ViewCache } from "./views.js";
 export type Bucket = "day" | "week" | "month";
 export const BUCKETS: Bucket[] = ["day", "week", "month"];
 
-export type Metric = "identities" | "registrations" | "claims" | "attestations" | "revocations" | "attesters" | "wallets" | "active";
-export const METRICS: Metric[] = ["identities", "registrations", "claims", "attestations", "revocations", "attesters", "wallets", "active"];
+export type Metric = "identities" | "registrations" | "claims" | "attestations" | "revocations" | "attesters" | "wallets" | "active" | "references";
+export const METRICS: Metric[] = ["identities", "registrations", "claims", "attestations", "revocations", "attesters", "wallets", "active", "references"];
 
 /** [from, to) in unix seconds. */
 export interface Window {
@@ -69,6 +69,11 @@ function metricSql(metric: Metric): { from: string; count: string } {
         from: `(SELECT ubid, MIN(block_number) AS block_number FROM events WHERE event_name = 'CounterfactualAgentRegistered' GROUP BY ubid) c JOIN events e ON e.ubid = c.ubid AND e.block_number = c.block_number AND e.event_name = 'CounterfactualAgentRegistered' JOIN blocks b ON b.number = e.block_number`,
         count: "COUNT(DISTINCT e.ubid)",
       };
+    case "references":
+      return {
+        from: `(SELECT ubid, MIN(block_number) AS block_number FROM events WHERE event_name = 'Attested' AND ubid IS NOT NULL AND ubid NOT IN (SELECT ubid FROM events WHERE ubid IS NOT NULL AND event_name IN (${list(CREATING)})) GROUP BY ubid) c JOIN events e ON e.ubid = c.ubid AND e.block_number = c.block_number AND e.event_name = 'Attested' JOIN blocks b ON b.number = e.block_number`,
+        count: "COUNT(DISTINCT e.ubid)",
+      };
     case "registrations":
       return { from: `${base} AND e.event_name = 'AgentBound'`, count: "COUNT(*)" };
     case "attestations":
@@ -85,7 +90,7 @@ function metricSql(metric: Metric): { from: string; count: string } {
 }
 
 /** Metrics keyed by UBID rather than bound address; grouping them by project goes through the UBID map. */
-const UBID_KEYED = new Set<Metric>(["attestations", "revocations", "attesters", "active"]);
+const UBID_KEYED = new Set<Metric>(["attestations", "revocations", "attesters", "active", "references"]);
 /** The UBID → bound address map. */
 const BOUND_OF = "(SELECT ubid, MIN(bound_address) AS bound_address FROM events WHERE ubid IS NOT NULL AND bound_address IS NOT NULL GROUP BY ubid)";
 

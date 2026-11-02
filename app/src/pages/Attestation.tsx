@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Addr, Badge, Modal, Section, Spinner, StandardBadge, StatusBadge, Tip, TypeBadge, UbidCell, registrationOf } from "../components/ui";
+import { EventDate, Ubid, Addr, Badge, Modal, Section, Spinner, StandardBadge, StatusBadge, Tip, TypeBadge, UbidCell, registrationOf } from "../components/ui";
 import { adapterOf, api, NotFound, type AttestationView } from "../lib/api";
 import { ChainTag } from "../components/chains";
 import { useApp, useLive, settle } from "../lib/app-state";
@@ -37,7 +37,7 @@ export function AttestationPage({ id }: { id: string }) {
 
   const payload = decodePayload(a);
   const word = TYPE_WORD[a.typeName] ?? "statement";
-  const about = a.target ? displayName(a.target) : `${a.ubid.slice(0, 12)}…`;
+  const about = a.target ? displayName(a.target) : <Ubid value={a.ubid} />;
   const stands = !a.revoked && !a.supersededBy;
 
   return (
@@ -66,16 +66,16 @@ export function AttestationPage({ id }: { id: string }) {
             <dd>
               {a.target ? (
                 <span className="row wrap" style={{ gap: 8 }}>
-                  <button className="row" style={{ gap: 8 }} onClick={() => navigate(`/identity/${a.ubid}`)}>
+                  <span className="row" style={{ gap: 8 }}>
                     <UbidCell ubid={a.ubid} image={a.target.image} registration={registrationOf(a.target)} />
-                    <span className="agent-link">{displayName(a.target)}</span>
-                  </button>
+                    <button className="agent-link" onClick={() => navigate(`/identity/${a.ubid}`)}>{displayName(a.target)}</button>
+                  </span>
                   <StandardBadge id={a.target} />
                   <StatusBadge id={a.target} />
                 </span>
               ) : (
                 <span className="row wrap" style={{ gap: 8 }}>
-                  <span className="mono t2">{a.ubid}</span>
+                  <Ubid value={a.ubid} />
                   <Badge tone="warn" tip="No claim or binding matches this UBID yet. The statement is kept and gains meaning if one arrives.">unresolved</Badge>
                 </span>
               )}
@@ -121,6 +121,7 @@ export function AttestationPage({ id }: { id: string }) {
             <dd>
               <button className="agent-link mono" style={{ overflowWrap: "anywhere", textAlign: "left" }} title="What this id is a hash of" onClick={() => setShowPreimage(true)}>{a.attestationId}</button>
             </dd>
+            <dt>Date</dt><dd><EventDate timestamp={a.order.timestamp} /></dd>
             <dt>Made in</dt>
             <dd className="small">
               {explorerBlockUrl(a.chain, a.order.blockNumber) ? <a className="agent-link num" href={explorerBlockUrl(a.chain, a.order.blockNumber)!} target="_blank" rel="noopener noreferrer">block {a.order.blockNumber}</a> : <span className="num">block {a.order.blockNumber}</span>}
@@ -131,7 +132,7 @@ export function AttestationPage({ id }: { id: string }) {
             <dd>
               {a.revoked && a.revocation ? (
                 <span className="small">
-                  <Badge tone="danger">revoked</Badge> by <AddressLink address={a.revocation.revoker} /> in block <span className="num">{a.revocation.order.blockNumber}</span>
+                  <EventDate timestamp={a.revocation.order.timestamp} /> · <Badge tone="danger">revoked</Badge> by <AddressLink address={a.revocation.revoker} /> in block <span className="num">{a.revocation.order.blockNumber}</span>
                   {a.revocation.transactionHash && explorerTxUrl(a.chain, a.revocation.transactionHash) && <> · <a className="agent-link mono" href={explorerTxUrl(a.chain, a.revocation.transactionHash)!} target="_blank" rel="noopener noreferrer">{a.revocation.transactionHash.slice(0, 14)}…</a></>}
                 </span>
               ) : a.revoked ? (
@@ -163,7 +164,7 @@ export function AttestationPage({ id }: { id: string }) {
             <dt>Chain</dt><dd className="num">{a.preimage.chainId}</dd>
             <dt>Adapter</dt><dd><Addr value={a.preimage.adapter} n={42} /></dd>
             <dt>Attester</dt><dd><Addr value={a.preimage.attester} n={42} /></dd>
-            <dt>UBID</dt><dd className="mono" style={{ overflowWrap: "anywhere" }}>{a.preimage.ubid}</dd>
+            <dt>UBID</dt><dd><Ubid value={a.preimage.ubid} /></dd>
             <dt>Type</dt><dd className="num">{a.preimage.attestationType} <span className="t3">({a.typeName})</span></dd>
             <dt>Block</dt>
             <dd className="num">{a.preimage.blockNumber}</dd>

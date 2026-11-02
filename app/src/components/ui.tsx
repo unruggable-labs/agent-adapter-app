@@ -89,6 +89,13 @@ export function Badge({ tone = "", tip, children }: { tone?: string; tip?: strin
   return tip ? <Tip tip={tip}>{badge}</Tip> : badge;
 }
 
+/** Dates are block times, displayed consistently in UTC; never guess a missing date. */
+export function EventDate({ timestamp }: { timestamp?: number | null }) {
+  if (timestamp == null) return <span className="t3 small" title="The indexer is still fetching this block's timestamp">Date pending</span>;
+  const date = new Date(timestamp * 1000);
+  return <time className="small" dateTime={date.toISOString()} title="Block time (UTC)">{date.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })} UTC</time>;
+}
+
 export function Addr({ value, n = 10 }: { value: string; n?: number }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -103,6 +110,35 @@ export function Addr({ value, n = 10 }: { value: string; n?: number }) {
       }}
     >
       {copied ? "copied" : shortHex(value, n)}
+    </button>
+  );
+}
+
+/** Keep the identifier compact; copying always uses the complete UBID. */
+export function Ubid({ value }: { value: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const label = status === "copied" ? "UBID copied" : status === "error" ? "Could not copy UBID. Try again." : "Copy UBID";
+  return (
+    <button type="button" className="ubid" title={label} aria-label={label}
+      onKeyDown={(e) => e.stopPropagation()}
+      onClick={async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(value);
+          setStatus("copied");
+        } catch {
+          setStatus("error");
+        }
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setStatus("idle"), 1500);
+      }}>
+      <span>{shortHex(value, 10)}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {status === "copied" ? <path d="m5 12 4 4L19 6" /> : <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4" /></>}
+      </svg>
     </button>
   );
 }
@@ -145,7 +181,7 @@ export function UbidCell({ ubid, image, registration }: { ubid: string; image?: 
     <span className="row" style={{ gap: 8 }}>
       <Avatar seed={ubid} image={image} size={28} />
       {registration && <RegistrationMark r={registration} />}
-      <span className="mono t2">{shortHex(ubid, 10)}</span>
+      <Ubid value={ubid} />
     </span>
   );
 }

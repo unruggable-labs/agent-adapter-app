@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip } from "../components/ui";
+import { EventDate, Ubid, Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip } from "../components/ui";
 import { adapterOf, api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
 import { ChainTag } from "../components/chains";
 import { useApp, useLive, settle } from "../lib/app-state";
@@ -62,7 +62,8 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <StandardBadge id={id} />
             <ChainTag chain={id.chain} />
           </div>
-          <p className="mono t3 small" style={{ margin: 0, overflowWrap: "anywhere" }}>{id.ubid}</p>
+          <p className="t3 small" style={{ margin: 0 }}><Ubid value={id.ubid} /></p>
+          {id.card?.agentMetadataPending && <p className="t3 small" style={{ margin: 0 }}>Agent metadata is temporarily unavailable. Retrying shortly.</p>}
           {id.card?.name && id.card.name !== displayName(id) && (
             <p className="t2 small" style={{ margin: 0 }}>{id.card.name}<span className="t3"> · from the {id.card.source === "token" ? "token's" : "agent card's"} metadata</span></p>
           )}
@@ -105,7 +106,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <div key={r.attestationId} className="review-item">
               <div>{r.score !== null && r.score !== undefined && <span className="num" style={{ marginRight: 8 }}>{r.score}/100</span>}"{r.text}"</div>
               <div className="t3 small">
-                — <AddressLink address={r.attester} /> · block {r.order.blockNumber}
+                — <AddressLink address={r.attester} /> · <EventDate timestamp={r.order.timestamp} /> · block {r.order.blockNumber}
                 {r.reference && r.reference !== ZERO32 && <> · ref <TxRef hash={r.reference} chain={id.chain} /></>}
                 {" · "}<button className="agent-link" onClick={() => navigate(`/attestation/${r.attestationId}`)}>statement</button>
               </div>
@@ -114,7 +115,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
           {id.reputation.interactions.map((x) => (
             <div key={x.attestationId} className="review-item">
               <div><span className="num">{x.score}/100</span> {x.text && <span className="t2">· {x.text}</span>}</div>
-              <div className="t3 small">transaction · ref <TxRef hash={x.reference} chain={id.chain} /> · by <AddressLink address={x.attester} /> · <button className="agent-link" onClick={() => navigate(`/attestation/${x.attestationId}`)}>statement</button></div>
+              <div className="t3 small"><EventDate timestamp={x.order.timestamp} /> · transaction · ref <TxRef hash={x.reference} chain={id.chain} /> · by <AddressLink address={x.attester} /> · <button className="agent-link" onClick={() => navigate(`/attestation/${x.attestationId}`)}>statement</button></div>
             </div>
           ))}
           {id.reputation.confirmedAccounts.length > 0 && (
@@ -134,7 +135,8 @@ export function IdentityPage({ ubid }: { ubid: string }) {
 
         <Section label="Record">
           <dl className="kv">
-            <dt>UBID</dt><dd className="mono">{id.ubid}</dd>
+            <dt>UBID</dt><dd><Ubid value={id.ubid} /></dd>
+            <dt>Created</dt><dd><EventDate timestamp={id.created?.timestamp} /></dd>
             <dt>Agent URI</dt><dd className="mono">{id.agentURI ?? <span className="t3">not set</span>}</dd>
             <dt>Agent wallet</dt>
             <dd>
@@ -222,7 +224,7 @@ function ControllerSection({ id }: { id: Identity }) {
               <span className="row wrap" style={{ gap: 8 }}>
                 <span className="num">#{id.tokenId.length > 12 ? `${id.tokenId.slice(0, 6)}…${id.tokenId.slice(-4)}` : id.tokenId}</span>
                 {id.flags.currentlyOwnerless === true && (
-                  <Badge tone="warn" tip="The collection answers that no one owns this id: the token isn't minted yet, or was burned. A collection can claim an identity ahead of the mint; the first owner inherits it, picture and all.">not minted yet</Badge>
+                  <Badge tone="warn" tip="The last ownership check returned no owner for this token. It may be unminted or burned. This check is separate from the agent's ERC-8004 registration.">no token owner found</Badge>
                 )}
                 {holder && <span className="t2 small">held by <AddressLink address={holder} /></span>}
               </span>
@@ -255,6 +257,7 @@ function ControllerSection({ id }: { id: Identity }) {
  * seeing what was attempted is part of reading the record.
  */
 function HistoryPanel({ id }: { id: Identity }) {
+  const { tick } = useApp();
   const [rows, setRows] = useState<HistoryEntry[] | null>(null);
   const [error, setError] = useState(false);
   const last = id.lastEvent ? `${id.lastEvent.blockNumber}:${id.lastEvent.logIndex}` : "";
@@ -262,11 +265,11 @@ function HistoryPanel({ id }: { id: Identity }) {
   // Re-fetch when the identity's latest event moves, so a fresh transaction shows up here too.
   useEffect(() => {
     let cancelled = false;
-    api.history(id.ubid).then((h) => !cancelled && setRows(h)).catch(() => !cancelled && setError(true));
+    api.history(id.ubid).then((h) => { if (!cancelled) { setRows(h); setError(false); } }).catch(() => !cancelled && setError(true));
     return () => {
       cancelled = true;
     };
-  }, [id.ubid, last, id.reputation.stars, id.reputation.reviews.length, id.reputation.interactions.length]);
+  }, [id.ubid, last, id.reputation.stars, id.reputation.reviews.length, id.reputation.interactions.length, tick]);
 
   if (error) return <Section label="History"><p className="t2 small" style={{ margin: 0 }}>Couldn't load the history.</p></Section>;
   if (!rows) return <Section label="History"><Spinner /></Section>;
@@ -283,7 +286,7 @@ function HistoryPanel({ id }: { id: Identity }) {
         <div className="table-scroll">
           <table className="table">
             <thead>
-              <tr><th className="td-right">Block</th><th>Event</th><th>By</th><th>What it did</th><th>Tx</th></tr>
+              <tr><th className="td-right">Date / block</th><th>Event</th><th>By</th><th>What it did</th><th>Tx</th></tr>
             </thead>
             <tbody>
               {newestFirst.map((h) => {
@@ -291,6 +294,7 @@ function HistoryPanel({ id }: { id: Identity }) {
                 return (
                   <tr key={`${h.order.blockNumber}:${h.order.logIndex}`} className={h.outcome !== "applied" ? "is-muted" : undefined}>
                     <td className="td-right num">
+                      <div><EventDate timestamp={h.order.timestamp} /></div>
                       {explorerBlockUrl(id.chain, h.order.blockNumber)
                         ? <a className="agent-link" href={explorerBlockUrl(id.chain, h.order.blockNumber)!} target="_blank" rel="noopener noreferrer">{h.order.blockNumber}</a>
                         : h.order.blockNumber}

@@ -50,6 +50,24 @@ function world() {
 const win = (fromDay: number, toDay: number) => ({ from: T0 + fromDay * DAY, to: T0 + toDay * DAY });
 
 describe("stats", () => {
+  it("keeps unresolved feedback references separate and excludes invalid counterfactual registrations", () => {
+    const { log, store } = world();
+    const unknown = h(999);
+    const events: StoredEvent[] = [
+      { blockNumber: 10n, logIndex: 0, blockHash: h(10), blockTimestamp: T0 + 9 * DAY + 100, eventName: "CounterfactualAgentRegistered", args: { ubid: h(888), boundAddress: PUNKS, tokenId: 999n, standard: Standard.ERC721, emitter: ALICE, metadata: [] } },
+      ...[11, 12].map((block): StoredEvent => ({ blockNumber: BigInt(block), logIndex: 0, blockHash: h(block), blockTimestamp: T0 + 9 * DAY + block, eventName: "Attested", args: { ubid: unknown, attester: ALICE, attestationType: AttestationType.STAR, variant: ZERO32, data: "0x01", attestationId: computeAttestationId(CHAIN, ADAPTER, ALICE, unknown, AttestationType.STAR, BigInt(block), ZERO32, "0x01") } })),
+    ];
+    log.append(events, { number: 12n, hash: h(12) });
+    events.forEach((event) => store.apply(event));
+    const stats = overview(log.connection, store, win(0, 10));
+    expect(stats.figures.claims.value).toBe(4);
+    expect(stats.figures.identities.value).toBe(4);
+    expect(stats.figures.references.value).toBe(1);
+    expect(series(log.connection, "references", "day", win(9, 10)).series[0].points[0].v).toBe(1);
+    expect(log.count()).toBe(11); // original rejected event is retained
+    expect(store.dropped).toHaveLength(1);
+  });
+
   it("counts identities per day, zero-filled, with claims and registrations apart", () => {
     const { log } = world();
     const s = series(log.connection, "identities", "day", win(0, 5));

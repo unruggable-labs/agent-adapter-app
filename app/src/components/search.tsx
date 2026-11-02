@@ -3,7 +3,7 @@ import { api, type SearchHit } from "../lib/api";
 import { ChainTag } from "./chains";
 import { useApp } from "../lib/app-state";
 import { displayName } from "../lib/chain";
-import { Avatar, Badge, StandardBadge } from "./ui";
+import { Avatar, Badge, StandardBadge, Ubid } from "./ui";
 
 /**
  * The one search box, in the header of every page. It answers the product's question - who is
@@ -13,7 +13,7 @@ import { Avatar, Badge, StandardBadge } from "./ui";
  * Picking a hit opens its page.
  */
 export function SearchBar() {
-  const { navigate } = useApp();
+  const { navigate, tick } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
@@ -36,7 +36,7 @@ export function SearchBar() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, tick]);
 
   const hits = result.hits;
   useEffect(() => setCursor(0), [query]);
@@ -101,26 +101,27 @@ export function SearchBar() {
                 <Badge tone="outline">address</Badge>
               </button>
             ) : (
-              <button
+              <div
                 key={h.identity.ubid}
-                type="button"
+                tabIndex={0}
                 role="option"
                 aria-selected={i === cursor}
                 className={`search-item${i === cursor ? " is-active" : ""}`}
                 onMouseEnter={() => setCursor(i)}
                 onClick={() => pick(h)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(h); } }}
               >
                 <Avatar seed={h.identity.ubid} image={h.identity.image} size={24} />
                 <span className="search-item-text">
                   <span className="row" style={{ gap: 8 }}>
-                    <span className="search-item-ubid mono">{h.identity.ubid.slice(0, 14)}…{h.identity.ubid.slice(-6)}</span>
+                    <Ubid value={h.identity.ubid} />
                     <StandardBadge name={h.identity.standardName} />
                     <ChainTag chain={h.identity.chain} bare />
                   </span>
                   <span className="search-item-name t2">{displayName(h.identity)}</span>
                 </span>
                 {h.note && <Badge tone={h.tone ?? "outline"}>{h.note}</Badge>}
-              </button>
+              </div>
             ),
           )}
           {hits.length === 0 && answered && query.length >= 3 && <div className="search-empty t2 small">{nothing}</div>}

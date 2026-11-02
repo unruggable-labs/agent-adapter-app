@@ -1,3 +1,4 @@
+import { computeUbid, Standard } from "../src/ubid.js";
 import { describe, expect, it } from "vitest";
 import type { Address, Hex } from "viem";
 import { decodeArgs, encodeArgs, EventLog, type StoredEvent } from "../src/eventlog.js";
@@ -93,7 +94,7 @@ describe("event log", () => {
 describe("event log facts and timestamps (schema 2)", () => {
   const ALICE = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8" as Address;
   const PUNKS = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9" as Address;
-  const UBID = `0x${"ab".repeat(32)}` as Hex;
+  const UBID = computeUbid(identity.chainId, ADAPTER, Standard.ERC721, PUNKS, 7n);
   const AID = `0x${"cd".repeat(32)}` as Hex;
   const at = (block: number, logIndex: number, eventName: string, args: Record<string, unknown>, blockTimestamp?: number): StoredEvent =>
     ({ blockNumber: BigInt(block), logIndex, blockHash: h(block), eventName, args, blockTimestamp });
@@ -127,6 +128,21 @@ describe("event log facts and timestamps (schema 2)", () => {
     expect(log.blocksWithoutTimestamp()).toEqual([101n]); // 102 has one; 103 carries no event
     log.setTimestamps(new Map([[101n, 9]]));
     expect(log.blocksWithoutTimestamp()).toEqual([]);
+  });
+
+  it("repairs legacy counterfactual facts in existing files without deleting events", () => {
+    const path = `/tmp/claude-501/eventlog-repair-${process.pid}-${Date.now()}.sqlite`;
+    const log = new EventLog(path, identity);
+    log.append([at(101, 0, "CounterfactualAgentRegistered", { ubid: h(999), boundAddress: PUNKS, tokenId: 7n, standard: 0, emitter: ALICE }, 1_700_000_000)], { number: 101n, hash: h(101) });
+    // Simulate the previous version's unvalidated fact columns.
+    log.connection.prepare("UPDATE events SET ubid = ?, bound_address = ?").run(h(999), PUNKS);
+    log.connection.exec("DELETE FROM meta WHERE key = 'counterfactualFacts'");
+    log.close();
+    const reopened = new EventLog(path, identity);
+    expect(reopened.connection.prepare("SELECT ubid, bound_address FROM events").get()).toEqual({ ubid: null, bound_address: null });
+    expect(reopened.count()).toBe(1);
+    expect([...reopened.events()][0].args.ubid).toBe(h(999));
+    reopened.close();
   });
 
   it("migrates a schema 1 file in place, filling the facts from the stored args", async () => {
