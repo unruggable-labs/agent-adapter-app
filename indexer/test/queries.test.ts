@@ -46,6 +46,18 @@ function world() {
 const params = (o: Record<string, string>) => new URLSearchParams(o);
 
 describe("queries", () => {
+  it("searches a collection by name, token ID and ERC-8004 ID before pagination", () => {
+    const { store, chains } = world();
+    store.apply(ev(5, "AgentBound", { agentId: 9001n, standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, registeredBy: ALICE }));
+    for (const q of ["punkbot", "7", "#7", "9001", "#9001"]) {
+      const found = listIdentities(chains, params({ bound: PUNKS, standard: "ERC721", q, limit: "1" }));
+      expect(found.total).toBe(1);
+      expect(found.items[0].ubid).toBe(UBID7);
+    }
+    expect(listIdentities(chains, params({ bound: PUNKS, q: "9" })).items.map((i) => i.ubid)).toEqual([UBID9]);
+    expect(listIdentities(chains, params({ bound: BOB, q: "punkbot" })).total).toBe(0);
+  });
+
   it("adds block dates to identities, feedback and statement details without mutating projection order", () => {
     const { store, chains } = world();
     chains[0].timeOf = (order) => 1_700_000_000 + Number(order.blockNumber);

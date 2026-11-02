@@ -99,6 +99,8 @@ export function viewOf(c: ChainScope, id: IdentityState): ChainIdentityView {
 
 /** Does the identity's text - what people call it - contain the query? */
 function matchesText(views: ViewCache, id: IdentityState, q: string): boolean {
+  const numeric = /^#?\d+$/.test(q) ? q.replace(/^#/, "") : null;
+  if (numeric !== null) return id.tokenId.toString() === numeric || id.agentIds.some((agentId) => agentId.toString() === numeric);
   const s = views.summary(id);
   return [s.agentName, s.contractName, s.subjectLabel, s.card?.name]
     .filter(Boolean)

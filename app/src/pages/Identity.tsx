@@ -3,6 +3,7 @@ import type { Hex } from "viem";
 import { EventDate, Ubid, Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip } from "../components/ui";
 import { adapterOf, api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
 import { ChainTag } from "../components/chains";
+import { collectionPath } from "../components/collections";
 import { useApp, useLive, settle } from "../lib/app-state";
 import {
   ATTESTATION_TYPES,
@@ -61,6 +62,7 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <StatusBadge id={id} />
             <StandardBadge id={id} />
             <ChainTag chain={id.chain} />
+            {id.standard <= 4 && <a className="agent-link small" href={collectionPath({ chain: id.chain, address: id.boundAddress })} onClick={(e) => { e.preventDefault(); navigate(collectionPath({ chain: id.chain, address: id.boundAddress })); }}>{id.contractName ?? "Collection"} →</a>}
           </div>
           <p className="t3 small" style={{ margin: 0 }}><Ubid value={id.ubid} /></p>
           {id.card?.agentMetadataPending && <p className="t3 small" style={{ margin: 0 }}>Agent metadata is temporarily unavailable. Retrying shortly.</p>}
@@ -213,6 +215,7 @@ function ControllerSection({ id }: { id: Identity }) {
           <span className="row wrap" style={{ gap: 8 }}>
             {id.contractName && !col?.name && <span style={{ fontWeight: 600 }}>{id.contractName}</span>}
             <Addr value={id.boundAddress} n={10} />
+            {isToken && <a className="agent-link small" href={collectionPath({ chain: id.chain, address: id.boundAddress })} onClick={(e) => { e.preventDefault(); navigate(collectionPath({ chain: id.chain, address: id.boundAddress })); }}>View collection →</a>}
             <button className="agent-link small" onClick={() => navigate(`/address/${id.boundAddress}`)}>Everything about this address</button>
             {explorer && <a className="agent-link small" href={explorer} target="_blank" rel="noopener noreferrer">View on {explorerName(id.chain)}</a>}
           </span>
