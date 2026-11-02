@@ -107,12 +107,15 @@ export function resetGatewayState(): void {
   sources.clear();
 }
 
-/** ipfs://cid/path, ipfs://ipfs/cid/path, https://<gateway>/ipfs/cid/path, https://<cid>.ipfs.<gateway>/path, ar://id. */
+/** ipfs://cid/path, ipfs://ipfs/cid/path, https://<gateway>/ipfs/cid/path, https://<cid>.ipfs.<gateway>/path, ar://id, https://arweave.net/id/path. */
 export function parseContentUri(uri: string): { scheme: Scheme; path: string } | null {
   const u = uri.trim();
   let m: RegExpExecArray | null;
   if ((m = /^ipfs:\/\/(?:ipfs\/)?(.+)$/i.exec(u))) return clean("ipfs", m[1]);
   if ((m = /^ar:\/\/(.+)$/i.exec(u))) return clean("ar", m[1]);
+  // An Arweave gateway's https address (Loopers' metadata is written this way) is the same
+  // content as ar://: read it as that, so it gets the cache, the pacing and the other gateway.
+  if ((m = /^https?:\/\/(?:[a-z0-9-]+\.)?(?:arweave\.net|ardrive\.net|ar-io\.net)\/([A-Za-z0-9_-]{43}(?:\/[^?#]*)?)/i.exec(u))) return clean("ar", m[1]);
   if ((m = /^https?:\/\/([^/]+)\/ipfs\/(.+)$/i.exec(u))) {
     const got = clean("ipfs", m[2]);
     const host = m[1].toLowerCase();

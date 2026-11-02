@@ -25,6 +25,9 @@ describe("content gateway", () => {
     expect(parseContentUri("https://ipfs.io/ipfs/bafyfoo/a.png?x=1")).toEqual({ scheme: "ipfs", path: "bafyfoo/a.png" });
     expect(parseContentUri("https://bafybeievztwgzp6zi3hbdkm4yql5ufxrkj6adxyr3ssk6em4437qzpfghe.ipfs.dweb.link/img.png")).toEqual({ scheme: "ipfs", path: "bafybeievztwgzp6zi3hbdkm4yql5ufxrkj6adxyr3ssk6em4437qzpfghe/img.png" });
     expect(parseContentUri("ar://abc_DEF-123")).toEqual({ scheme: "ar", path: "abc_DEF-123" });
+    expect(parseContentUri("https://arweave.net/r7YgEsEQqIcwiihV1O2f1uWdC4X3oWmgzysp8uQS_Ew/667.json")).toEqual({ scheme: "ar", path: "r7YgEsEQqIcwiihV1O2f1uWdC4X3oWmgzysp8uQS_Ew/667.json" });
+    expect(parseContentUri("https://ardrive.net/_FbjQgvq0n9m6rCLOqoi9r7gVKgiejZ3QakE20ScAOQ")).toEqual({ scheme: "ar", path: "_FbjQgvq0n9m6rCLOqoi9r7gVKgiejZ3QakE20ScAOQ" });
+    expect(parseContentUri("https://arweave.net/graphql")).toBeNull(); // not a transaction id
     expect(parseContentUri("ipfs://bafy/../etc")).toBeNull();
     expect(parseContentUri("https://cdn.example/x.png")).toBeNull();
     expect(proxyPath("ipfs://bafyfoo/7.png")).toBe("/ipfs/bafyfoo/7.png");
