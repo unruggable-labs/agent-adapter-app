@@ -119,7 +119,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
       // construction, so the browser may keep them forever. Images only: this is not an open proxy.
       let c: RegExpExecArray | null;
       if ((c = /^\/(ipfs|ar)\/([A-Za-z0-9._~!$&'()*+,;=:@%\/-]+)$/.exec(url.pathname)) && !c[2].includes("..")) {
-        const got = await fetchContent(c[1] as "ipfs" | "ar", c[2]);
+        const got = await fetchContent(c[1] as "ipfs" | "ar", c[2], true);
         if (!got) return send(404, "text/plain", "not available from any gateway right now");
         if (!/^image\//.test(got.type)) return send(415, "text/plain", "not an image");
         return send(200, got.type, got.body, { "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" });
@@ -143,6 +143,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
         const found = findIdentity(scope, m[1]);
         if (!found) return send(404, "text/plain", "no such identity");
         const { c, id } = found;
+        c.views.requestCardRefresh(id);
         const v = c.views.view(id);
         const image = await imageData(v.image);
         const version = previewVersion(host, cardOf(c), v, image);
@@ -273,6 +274,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
         const found = findIdentity(scope, m[1]);
         if (found) {
           const { id } = found;
+          found.c.views.requestCardRefresh(id);
           const chain = found.c.label;
           const v = found.c.views.view(id);
           const name = v.agentName ?? v.subjectLabel;

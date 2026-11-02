@@ -80,6 +80,25 @@ describe("identity views", () => {
     } finally { clock.mockRestore(); }
   });
 
+  it("queues an opened older profile without reading on the request, then refreshes it before the bulk backlog", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    for (let token = 1; token <= 5; token++) store.apply(registered(token, BigInt(token)));
+    const { client, calls } = fakeChain();
+    const views = new ViewCache(store, client, { batch: 1, concurrency: 1, tickMs: 5, gapMs: 0 });
+    const oldest = [...store.identities.values()][0];
+    views.requestCardRefresh(oldest);
+    views.requestCardRefresh(oldest);
+    expect(calls).toEqual([]);
+    views.start();
+    try {
+      for (let attempt = 0; attempt < 100 && views.read < 5; attempt++) await new Promise((resolve) => setTimeout(resolve, 5));
+      const holders = calls.filter((call) => call.startsWith("ownerOf"));
+      expect(holders[0]).toBe("ownerOf 1");
+      expect(holders.filter((call) => call === "ownerOf 1")).toHaveLength(1);
+      expect(views.read).toBe(5);
+    } finally { views.stop(); }
+  });
+
   it("answers from memory before the chain has been read, with the chain facts unknown", () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
     store.apply(registered(1));

@@ -117,6 +117,7 @@ export async function handleApi(all: ApiChain[], subpath: string): Promise<ApiRe
   if (head === "identity" && arg) {
     const found = findIdentity(chains, arg);
     if (!found) return { status: 404, body: toJson({ error: "unknown identity", ubid: arg }) };
+    found.c.views.requestCardRefresh(found.id);
     return { status: 200, body: toJson(viewOf(found.c, found.id)) };
   }
   if (head === "history" && arg) {

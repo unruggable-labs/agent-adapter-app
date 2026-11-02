@@ -138,15 +138,21 @@ export function proxyPath(uri: string): string | null {
   return c ? `/${c.scheme}/${c.path}` : null;
 }
 
-export async function fetchContent(scheme: Scheme, path: string): Promise<Content | null> {
+export async function fetchContent(scheme: Scheme, path: string, priority = false): Promise<Content | null> {
   const key = `${scheme}/${path}`;
   const cached = await readCache(key);
   if (cached) return cached;
   const missedAt = misses.get(key);
   if (missedAt && Date.now() - missedAt < MISS_TTL_MS) return null;
   const running = inflight.get(key);
-  if (running) return running;
-  const task = withSlot(() => fetchFromGateways(scheme, path))
+  if (running) {
+    if (priority) {
+      const index = waiting.findIndex((entry) => entry.key === key);
+      if (index >= 0) waiting.unshift(...waiting.splice(index, 1));
+    }
+    return running;
+  }
+  const task = withSlot(() => fetchFromGateways(scheme, path), priority, key)
     .then(async ({ got, answered }) => {
       if (got) await writeCache(key, got);
       else if (answered) {
@@ -197,15 +203,15 @@ function restFor(res: Response): number {
 
 // ---- a small concurrency gate
 let active = 0;
-const waiting: (() => void)[] = [];
-async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
-  if (active >= MAX_CONCURRENT) await new Promise<void>((r) => waiting.push(r));
+const waiting: { key?: string; resume: () => void }[] = [];
+async function withSlot<T>(fn: () => Promise<T>, priority = false, key?: string): Promise<T> {
+  if (active >= MAX_CONCURRENT) await new Promise<void>((resume) => { const entry = { key, resume }; if (priority) waiting.unshift(entry); else waiting.push(entry); });
   active++;
   try {
     return await fn();
   } finally {
     active--;
-    waiting.shift()?.();
+    waiting.shift()?.resume();
   }
 }
 

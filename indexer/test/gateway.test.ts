@@ -19,6 +19,30 @@ describe("content gateway", () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+  it("promotes an already queued visible image ahead of background metadata without duplicating its fetch", async () => {
+    const order: string[] = [];
+    const release: (() => void)[] = [];
+    setGatewayFetch(async (input) => {
+      const path = String(input).split("/").at(-1)!;
+      order.push(path);
+      if (path.startsWith("busy")) await new Promise<void>((resolve) => release.push(resolve));
+      return reply(200, png);
+    });
+    const busy = Array.from({ length: 6 }, (_, i) => fetchContent("ar", `busy${i}`));
+    for (let attempt = 0; attempt < 100 && release.length < 6; attempt++) await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(release).toHaveLength(6);
+    const background = fetchContent("ar", "background");
+    const image = fetchContent("ar", "visible");
+    // Let disk cache checks enqueue both requests before promoting the existing one.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const promoted = fetchContent("ar", "visible", true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    release.forEach((resolve) => resolve());
+    await Promise.all([...busy, background, image, promoted]);
+    expect(order.slice(6)).toEqual(["visible", "background"]);
+    expect(order.filter((path) => path === "visible")).toHaveLength(1);
+  });
+
   it("reads every spelling of a content address, and nothing else", () => {
     expect(parseContentUri("ipfs://bafyfoo/7.png")).toEqual({ scheme: "ipfs", path: "bafyfoo/7.png" });
     expect(parseContentUri("ipfs://ipfs/bafyfoo")).toEqual({ scheme: "ipfs", path: "bafyfoo" });

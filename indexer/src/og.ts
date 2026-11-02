@@ -122,7 +122,7 @@ export async function imageData(url: string | null): Promise<string | null> {
       if (!saved) return null;
       buf = saved;
     } else if (own) {
-      const got = await fetchContent(own[1] as "ipfs" | "ar", own[2]);
+      const got = await fetchContent(own[1] as "ipfs" | "ar", own[2], true);
       if (!got) return null;
       buf = got.body;
     } else {

@@ -23,8 +23,8 @@ import type { Dirty } from "./watch.js";
  * reports those facts as unknown (null). The worker reads, in order: records the collection
  * watcher (watch.ts) says changed - a transfer, an upgrade, a metadata update; records never read,
  * newest first (the explorer's first page is the newest); then the stalest, once a day, as the
- * backstop for contracts that change without an event. What it reads is set by the size of the
- * registry and by what the bound contracts emit, never by who is looking.
+ * backstop for contracts that change without an event. An opened profile may queue a due card
+ * in a bounded priority lane; the request itself still reads only stored data.
  *
  * The worker reads in batches. The holder reads - one `ownerOf` per identity, the bulk of the
  * work - go through the chain's Multicall3 when it has one, so a batch of a hundred identities
@@ -91,6 +91,9 @@ export class ViewCache {
   private newest: IdentityState[] = [];
   private inflight = new Set<Hex>();
   private inflightBatches = 0;
+  /** One bounded foreground lane so an opened older profile needn't wait for a full rebuild. */
+  private requestedCards = new Set<Hex>();
+  private requestedCardBusy = false;
   private checkingRefs = false;
   /** Records whose last read the RPC failed, and when to try again. Not stored: a restart tries at once. */
   private retryAt = new Map<Hex, number>();
@@ -175,6 +178,11 @@ export class ViewCache {
     };
   }
 
+  /** Enqueue only; API requests still perform no RPC or metadata reads. */
+  requestCardRefresh(id: IdentityState): void {
+    if (this.requestedCards.size < 100 && !this.inflight.has(id.ubid) && this.cardDue(id, Date.now())) this.requestedCards.add(id.ubid);
+  }
+
   /** The stored card for a record, stale or not. */
   private cardOf(id: IdentityState): Card | null {
     return this.advisories.card(id.ubid)?.card ?? null;
@@ -245,7 +253,7 @@ export class ViewCache {
    * Multicall3 call); the contract facts and cards only where missing, marked or stale - or all of
    * it with `everything`.
    */
-  async refreshMany(ids: IdentityState[], everything = false): Promise<void> {
+  async refreshMany(ids: IdentityState[], everything = false, priority = false): Promise<void> {
     const now = Date.now();
     const holders = await this.holders(ids);
 
@@ -271,7 +279,7 @@ export class ViewCache {
           // Nothing found is often nothing reachable (a gateway down, a server out): the card we
           // had stays. Incomplete registration metadata gets a shorter retry interval.
           const had = this.advisories.card(id.ubid);
-          const resolved = await resolveCard(this.client, id, registry);
+          const resolved = await resolveCard(this.client, id, registry, priority);
           const legacyKey = `2:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
           const previous = had && (had.key === cardKey(id) || had.key === legacyKey) ? had.card : null;
           const card = resolved?.agentMetadataPending && previous
@@ -461,6 +469,19 @@ export class ViewCache {
   }
 
   private pump() {
+    if (!this.requestedCardBusy) for (const ubid of this.requestedCards) {
+      this.requestedCards.delete(ubid);
+      const id = this.store.identities.get(ubid);
+      if (!id || this.inflight.has(ubid) || !this.cardDue(id, Date.now()) || this.backingOff(ubid, Date.now())) continue;
+      this.requestedCardBusy = true;
+      this.inflight.add(ubid);
+      void this.refreshMany([id], false, true).catch(() => {}).finally(() => {
+        this.inflight.delete(ubid);
+        this.requestedCardBusy = false;
+        if (this.timer) this.pump();
+      });
+      break;
+    }
     while (this.inflightBatches < this.opts.concurrency) {
       const ids = this.nextBatch();
       if (ids.length === 0) {

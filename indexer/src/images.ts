@@ -42,15 +42,15 @@ export function cardKey(id: IdentityState): string {
 
 /** Read the card from the chain and the web, now. The view worker's call; never a request's.
  *  `registry` is the ERC-8004 registry the adapter mints on, for agents whose URI it never emitted. */
-export async function resolveCard(client: PublicClient, id: IdentityState, registry: Address | null = null): Promise<Card | null> {
-  return resolve(client, id, registry).catch(() => null);
+export async function resolveCard(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false): Promise<Card | null> {
+  return resolve(client, id, registry, priority).catch(() => null);
 }
 
-async function resolve(client: PublicClient, id: IdentityState, registry: Address | null): Promise<Card | null> {
+async function resolve(client: PublicClient, id: IdentityState, registry: Address | null, priority: boolean): Promise<Card | null> {
   const tokenUri = await tokenMetadataUri(client, id).catch(() => null);
-  const token = tokenUri ? await cardIn(tokenUri, "token").catch(() => null) : null;
+  const token = tokenUri ? await cardIn(tokenUri, "token", priority).catch(() => null) : null;
   const agentUri = id.agentURI ?? (await registryUri(client, id, registry).catch(() => null));
-  const agent = agentUri ? await cardIn(agentUri, "agent").catch(() => null) : null;
+  const agent = agentUri ? await cardIn(agentUri, "agent", priority).catch(() => null) : null;
   const pending = !!(id.agentURI || id.agentIds.length) && !agent;
   if (!token && !agent && !pending) return null;
   // The token's card leads; the agent card fills anything it left blank.
@@ -98,8 +98,8 @@ async function tokenMetadataUri(client: PublicClient, id: IdentityState): Promis
 
 /** Fetch a metadata document and read its card: image as something a browser can load, name
  *  and description as plain text, cut to sane lengths. Null when it holds none of the three. */
-async function cardIn(uri: string, source: Card["source"]): Promise<Card | null> {
-  const json = await readJson(uri);
+async function cardIn(uri: string, source: Card["source"], priority: boolean): Promise<Card | null> {
+  const json = await readJson(uri, priority);
   if (!json || typeof json !== "object") return null;
   const doc = json as Record<string, unknown>;
   const str = (v: unknown, max: number) => (typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, max) : null);
@@ -113,7 +113,7 @@ async function cardIn(uri: string, source: Card["source"]): Promise<Card | null>
   return card.image || card.name || card.description ? card : null;
 }
 
-export async function readJson(uri: string): Promise<unknown> {
+export async function readJson(uri: string, priority = false): Promise<unknown> {
   const data = /^data:([^,]*),(.*)$/s.exec(uri);
   if (data) {
     const [, meta, payload] = data;
@@ -123,7 +123,7 @@ export async function readJson(uri: string): Promise<unknown> {
   // Content-addressed documents come through the gateway module: its gateways, its cache.
   const content = parseContentUri(uri);
   if (content) {
-    const got = await fetchContent(content.scheme, content.path);
+    const got = await fetchContent(content.scheme, content.path, priority);
     if (!got || got.body.length > MAX_JSON_BYTES) return null;
     return JSON.parse(got.body.toString("utf8"));
   }
