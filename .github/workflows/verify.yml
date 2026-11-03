@@ -1,0 +1,26 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  indexer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: indexer/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: indexer
+      - run: npm test
+        working-directory: indexer
+      - run: npx tsc --noEmit
+        working-directory: indexer

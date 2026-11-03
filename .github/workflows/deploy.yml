@@ -1,12 +1,14 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
   deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy adapter stack to ENS stack server
@@ -36,7 +38,7 @@ jobs:
             echo "--- Git pull ---"
             echo "  before: $(git rev-parse --short HEAD)"
             git fetch origin main
-            git reset --hard origin/main
+            git reset --hard "${{ github.sha }}"
             echo "  after:  $(git rev-parse --short HEAD)"
             git rev-parse --short HEAD > REVISION
 

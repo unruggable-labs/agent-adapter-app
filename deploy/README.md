@@ -160,3 +160,11 @@ in the background, so an RPC outage leaves the stored-data API available.
 For a time-bounded trial, set `RPC_READS_UNTIL` to an absolute ISO UTC timestamp. The guard
 rejects outbound requests after that time even if requests remain and the service restarts.
 Per-workload and global daily limits still apply. This is optional for the sustained policy.
+
+## Operational release gate
+
+Pushes run `Verify`; they no longer deploy. Run the `Deploy` workflow manually on main after reviewing the change. It runs the same tests and TypeScript checks before SSH deployment. Existing running services are unaffected by this workflow change.
+
+For recurring paid work, include a cost estimate and bounded-trial evidence in the release review. Baseline ingestion at three requests per chain per minute across three chains is 12,960 requests/day; the 20,000/day cap leaves 7,040 for startup, catch-up and unusual activity. This is a request estimate, not a provider billing guarantee. Metadata enrichment and maintenance remain allocated zero in `rpc-ingestion.env`.
+
+Infrastructure follow-up: configure protected main with the Verify status required; restrict production deployment credentials and budget policy changes; configure provider-side spend limits/alerts where supported. Repository instructions and workflow checks cannot prevent an administrator from bypassing them. These account settings require separate configuration and are not established merely by committing this repository.
