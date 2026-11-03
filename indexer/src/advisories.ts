@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Address, Hex } from "viem";
 import type { Collection } from "./collection.js";
-import type { Card } from "./images.js";
+import type { Card, CardSources } from "./images.js";
 import type { TrustBase } from "./trustbase.js";
 
 /**
@@ -33,6 +33,7 @@ export interface ContractFacts {
 }
 
 export interface CardFact {
+  sources?: CardSources;
   /** What the card was resolved from (token, standard, agent URI): a changed key is a stale card. */
   key: string;
   card: Card | null;
@@ -73,6 +74,9 @@ export class AdvisoryStore {
       CREATE TABLE IF NOT EXISTS advisory_cards (ubid TEXT PRIMARY KEY, key TEXT NOT NULL, card TEXT, at INTEGER NOT NULL) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS advisory_txrefs (hash TEXT PRIMARY KEY, found INTEGER NOT NULL, at INTEGER NOT NULL) WITHOUT ROWID;
     `);
+    // Additive migration: never invalidate the existing cards to add URI provenance.
+    const cardColumns = db.prepare("PRAGMA table_info(advisory_cards)").all() as { name: string }[];
+    if (!cardColumns.some((c) => c.name === "sources")) db.exec("ALTER TABLE advisory_cards ADD COLUMN sources TEXT");
     db.prepare("INSERT OR REPLACE INTO advisory_meta (key, value) VALUES ('schema', ?)").run(SCHEMA);
 
     const parse = <T>(text: string | null): T | null => (text === null ? null : (JSON.parse(text) as T));
@@ -82,8 +86,8 @@ export class AdvisoryStore {
     for (const r of db.prepare("SELECT address, trust_base, name, collection, at FROM advisory_contracts").all() as { address: Address; trust_base: string | null; name: string | null; collection: string | null; at: number }[]) {
       this.contracts.set(r.address, { trustBase: parse<TrustBase>(r.trust_base), name: r.name, collection: parse<Collection>(r.collection), at: r.at });
     }
-    for (const r of db.prepare("SELECT ubid, key, card, at FROM advisory_cards").all() as { ubid: Hex; key: string; card: string | null; at: number }[]) {
-      this.cards.set(r.ubid, { key: r.key, card: parse<Card>(r.card), at: r.at });
+    for (const r of db.prepare("SELECT ubid, key, card, at, sources FROM advisory_cards").all() as { ubid: Hex; key: string; card: string | null; at: number; sources: string | null }[]) {
+      this.cards.set(r.ubid, { key: r.key, card: parse<Card>(r.card), at: r.at, ...(r.sources ? { sources: parse<CardSources>(r.sources)! } : {}) });
     }
     for (const r of db.prepare("SELECT hash, found, at FROM advisory_txrefs").all() as { hash: Hex; found: number; at: number }[]) {
       this.txRefs.set(r.hash, { found: r.found === 1, at: r.at });
@@ -140,8 +144,8 @@ export class AdvisoryStore {
       for (const [k, v] of batch.holders ?? []) h.run(k, v.holder, v.ownerless === null ? null : v.ownerless ? 1 : 0, v.at);
       const c = db.prepare("INSERT OR REPLACE INTO advisory_contracts (address, trust_base, name, collection, at) VALUES (?, ?, ?, ?, ?)");
       for (const [k, v] of batch.contracts ?? []) c.run(k.toLowerCase(), json(v.trustBase), v.name, json(v.collection), v.at);
-      const d = db.prepare("INSERT OR REPLACE INTO advisory_cards (ubid, key, card, at) VALUES (?, ?, ?, ?)");
-      for (const [k, v] of batch.cards ?? []) d.run(k, v.key, json(v.card), v.at);
+      const d = db.prepare("INSERT OR REPLACE INTO advisory_cards (ubid, key, card, at, sources) VALUES (?, ?, ?, ?, ?)");
+      for (const [k, v] of batch.cards ?? []) d.run(k, v.key, json(v.card), v.at, json(v.sources ?? null));
       const t = db.prepare("INSERT OR REPLACE INTO advisory_txrefs (hash, found, at) VALUES (?, ?, ?)");
       for (const [k, v] of batch.txRefs ?? []) t.run(k.toLowerCase(), v.found ? 1 : 0, v.at);
       if (batch.watchedTo !== undefined) db.prepare("INSERT OR REPLACE INTO advisory_meta (key, value) VALUES ('watch_checkpoint', ?)").run(batch.watchedTo.toString());

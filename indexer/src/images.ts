@@ -1,3 +1,4 @@
+import { withRpcPurpose } from "./rpc-budget.js";
 import type { Address, PublicClient } from "viem";
 import { fetchContent, parseContentUri, proxyPath } from "./gateway.js";
 import type { IdentityState } from "./projection.js";
@@ -42,26 +43,33 @@ export function cardKey(id: IdentityState): string {
 
 /** Read the card from the chain and the web, now. The view worker's call; never a request's.
  *  `registry` is the ERC-8004 registry the adapter mints on, for agents whose URI it never emitted. */
+export interface CardSources {
+  tokenUri?: string | null;
+  agentUri?: string | null;
+}
 export async function resolveCard(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false): Promise<Card | null> {
-  return resolve(client, id, registry, priority).catch(() => null);
+  return (await resolveCardDetails(client, id, registry, priority)).card;
 }
 
-async function resolve(client: PublicClient, id: IdentityState, registry: Address | null, priority: boolean): Promise<Card | null> {
-  const tokenUri = await tokenMetadataUri(client, id).catch(() => null);
+/** Successful URI lookups are persisted separately from the document. HTTP retries reuse them. */
+export async function resolveCardDetails(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false, cached?: CardSources): Promise<{ card: Card | null; sources: CardSources }> {
+  const tokenUri = cached && "tokenUri" in cached ? cached.tokenUri
+    : await withRpcPurpose("token-uri", () => tokenMetadataUri(client, id)).catch(() => undefined);
   const token = tokenUri ? await cardIn(tokenUri, "token", priority).catch(() => null) : null;
-  const agentUri = id.agentURI ?? (await registryUri(client, id, registry).catch(() => null));
+  const agentUri = id.agentURI !== null ? id.agentURI : cached && "agentUri" in cached ? cached.agentUri
+    : !id.agentIds.length ? null : registry ? await withRpcPurpose("agent-uri", () => registryUri(client, id, registry)).catch(() => undefined) : undefined;
   const agent = agentUri ? await cardIn(agentUri, "agent", priority).catch(() => null) : null;
+  const sources: CardSources = { ...(tokenUri !== undefined ? { tokenUri } : {}), ...(agentUri !== undefined ? { agentUri } : {}) };
   const pending = !!(id.agentURI || id.agentIds.length) && !agent;
-  if (!token && !agent && !pending) return null;
-  // The token's card leads; the agent card fills anything it left blank.
-  return {
+  if (!token && !agent && !pending) return { card: null, sources };
+  return { sources, card: {
     image: token?.image ?? agent?.image ?? null,
     name: token?.name ?? agent?.name ?? null,
     description: token?.description ?? agent?.description ?? null,
     source: token ? "token" : "agent",
     agentName: agent?.name ?? null,
     ...(pending ? { agentMetadataPending: true } : {}),
-  };
+  } };
 }
 
 /**

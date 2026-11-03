@@ -116,7 +116,10 @@ async function main() {
   configurePictures(join(dataDir, "pictures")); // our small copy of every picture shown (pictures.ts)
 
   // Fail closed until an operator explicitly sets a spending boundary.
-  const budget = new RpcBudget(join(dataDir, "rpc-usage.sqlite"), Number(process.env.RPC_DAILY_REQUEST_LIMIT ?? 0), Number(process.env.RPC_MINUTE_REQUEST_LIMIT ?? 120));
+  const budget = new RpcBudget(join(dataDir, "rpc-usage.sqlite"), Number(process.env.RPC_DAILY_REQUEST_LIMIT ?? 0), Number(process.env.RPC_MINUTE_REQUEST_LIMIT ?? 120), Date.now, {
+    enrichment: { daily: Number(process.env.RPC_ENRICHMENT_DAILY_LIMIT ?? 0), minute: Number(process.env.RPC_ENRICHMENT_MINUTE_LIMIT ?? 0) },
+    maintenance: { daily: Number(process.env.RPC_MAINTENANCE_DAILY_LIMIT ?? 0), minute: Number(process.env.RPC_MAINTENANCE_MINUTE_LIMIT ?? 0) },
+  }, process.env.RPC_READS_UNTIL ? Date.parse(process.env.RPC_READS_UNTIL) : undefined);
   const chains: ChainRuntime[] = [];
   for (const name of names) {
     const net = NETWORKS[name];
@@ -135,13 +138,20 @@ async function main() {
   console.log(`API + UI for ${chains.map((c) => c.slug).join(", ")} on http://127.0.0.1:${port}`);
 }
 
+/** Enrichment is opt-in; enabling indexing alone never bootstraps every existing profile. */
+function enrichmentMode(): "off" | "events" | "bulk" {
+  const mode = process.env.ENRICHMENT_MODE ?? "off";
+  if (mode !== "off" && mode !== "events" && mode !== "bulk") throw new Error("ENRICHMENT_MODE must be off, events or bulk");
+  return mode;
+}
+
 /** One chain up to the point of serving: the RPC checked, the stored log folded. Its first sync starts with the server. */
 async function boot(name: NetworkName, fromBlock: bigint, dataDir: string, budget: RpcBudget): Promise<ChainRuntime> {
   const net = NETWORKS[name];
   console.log(`[${name}] adapter ${net.adapter} from block ${fromBlock}${"upgradeBlock" in net ? ` (v0.0.17 from ${net.upgradeBlock})` : ""} via configured RPC`);
   const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl, { fetchFn: budget.fetch(name), retryCount: 0 }) }) as PublicClient;
   const offline = process.env.ADAPTER_OFFLINE === "1" || budget.dailyLimit === 0;
-  if (!offline && budget.snapshot().allowed) await preflight(client, net.rpcUrl, net.chainId, fromBlock);
+
   const upgradeBlock = "upgradeBlock" in net && net.upgradeBlock > fromBlock ? net.upgradeBlock : null;
   const store = new ProjectionStore(net.chainId, net.adapter, upgradeBlock);
   const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock, upgradeBlock });
@@ -161,7 +171,10 @@ async function boot(name: NetworkName, fromBlock: bigint, dataDir: string, budge
     adapter: net.adapter,
     ingester,
     log,
-    pollMs: net.pollMs,
+    pollMs: Math.max(60_000, net.pollMs),
+    enrichmentMode: enrichmentMode(),
+    timestampBackfill: process.env.BACKFILL_TIMESTAMPS === "1",
+    beforeSync: () => preflight(client, net.chainId),
     // A full-history verification is expensive maintenance, never an automatic startup job.
     verifyFrom: process.env.VERIFY_BACKFILL === "1" ? fromBlock : undefined,
     offline,
@@ -169,31 +182,10 @@ async function boot(name: NetworkName, fromBlock: bigint, dataDir: string, budge
   });
 }
 
-/**
- * Fail fast, in one line, on the two RPC misconfigurations that otherwise surface as a crash
- * loop with a stack trace: an endpoint for the wrong chain, and one that caps eth_getLogs
- * below the 10,000-block chunk the backfill uses (some free tiers allow 10). Both are fixed in
- * /etc/adapter.env, not in code, so the message says which endpoint and what it said.
- */
-async function preflight(client: ReturnType<typeof createPublicClient>, rpcUrl: string, chainId: bigint, fromBlock: bigint) {
+/** Validate the configured chain in the background, so upstream outages don't take the cached API down. */
+async function preflight(client: ReturnType<typeof createPublicClient>, chainId: bigint) {
   const actual = BigInt(await client.getChainId());
-  if (actual !== chainId) {
-    throw new Error(`RPC ${rpcUrl} is chain ${actual}, not ${chainId}. Fix the *_RPC_URL in /etc/adapter.env.`);
-  }
-  try {
-    // A full chunk, ending at the head when the cutover is younger than one: a range past the head
-    // is refused for that alone, which is not the cap this is looking for.
-    const head = await client.getBlockNumber();
-    const to = fromBlock + 9_999n < head ? fromBlock + 9_999n : head;
-    await client.getLogs({ address: "0x0000000000000000000000000000000000000000", fromBlock: to > 9_999n ? to - 9_999n : 0n, toBlock: to });
-  } catch (err) {
-    const said = (err as { details?: string; shortMessage?: string; message?: string });
-    const detail = said.details ?? said.shortMessage ?? said.message ?? String(err);
-    if (/block range|range|exceed|too many|limit/i.test(detail)) {
-      throw new Error(`RPC ${rpcUrl} rejects a 10,000-block eth_getLogs range, which the backfill needs. It said: ${detail.slice(0, 200)}. Use an endpoint without that cap (PublicNode's free endpoint has none) or a higher tier.`);
-    }
-    // Anything else (a transient error) is left to the backfill, which retries.
-  }
+  if (actual !== chainId) throw new Error(`Configured RPC is chain ${actual}, not ${chainId}. Fix the *_RPC_URL in /etc/adapter.env.`);
 }
 
 main().catch((err) => {

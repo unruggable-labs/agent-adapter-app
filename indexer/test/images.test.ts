@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PublicClient } from "viem";
 import { parseCollection } from "../src/collection.js";
-import { cardKey, resolveCard } from "../src/images.js";
+import { cardKey, resolveCard, resolveCardDetails } from "../src/images.js";
 import type { IdentityState } from "../src/projection.js";
 import { Standard } from "../src/ubid.js";
 
@@ -38,6 +38,28 @@ async function resolved(c: PublicClient, id: IdentityState) {
 }
 
 describe("identity images", () => {
+  it("retries HTTP metadata from cached URIs without any more RPC lookups", async () => {
+    const registry = "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432";
+    let reads = 0;
+    let available = false;
+    const c = { readContract: async ({ address }: { address: string }) => { reads++; return address === registry ? "https://agent.example/card.json" : "https://token.example/7.json"; } } as unknown as PublicClient;
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("agent.example") && !available) throw new Error("temporary document outage");
+      return new Response(JSON.stringify({ name: url.includes("agent.example") ? "Zori" : "Token #7", image: "https://example.com/image.png" }));
+    });
+    try {
+      const id = identity({ agentIds: [42n] });
+      const first = await resolveCardDetails(c, id, registry);
+      expect(first.card?.agentMetadataPending).toBe(true);
+      expect(reads).toBe(2);
+      available = true;
+      const second = await resolveCardDetails(c, id, null, false, first.sources);
+      expect(second.card?.agentName).toBe("Zori");
+      expect(second.card?.agentMetadataPending).toBeUndefined();
+      expect(reads).toBe(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("takes an ERC-721 token's metadata image and serves ipfs through our own route", async () => {
     const c = client({ tokenURI: () => json({ name: "Punk", image: "ipfs://bafyfoo/7.png" }) });
     expect(await resolved(c, identity({}))).toBe("/ipfs/bafyfoo/7.png");

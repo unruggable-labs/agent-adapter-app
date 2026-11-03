@@ -1,7 +1,8 @@
+import { withRpcPurpose, withRpcWorkload } from "./rpc-budget.js";
 import { BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Address, type Hex, type PublicClient } from "viem";
 import { AdvisoryStore, type CardFact, type ContractFacts, type HolderFact, type TxRefFact } from "./advisories.js";
 import { collectionFor, type Collection } from "./collection.js";
-import { cardKey, resolveCard, type Card } from "./images.js";
+import { cardKey, resolveCardDetails, type Card } from "./images.js";
 import { contractName, labelsFrom } from "./names.js";
 import { shownPicture, warmPictures } from "./pictures.js";
 import type { IdentityState, ProjectionStore } from "./projection.js";
@@ -46,6 +47,7 @@ export interface Advisory {
 }
 
 export interface ViewWorkerOptions {
+  eventOnly: boolean;
   canReadRpc: () => boolean;
   /** Batches in flight at once. */
   concurrency: number;
@@ -100,6 +102,7 @@ export class ViewCache {
   private retryAt = new Map<Hex, number>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private firstPassDone = false;
+  private initialKeys = new Map<Hex, string>();
   private readonly startedAt = Date.now();
   readonly opts: ViewWorkerOptions;
 
@@ -109,8 +112,9 @@ export class ViewCache {
     opts: Partial<ViewWorkerOptions> = {},
     advisories?: AdvisoryStore,
   ) {
-    this.opts = { canReadRpc: () => true, concurrency: 2, batch: 100, gapMs: 250, staleMs: 24 * 60 * 60_000, missStaleMs: 6 * 60 * 60_000, txRefBatch: 20, retryMs: 2 * 60_000, tickMs: 1000, log: () => {}, ...opts };
+    this.opts = { eventOnly: false, canReadRpc: () => true, concurrency: 2, batch: 100, gapMs: 250, staleMs: 24 * 60 * 60_000, missStaleMs: 6 * 60 * 60_000, txRefBatch: 20, retryMs: 2 * 60_000, tickMs: 1000, log: () => {}, ...opts };
     this.advisories = advisories ?? new AdvisoryStore();
+    if (this.opts.eventOnly) this.initialKeys = new Map([...this.store.identities.values()].map((id) => [id.ubid, cardKey(id)]));
     this.multicall = Boolean(client.chain?.contracts?.multicall3?.address);
   }
 
@@ -122,7 +126,7 @@ export class ViewCache {
   private async registry(): Promise<Address | null> {
     if (this.registryAddress) return this.registryAddress;
     try {
-      const a = (await this.client.readContract({ address: this.store.adapter, abi: REGISTRY_ABI, functionName: "identityRegistry" })) as Address;
+      const a = await withRpcPurpose("registry-address", () => this.client.readContract({ address: this.store.adapter, abi: REGISTRY_ABI, functionName: "identityRegistry" })) as Address;
       if (a && a !== ZERO_ADDRESS) this.registryAddress = a;
     } catch {
       // the RPC or an adapter without it: cards go without the registry's URI, and the next batch asks again
@@ -142,6 +146,7 @@ export class ViewCache {
     ]);
     this.timer = setInterval(() => this.pump(), this.opts.tickMs);
     this.timer.unref?.();
+    if (!this.opts.eventOnly) this.initialKeys = new Map([...this.store.identities.values()].map((id) => [id.ubid, cardKey(id)]));
     this.pump();
   }
 
@@ -181,7 +186,7 @@ export class ViewCache {
 
   /** Enqueue only; API requests still perform no RPC or metadata reads. */
   requestCardRefresh(id: IdentityState): void {
-    if (this.requestedCards.size < 100 && !this.inflight.has(id.ubid) && this.cardDue(id, Date.now())) this.requestedCards.add(id.ubid);
+    if ((!this.opts.eventOnly || this.eventEligible(id) || this.httpRefreshEligible(id)) && this.requestedCards.size < 100 && !this.inflight.has(id.ubid) && this.cardDue(id, Date.now())) this.requestedCards.add(id.ubid);
   }
 
   /** The stored card for a record, stale or not. */
@@ -255,17 +260,22 @@ export class ViewCache {
    * it with `everything`.
    */
   async refreshMany(ids: IdentityState[], everything = false, priority = false): Promise<void> {
+    return withRpcWorkload("enrichment", "profile", () => this.refreshManyInner(ids, everything, priority));
+  }
+
+  private async refreshManyInner(ids: IdentityState[], everything: boolean, priority: boolean): Promise<void> {
     const now = Date.now();
-    const holderIds = ids.filter((id) => everything || this.holderDue(id, now));
-    const holders = await this.holders(holderIds);
+    const eventIds = ids.filter((id) => everything || !this.opts.eventOnly || this.eventEligible(id));
+    const holderIds = eventIds.filter((id) => everything || this.holderDue(id, now));
+    const holders = await withRpcPurpose("ownership", () => this.holders(holderIds));
 
     const contracts = new Map<Address, ContractFacts>();
-    for (const address of new Set(ids.map((i) => i.boundAddress))) {
+    for (const address of new Set(eventIds.map((i) => i.boundAddress))) {
       if (!everything && !this.contractDue(address, now)) continue;
       const [trustBase, name, collection] = await Promise.all([
-        probeTrustBase(this.client, address).catch(() => null),
-        contractName(this.client, address),
-        collectionFor(this.client, address).catch(() => null),
+        withRpcPurpose("contract-facts", () => probeTrustBase(this.client, address)).catch(() => null),
+        withRpcPurpose("contract-name", () => contractName(this.client, address)),
+        withRpcPurpose("collection-uri", () => collectionFor(this.client, address)).catch(() => null),
       ]);
       // As with cards: a collection document we couldn't reach this time keeps the one we had.
       const had = this.advisories.contract(address);
@@ -274,20 +284,25 @@ export class ViewCache {
 
     const cards = new Map<Hex, CardFact>();
     const cardIds = ids.filter((id) => everything || this.cardDue(id, now));
-    const registry = cardIds.some((id) => id.agentURI === null && id.agentIds.length > 0) ? await this.registry() : null;
+    const sourcesOf = (id: IdentityState) => {
+      const had = this.advisories.card(id.ubid);
+      return !everything && !this.dirty.cards.has(id.ubid) && had?.key === cardKey(id) ? had.sources : undefined;
+    };
+    const registry = cardIds.some((id) => id.agentURI === null && id.agentIds.length > 0 && !(sourcesOf(id) && "agentUri" in sourcesOf(id)!)) ? await this.registry() : null;
     await Promise.all(
       cardIds
         .map(async (id) => {
           // Nothing found is often nothing reachable (a gateway down, a server out): the card we
-          // had stays. Incomplete registration metadata gets a shorter retry interval.
+          // had stays. HTTP retries can reuse the persisted metadata URIs.
           const had = this.advisories.card(id.ubid);
-          const resolved = await resolveCard(this.client, id, registry, priority);
+          const details = await resolveCardDetails(this.client, id, registry, priority, sourcesOf(id));
+          const resolved = details.card;
           const legacyKey = `2:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
           const previous = had && (had.key === cardKey(id) || had.key === legacyKey) ? had.card : null;
           const card = resolved?.agentMetadataPending && previous
             ? { ...resolved, agentName: previous.agentName ?? null, description: resolved.description ?? previous.description, image: resolved.image ?? previous.image }
             : resolved ?? previous;
-          cards.set(id.ubid, { key: cardKey(id), card, at: Date.now() });
+          cards.set(id.ubid, { key: cardKey(id), card, sources: details.sources, at: Date.now() });
         }),
     );
 
@@ -299,20 +314,28 @@ export class ViewCache {
       if (holders.has(id.ubid)) {
         this.dirty.holders.delete(id.ubid);
         this.retryAt.delete(id.ubid);
-      } else this.retryAt.set(id.ubid, Date.now() + this.opts.retryMs);
+      } else {
+        this.dirty.holders.add(id.ubid);
+        this.retryAt.set(id.ubid, Date.now() + this.opts.retryMs);
+      }
     }
-    for (const ubid of cards.keys()) this.dirty.cards.delete(ubid);
+    for (const ubid of cards.keys()) {
+      this.dirty.cards.delete(ubid);
+      const id = this.store.identities.get(ubid);
+      if (id) this.initialKeys.set(ubid, cardKey(id));
+    }
     for (const a of contracts.keys()) this.dirty.contracts.delete(a);
   }
 
   private holderDue(id: IdentityState, now: number): boolean {
     const had = this.advisories.holder(id.ubid);
-    return !had || this.dirty.holders.has(id.ubid) || this.dirty.contracts.has(id.boundAddress) || now - had.at >= this.opts.staleMs;
+    return !had || this.dirty.holders.has(id.ubid) || this.dirty.contracts.has(id.boundAddress) || (!this.opts.eventOnly && now - had.at >= this.opts.staleMs);
   }
 
   private contractDue(address: Address, now: number): boolean {
     const c = this.advisories.contract(address);
     if (!c || this.dirty.contracts.has(address)) return true;
+    if (this.opts.eventOnly) return false;
     // Every contract has a trust-base reading, an EOA included, so none means the RPC failed the probe.
     if (c.trustBase === null) return now - c.at > this.opts.retryMs;
     const missing = c.name === null && c.collection === null;
@@ -399,6 +422,17 @@ export class ViewCache {
     return out;
   }
 
+  private httpRefreshEligible(id: IdentityState): boolean {
+    const had = this.advisories.card(id.ubid);
+    return had?.key === cardKey(id) && !!had.sources && "tokenUri" in had.sources && "agentUri" in had.sources;
+  }
+
+  /** Event-only mode never bootstraps or sweeps the old registry after a restart. */
+  private eventEligible(id: IdentityState): boolean {
+    return this.dirty.holders.has(id.ubid) || this.dirty.cards.has(id.ubid) || this.dirty.contracts.has(id.boundAddress)
+      || this.initialKeys.get(id.ubid) !== cardKey(id);
+  }
+
   /** The next batch worth a read, possibly empty: marked first, then never-read newest first, then the stale. */
   private nextBatch(): IdentityState[] {
     const now = Date.now();
@@ -423,6 +457,7 @@ export class ViewCache {
     }
     const stale: { id: IdentityState; at: number }[] = [];
     for (const id of this.newest) {
+      if (this.opts.eventOnly && !this.eventEligible(id)) continue;
       if (this.inflight.has(id.ubid) || taken.has(id.ubid) || this.backingOff(id.ubid, now)) continue;
       const h = this.advisories.holder(id.ubid);
       if (!h || marked(id) || this.cardDue(id, now) || (this.contractDue(id.boundAddress, now) && !this.inflightAddress(id.boundAddress))) {
@@ -465,7 +500,7 @@ export class ViewCache {
     this.checkingRefs = true;
     Promise.all(
       [...new Set(due)].map(async (hash) => {
-        const found = await this.client.getTransaction({ hash }).then(() => true).catch(() => false);
+        const found = await withRpcWorkload("enrichment", "transaction-reference", () => this.client.getTransaction({ hash })).then(() => true).catch(() => false);
         return [hash, { found, at: Date.now() }] as const;
       }),
     )
@@ -481,7 +516,7 @@ export class ViewCache {
     if (!this.requestedCardBusy) for (const ubid of this.requestedCards) {
       this.requestedCards.delete(ubid);
       const id = this.store.identities.get(ubid);
-      if (!id || this.inflight.has(ubid) || !this.cardDue(id, Date.now()) || this.backingOff(ubid, Date.now())) continue;
+      if (!id || (this.opts.eventOnly && !this.eventEligible(id) && !this.httpRefreshEligible(id)) || this.inflight.has(ubid) || !this.cardDue(id, Date.now()) || this.backingOff(ubid, Date.now())) continue;
       this.requestedCardBusy = true;
       this.inflight.add(ubid);
       void this.refreshMany([id], false, true).catch(() => {}).finally(() => {
@@ -499,7 +534,7 @@ export class ViewCache {
           this.opts.log(`Advisories: ${this.read} identities read in ${((Date.now() - this.startedAt) / 1000).toFixed(1)}s`);
         }
         // Nothing else waiting: the references, a few at a time.
-        if (this.inflightBatches === 0) this.checkRefs();
+        if (this.inflightBatches === 0 && !this.opts.eventOnly) this.checkRefs();
         break;
       }
       this.inflightBatches++;

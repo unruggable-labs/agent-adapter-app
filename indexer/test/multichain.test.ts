@@ -237,6 +237,30 @@ describe("a chain fails on its own", () => {
     return ing;
   }
 
+  it("runs ingestion at one-minute intervals without starting enrichment or maintenance", async () => {
+    const c = chain("base", 8453n, 1000, 2);
+    c.register(1, 1n);
+    const rpc = vi.fn().mockRejectedValue(new Error("enrichment must stay off"));
+    const ing = fakeIngester([async () => { c.register(2, 2n); return 1; }]);
+    const backfill = vi.spyOn(ing, "backfillTimestamps");
+    const beforeSync = vi.fn().mockResolvedValue(undefined);
+    const runtime = new ChainRuntime({ slug: "base", label: "Base", store: c.store, client: { readContract: rpc, getCode: rpc, getStorageAt: rpc } as unknown as PublicClient, adapter: ADAPTER, ingester: ing as never, beforeSync });
+    const worker = vi.spyOn(runtime.views, "start");
+    const watcher = vi.spyOn(runtime.watcher!, "scan");
+    expect(runtime.pollMs).toBe(60_000);
+    runtime.start();
+    try {
+      for (let i = 0; i < 100 && runtime.status().state !== "live"; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(runtime.status().state).toBe("live");
+      expect(runtime.store.identities.size).toBe(2);
+      expect(beforeSync).toHaveBeenCalledTimes(1);
+      expect(worker).not.toHaveBeenCalled();
+      expect(watcher).not.toHaveBeenCalled();
+      expect(backfill).not.toHaveBeenCalled();
+      expect(rpc).not.toHaveBeenCalled();
+    } finally { runtime.stop(); }
+  });
+
   it("retries a failed first sync, then goes live", async () => {
     const ing = fakeIngester([async () => Promise.reject(new Error("503 from the RPC")), async () => 3]);
     const store = new ProjectionStore(1n, ADAPTER);

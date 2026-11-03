@@ -45,6 +45,40 @@ function fakeChain(multicall3 = false) {
 }
 
 describe("identity views", () => {
+  it("event-only mode ignores the existing registry and reads new or changed records once", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    for (let token = 1; token <= 3; token++) store.apply(registered(token, BigInt(token)));
+    const { client, calls } = fakeChain();
+    const views = new ViewCache(store, client, { eventOnly: true, batch: 1, concurrency: 1, tickMs: 5, gapMs: 0, staleMs: 0 });
+    views.start();
+    try {
+      views.requestCardRefresh([...store.identities.values()][0]);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls).toEqual([]);
+      store.apply(registered(4, 4n));
+      for (let i = 0; i < 100 && views.read < 1; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls.filter((call) => call.startsWith("ownerOf"))).toEqual(["ownerOf 4"]);
+      const oldest = [...store.identities.values()][0];
+      views.mark({ holders: new Set([oldest.ubid]), cards: new Set(), contracts: new Set() });
+      for (let i = 0; i < 100 && views.read < 2; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(calls.filter((call) => call.startsWith("ownerOf"))).toEqual(["ownerOf 4", "ownerOf 1"]);
+    } finally { views.stop(); }
+  });
+
+  it("adds URI provenance to an old advisory database without invalidating its cards", () => {
+    const log = new EventLog(":memory:", { chainId: CHAIN, adapter: ADAPTER, fromBlock: 0n });
+    log.connection.exec("CREATE TABLE advisory_meta (key TEXT PRIMARY KEY, value TEXT); INSERT INTO advisory_meta VALUES ('schema', '1'); CREATE TABLE advisory_cards (ubid TEXT PRIMARY KEY, key TEXT, card TEXT, at INTEGER)");
+    const card = { name: "Zori", image: null, description: null, source: "agent" as const };
+    log.connection.prepare("INSERT INTO advisory_cards VALUES (?, ?, ?, ?)").run(UBID7, "existing-key", JSON.stringify(card), 123);
+    const first = new AdvisoryStore(log.connection);
+    expect(first.card(UBID7)).toEqual({ key: "existing-key", card, at: 123 });
+    const sources = { tokenUri: "https://example.com/token.json", agentUri: "https://example.com/agent.json" };
+    first.write({ cards: new Map([[UBID7, { key: "existing-key", card, at: 123, sources }]]) });
+    expect(new AdvisoryStore(log.connection).card(UBID7)).toEqual({ key: "existing-key", card, at: 123, sources });
+    log.close();
+  });
+
   it("preserves a searchable agent name without repeatedly rereading RPC metadata", async () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
     store.apply(registered(1));

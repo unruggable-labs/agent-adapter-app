@@ -131,3 +131,32 @@ Full-range startup recounts are disabled unless `VERIFY_BACKFILL=1` explicitly e
 maintenance operation; those requests still consume the same allowance. Metadata gaps use the
 normal daily refresh cadence (six hours for completely absent cards), rather than two-minute
 full-chain rereads. Ownership refreshes are scheduled independently from card refreshes.
+
+### Ingestion-only recovery policy
+
+`rpc-ingestion.env` is a non-secret, versioned policy for the hub: 20,000 requests/day,
+30 requests/minute shared across all three chains, and a minimum 60-second ingestion interval.
+It does not enable enrichment, watcher scans, timestamp backfills or full-history recounts.
+Install it as an additional `EnvironmentFile` in a hub-specific systemd drop-in only after
+explicitly authorizing live RPC reads. It supplements the private endpoint configuration;
+it never contains provider URLs or keys. A positive allowance is not enabled merely by
+installing or deploying this repository.
+
+The request ledger now reserves independent `ingestion`, `enrichment`, and `maintenance`
+allowances. `RPC_ENRICHMENT_DAILY_LIMIT` / `RPC_ENRICHMENT_MINUTE_LIMIT` and
+`RPC_MAINTENANCE_DAILY_LIMIT` / `RPC_MAINTENANCE_MINUTE_LIMIT` default to zero. Their
+allocations are subtracted from the global allowance to reserve the rest for ingestion;
+allocations that exceed the global limits are rejected. The overview includes the allocations,
+remaining amounts and actual call counts grouped by chain, workload, purpose and RPC method.
+Legacy ledger usage is migrated without refunding spent requests.
+
+`ENRICHMENT_MODE=events` enables only new/changed records, with a small single worker.
+`bulk` explicitly enables registry-wide enrichment; keep it off during recovery. Successful
+metadata URI lookups are persisted additively with cards, so later document reads reuse those
+URIs instead of repeating RPC calls. Existing cards are retained during this migration; there
+is no cache-version bump or automatic full-registry rebuild. Startup chain validation runs
+in the background, so an RPC outage leaves the stored-data API available.
+
+For a time-bounded trial, set `RPC_READS_UNTIL` to an absolute ISO UTC timestamp. The guard
+rejects outbound requests after that time even if requests remain and the service restarts.
+Per-workload and global daily limits still apply. This is optional for the sustained policy.
