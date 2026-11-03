@@ -1,6 +1,6 @@
 import { createPublicClient, http } from "viem";
 import { describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RpcBudget, withRpcWorkload, withRpcPurpose } from "../src/rpc-budget.js";
@@ -8,6 +8,50 @@ import { RpcBudget, withRpcWorkload, withRpcPurpose } from "../src/rpc-budget.js
 const request = (method = "eth_call") => ({ body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [] }) });
 
 describe("outbound RPC budget", () => {
+  it("keeps the reviewed production policy bounded and enrichment disabled", () => {
+    const text = readFileSync(new URL("../../deploy/rpc-ingestion.env", import.meta.url), "utf8");
+    const policy = Object.fromEntries(text.split("\n").filter((line) => line && !line.startsWith("#")).map((line) => line.split("=")));
+    expect(policy).toMatchObject({
+      RPC_DAILY_REQUEST_LIMIT: "20000", RPC_MINUTE_REQUEST_LIMIT: "30",
+      RPC_ENRICHMENT_DAILY_LIMIT: "0", RPC_ENRICHMENT_MINUTE_LIMIT: "0",
+      RPC_MAINTENANCE_DAILY_LIMIT: "0", RPC_MAINTENANCE_MINUTE_LIMIT: "0",
+      ENRICHMENT_MODE: "off", BACKFILL_TIMESTAMPS: "0", VERIFY_BACKFILL: "0",
+    });
+  });
+
+  it("fits a full day of three-chain polling within the production policy", () => {
+    let now = Date.UTC(2026, 10, 3);
+    const budget = new RpcBudget(":memory:", 20_000, 30, () => now);
+    for (let minute = 0; minute < 1440; minute++) {
+      for (const chain of ["mainnet", "base", "robinhood"]) {
+        budget.consume(chain, ["eth_getBlockByNumber", "eth_getBlockByNumber", "eth_getLogs"]);
+      }
+      if (minute < 1439) now += 60_000;
+    }
+    expect(budget.snapshot().used).toBe(12_960);
+    expect(budget.snapshot().remaining).toBe(7_040);
+    budget.close();
+  });
+
+  it("blocks a 25,000-identity invalidation burst and failure retries before network I/O", async () => {
+    const budget = new RpcBudget(":memory:", 20_000, 30);
+    const network = vi.fn<typeof fetch>().mockRejectedValue(new Error("upstream unavailable"));
+    const guarded = budget.fetch("base", network);
+    const batch = { body: JSON.stringify(Array.from({ length: 25_000 }, () => ({ method: "eth_call" }))) };
+    await expect(guarded("https://rpc.example", batch)).rejects.toThrow("budget exhausted");
+    expect(network).not.toHaveBeenCalled();
+    await withRpcWorkload("enrichment", "cache-invalidation", async () => {
+      await expect(guarded("https://rpc.example", request())).rejects.toThrow("budget exhausted");
+    });
+    expect(network).not.toHaveBeenCalled();
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await expect(guarded("https://rpc.example", request("eth_getLogs"))).rejects.toThrow();
+    }
+    expect(network).toHaveBeenCalledTimes(30);
+    expect(budget.snapshot().used).toBe(30);
+    budget.close();
+  });
+
   it("reserves ingestion capacity independently from enrichment and maintenance", () => {
     const budget = new RpcBudget(":memory:", 10, 10, Date.now, { enrichment: { daily: 2, minute: 2 }, maintenance: { daily: 2, minute: 2 } });
     withRpcWorkload("enrichment", "ownership", () => budget.consume("base", ["eth_call", "eth_call"]));

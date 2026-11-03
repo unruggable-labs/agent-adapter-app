@@ -45,9 +45,9 @@ function fakeChain(multicall3 = false) {
 }
 
 describe("identity views", () => {
-  it("event-only mode ignores the existing registry and reads new or changed records once", async () => {
+  it("event-only mode leaves 25,000 cached identities unread and reads only new or changed records", async () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
-    for (let token = 1; token <= 3; token++) store.apply(registered(token, BigInt(token)));
+    for (let token = 1; token <= 25_000; token++) store.apply(registered(token, BigInt(token)));
     const { client, calls } = fakeChain();
     const views = new ViewCache(store, client, { eventOnly: true, batch: 1, concurrency: 1, tickMs: 5, gapMs: 0, staleMs: 0 });
     views.start();
@@ -55,14 +55,14 @@ describe("identity views", () => {
       views.requestCardRefresh([...store.identities.values()][0]);
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(calls).toEqual([]);
-      store.apply(registered(4, 4n));
+      store.apply(registered(25_001, 25_001n));
       for (let i = 0; i < 100 && views.read < 1; i++) await new Promise((resolve) => setTimeout(resolve, 5));
       await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(calls.filter((call) => call.startsWith("ownerOf"))).toEqual(["ownerOf 4"]);
+      expect(calls.filter((call) => call.startsWith("ownerOf"))).toEqual(["ownerOf 25001"]);
       const oldest = [...store.identities.values()][0];
       views.mark({ holders: new Set([oldest.ubid]), cards: new Set(), contracts: new Set() });
       for (let i = 0; i < 100 && views.read < 2; i++) await new Promise((resolve) => setTimeout(resolve, 5));
-      expect(calls.filter((call) => call.startsWith("ownerOf"))).toEqual(["ownerOf 4", "ownerOf 1"]);
+      expect(calls.filter((call) => call.startsWith("ownerOf"))).toEqual(["ownerOf 25001", "ownerOf 1"]);
     } finally { views.stop(); }
   });
 
