@@ -29,7 +29,7 @@ export interface ChainInfo {
 
 export interface ChainStatus {
   /** syncing: the first sync hasn't finished. live: polling. stalled: no good poll for a while. */
-  state: "syncing" | "live" | "stalled";
+  state: "syncing" | "live" | "stalled" | "paused";
   /** The newest block folded in. */
   syncedTo: string | null;
   /** The chain's head when it was last asked. */
@@ -37,9 +37,12 @@ export interface ChainStatus {
   /** When a poll last succeeded, unix ms. */
   lastSyncAt: number | null;
   error: string | null;
+  rpcBudget?: ReturnType<import("./rpc-budget.js").RpcBudget["snapshot"]>;
 }
 
 export interface RuntimeOptions extends ChainInfo {
+  offline?: boolean;
+  rpcBudget?: () => { day: string; limit: number; used: number; remaining: number; minuteLimit: number; minuteUsed: number; allowed: boolean };
   store: ProjectionStore;
   client: PublicClient;
   adapter: Address;
@@ -76,9 +79,13 @@ export class ChainRuntime implements ChainInfo {
   private lastSyncAt: number | null = null;
   private error: string | null = null;
   private dating = false;
+  private readonly offline: boolean;
+  private readonly rpcBudget?: RuntimeOptions["rpcBudget"];
   private timers: ReturnType<typeof setInterval>[] = [];
 
   constructor(o: RuntimeOptions) {
+    this.offline = o.offline ?? false;
+    this.rpcBudget = o.rpcBudget;
     this.slug = o.slug;
     this.label = o.label;
     this.host = o.host;
@@ -94,9 +101,10 @@ export class ChainRuntime implements ChainInfo {
     // Chain facts around each identity are read by this worker, never on a request, and kept in the
     // network's SQLite file beside the event log so a restart starts warm.
     this.advisories = new AdvisoryStore(o.log?.connection ?? null);
-    this.views = new ViewCache(o.store, o.client, { log: (line) => this.say(line) }, this.advisories);
+    this.views = new ViewCache(o.store, o.client, { canReadRpc: () => this.canReadRpc(), log: (line) => this.say(line) }, this.advisories);
     if (o.ingester) this.watcher = new CollectionWatcher(o.store, o.client, this.advisories, { log: (line) => this.say(line) });
-    if (!o.ingester) this.state = "live"; // a store fed by someone else (tests): nothing to sync
+    if (this.offline) this.state = "paused";
+    else if (!o.ingester) this.state = "live"; // a store fed by someone else (tests): nothing to sync
   }
 
   get chainId(): bigint {
@@ -111,7 +119,8 @@ export class ChainRuntime implements ChainInfo {
   status(): ChainStatus {
     const overdue = this.lastSyncAt !== null && Date.now() - this.lastSyncAt > this.pollMs * STALL_POLLS;
     return {
-      state: this.state === "live" && overdue ? "stalled" : this.state,
+      state: this.offline || (this.rpcBudget && this.rpcBudget().remaining === 0) ? "paused" : this.state === "live" && overdue ? "stalled" : this.state,
+      rpcBudget: this.rpcBudget?.(),
       syncedTo: this.ingester ? (this.ingester.next - 1n).toString() : null,
       head: this.head?.toString() ?? null,
       lastSyncAt: this.lastSyncAt,
@@ -121,6 +130,7 @@ export class ChainRuntime implements ChainInfo {
 
   /** Start everything: the first sync (in the background), then the poller, the worker and the watcher. */
   start(): void {
+    if (this.offline) return;
     this.views.start();
     if (!this.ingester) return;
     void this.firstSync().then(() => {
@@ -134,7 +144,7 @@ export class ChainRuntime implements ChainInfo {
   }
 
   private async dateBlocks(): Promise<void> {
-    if (this.dating || !this.ingester) return;
+    if (this.dating || !this.ingester || !this.canReadRpc()) return;
     this.dating = true;
     try {
       const filled = await this.ingester.backfillTimestamps();
@@ -207,9 +217,11 @@ export class ChainRuntime implements ChainInfo {
     return true;
   }
 
+  private canReadRpc(): boolean { return !this.offline && (this.rpcBudget?.().allowed ?? true); }
+
   private polling = false;
   private async poll(): Promise<void> {
-    if (this.polling) return;
+    if (this.polling || !this.canReadRpc()) return;
     this.polling = true;
     try {
       await this.ingester!.sync((_from, _to, head) => (this.head = head));
@@ -225,7 +237,7 @@ export class ChainRuntime implements ChainInfo {
   private scanning = false;
   /** The bound contracts, up to the block the ingester has synced, so every event maps onto records the store has. */
   private async scan(): Promise<void> {
-    if (this.scanning || !this.watcher || !this.ingester) return;
+    if (this.scanning || !this.watcher || !this.ingester || !this.canReadRpc()) return;
     this.scanning = true;
     try {
       const d = await this.watcher.scan(this.ingester.next - 1n);

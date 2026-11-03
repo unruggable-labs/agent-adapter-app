@@ -105,3 +105,29 @@ ssh in as `deploy`, pull, `npm ci` + build, restart the indexer instances
 (allowed passwordlessly via `/etc/sudoers.d/adapter`), health-check the APIs.
 Repo settings carry `DEPLOY_HOST` / `DEPLOY_USER` (variables) and
 `DEPLOY_SSH_KEY` (secret) — same key as the ens8004 repo.
+
+## RPC spending boundaries and stored-data-only operation
+
+The indexer now requires an explicit `RPC_DAILY_REQUEST_LIMIT` to perform RPC work. Unset or
+zero means **stored-data-only mode**: existing SQLite logs are replayed, the API and stats remain
+available, chain status is `paused`, and preflight, ingestion, watchers, timestamps and advisory
+workers make no RPC requests. `ADAPTER_OFFLINE=1` forces this mode even with a positive limit.
+Changing these environment settings requires a service restart; do not restart production as
+incident containment without authorization.
+
+Before enabling reads, choose the daily request allowance from the provider's method pricing and
+the account's remaining credits. This limit counts **outbound JSON-RPC requests**, not billed
+credits or dollars. A JSON-RPC batch consumes one allowance unit per member. Failed outbound
+attempts also count. Automatic viem transport retries are disabled.
+
+`RPC_MINUTE_REQUEST_LIMIT` defaults to 120. Both limits apply across the chains and indexer
+processes sharing the data directory. Counters are reserved atomically in `data/rpc-usage.sqlite`
+before network I/O, survive restarts, and the daily allowance resets at midnight UTC. Reaching a
+limit does not delete state or stop the API; subsequent RPC attempts are rejected locally. The
+overview's chain status includes the shared `rpcBudget` counters. This guard covers this indexer,
+not other applications sharing a provider key.
+
+Full-range startup recounts are disabled unless `VERIFY_BACKFILL=1` explicitly enables that
+maintenance operation; those requests still consume the same allowance. Metadata gaps use the
+normal daily refresh cadence (six hours for completely absent cards), rather than two-minute
+full-chain rereads. Ownership refreshes are scheduled independently from card refreshes.

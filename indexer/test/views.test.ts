@@ -45,7 +45,7 @@ function fakeChain(multicall3 = false) {
 }
 
 describe("identity views", () => {
-  it("preserves a searchable agent name through a partial metadata failure and retries promptly", async () => {
+  it("preserves a searchable agent name without repeatedly rereading RPC metadata", async () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
     store.apply(registered(1));
     const id = store.identities.get(UBID7)!;
@@ -63,7 +63,7 @@ describe("identity views", () => {
       }
       return read(args);
     };
-    const views = new ViewCache(store, client, { retryMs: 100 });
+    const views = new ViewCache(store, client, { retryMs: 100, staleMs: 1000 });
     await views.refreshMany([id]);
     expect(views.summary(id).agentName).toBe(name);
     available = false;
@@ -74,6 +74,9 @@ describe("identity views", () => {
     name = "Zori updated";
     const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 101);
     try {
+      await views.refreshMany([id]);
+      expect(views.summary(id).agentName).toBe("Normie #7 - Zori");
+      clock.mockReturnValue(Date.now() + 1001);
       await views.refreshMany([id]);
       expect(views.summary(id).agentName).toBe(name);
       expect(views.summary(id).card?.agentMetadataPending).toBeUndefined();
@@ -235,10 +238,12 @@ describe("identity views", () => {
     store.apply(registered(1));
     const { client } = fakeChain(true);
     const views = new ViewCache(store, client);
+    views.mark({ holders: new Set([UBID7]), cards: new Set(), contracts: new Set() });
     await views.refreshMany([...store.identities.values()]);
     (client as unknown as { multicall: () => Promise<unknown> }).multicall = async () => [
       { status: "failure", error: new HttpRequestError({ url: "https://rpc.example", details: "timeout" }) },
     ];
+    views.mark({ holders: new Set([UBID7]), cards: new Set(), contracts: new Set() });
     await views.refreshMany([...store.identities.values()]);
     expect(views.views()[0].currentControllerHolder).toBe(ALICE);
     expect(views.views()[0].flags.currentlyOwnerless).toBe(false);
@@ -246,6 +251,7 @@ describe("identity views", () => {
     (client as unknown as { multicall: () => Promise<unknown> }).multicall = async () => [
       { status: "failure", error: new ContractFunctionRevertedError({ abi: [], functionName: "ownerOf", message: "ERC721NonexistentToken(7)" }) },
     ];
+    views.mark({ holders: new Set([UBID7]), cards: new Set(), contracts: new Set() });
     await views.refreshMany([...store.identities.values()]);
     expect(views.views()[0].currentControllerHolder).toBeNull();
     expect(views.views()[0].flags.currentlyOwnerless).toBe(true);

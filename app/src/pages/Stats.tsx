@@ -4,7 +4,6 @@ import { ChainIcon } from "../components/chains";
 import { EventDate, MultiSelect, Pager, Skeleton, StandardBadge, Tip } from "../components/ui";
 import { statsApi, type ProjectRow, type StatsBucket, type StatsOverview, type StatsSeries } from "../lib/api";
 import { statsSourceFor, explorerOriginFor, NETWORKS, STANDARD_NAMES, type NetworkId } from "../lib/chain";
-import { useApp } from "../lib/app-state";
 import { usePageParam } from "../lib/url";
 
 /**
@@ -59,7 +58,7 @@ function readUrl() {
 }
 
 export function StatsPage({ chains: offered, allChains = false }: { chains: NetworkId[]; allChains?: boolean }) {
-  const { tick } = useApp();
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000) + 1);
   const initial = useMemo(readUrl, []);
   const [range, setRange] = useState<Range>(initial.range);
   const [bucketChoice, setBucketChoice] = useState<StatsBucket | "auto">(initial.bucket);
@@ -107,7 +106,6 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
     );
   }, [data, compare, chains]);
 
-  const now = useMemo(() => Math.floor(Date.now() / 1000) + 1, [tick]); // Include the current partial hour; refresh with the app poll
   const from = range === "7d" ? now - 7 * DAY : range === "30d" ? now - 30 * DAY : range === "90d" ? now - 90 * DAY : firstEvent ?? now - 365 * DAY;
   const window = { from, to: now };
   // Auto: days for anything up to two months, weeks up to about a year, months beyond - so "All" on a young chain still shows a shape.
@@ -116,6 +114,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
 
   useEffect(() => {
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     setError(false);
     (async () => {
       const results = await Promise.all(
@@ -153,11 +152,13 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
       // "All" starts at the first event any selected chain has. Learned from the first answer, then applied.
       const firsts = Object.values(loaded.overview).map((o) => o.totals.firstEvent).filter((t): t is number => t !== null);
       if (firsts.length) setFirstEvent(Math.min(...firsts));
+      refreshTimer = setTimeout(() => setNow(Math.floor(Date.now() / 1000) + 1), 30_000);
     })();
     return () => {
       cancelled = true;
+      clearTimeout(refreshTimer);
     };
-  }, [chains.join(","), bucket, from, now, tick]);
+  }, [chains.join(","), bucket, from, now]);
 
   // One identities series per compared project, from its own chain.
   useEffect(() => {
@@ -238,7 +239,7 @@ export function StatsPage({ chains: offered, allChains = false }: { chains: Netw
 
       {data && <div className="row wrap small t3" style={{ gap: 12, marginBottom: 14 }}>
         {Object.entries(data.overview).map(([chain, o]) => <span key={chain}>{NETWORKS[chain].label}: {o.indexed?.state ?? "indexed"}{o.indexed?.lastSyncAt != null && <> · synced <EventDate timestamp={o.indexed.lastSyncAt / 1000} /></>}{o.indexed?.syncedTo && <> · block {o.indexed.syncedTo}</>}</span>)}
-        <span>Refreshes every 12 seconds. Dates use UTC.</span>
+        <span>Refreshes 30 seconds after each completed load. Dates use UTC.</span>
       </div>}
       {allChains && (
         <div className="row wrap" style={{ gap: 6, marginBottom: 14 }}>

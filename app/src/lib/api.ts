@@ -14,7 +14,7 @@ export interface ChainOverview {
   registered: number;
   attestations: number;
   /** syncing: the first sync hasn't finished. live: polling. stalled: no good poll for a while. */
-  state: "syncing" | "live" | "stalled";
+  state: "syncing" | "live" | "stalled" | "paused";
   syncedTo: string | null;
   head: string | null;
 }
@@ -342,7 +342,7 @@ export interface ProjectsQuery {
  *  as the hub does - the chain's name, since the page asks several chains. */
 export function statsApi(source: { base: string; chain: string | null }) {
   const getAt = async <T,>(path: string): Promise<T> => {
-    const res = await fetch(source.base + path + (source.chain ? `&chain=${encodeURIComponent(source.chain)}` : ""));
+    const res = await fetch(source.base + path + (source.chain ? `&chain=${encodeURIComponent(source.chain)}` : ""), { signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(`${path}: ${res.status}`);
     return res.json();
   };

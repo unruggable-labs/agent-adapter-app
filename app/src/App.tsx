@@ -190,7 +190,10 @@ function Shell() {
             <WalletControl />
           </div>
         </header>
-        <div className="main-scroll">{page}</div>
+        <div className="main-scroll">
+          {overview?.chains?.some((c) => c.state === "paused") && <div className="callout callout-warn" role="status" style={{ margin: "14px 24px 0" }}><b>Updates paused on {overview.chains.filter((c) => c.state === "paused").map((c) => c.label).join(", ")}.</b> Profiles and statistics show the last indexed data.</div>}
+          {page}
+        </div>
       </main>
     </div>
   );

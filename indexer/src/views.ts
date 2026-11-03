@@ -46,6 +46,7 @@ export interface Advisory {
 }
 
 export interface ViewWorkerOptions {
+  canReadRpc: () => boolean;
   /** Batches in flight at once. */
   concurrency: number;
   /** Identities per batch: one Multicall3 call for the holders. */
@@ -108,7 +109,7 @@ export class ViewCache {
     opts: Partial<ViewWorkerOptions> = {},
     advisories?: AdvisoryStore,
   ) {
-    this.opts = { concurrency: 2, batch: 100, gapMs: 250, staleMs: 24 * 60 * 60_000, missStaleMs: 6 * 60 * 60_000, txRefBatch: 20, retryMs: 2 * 60_000, tickMs: 1000, log: () => {}, ...opts };
+    this.opts = { canReadRpc: () => true, concurrency: 2, batch: 100, gapMs: 250, staleMs: 24 * 60 * 60_000, missStaleMs: 6 * 60 * 60_000, txRefBatch: 20, retryMs: 2 * 60_000, tickMs: 1000, log: () => {}, ...opts };
     this.advisories = advisories ?? new AdvisoryStore();
     this.multicall = Boolean(client.chain?.contracts?.multicall3?.address);
   }
@@ -255,7 +256,8 @@ export class ViewCache {
    */
   async refreshMany(ids: IdentityState[], everything = false, priority = false): Promise<void> {
     const now = Date.now();
-    const holders = await this.holders(ids);
+    const holderIds = ids.filter((id) => everything || this.holderDue(id, now));
+    const holders = await this.holders(holderIds);
 
     const contracts = new Map<Address, ContractFacts>();
     for (const address of new Set(ids.map((i) => i.boundAddress))) {
@@ -271,10 +273,10 @@ export class ViewCache {
     }
 
     const cards = new Map<Hex, CardFact>();
-    const registry = await this.registry();
+    const cardIds = ids.filter((id) => everything || this.cardDue(id, now));
+    const registry = cardIds.some((id) => id.agentURI === null && id.agentIds.length > 0) ? await this.registry() : null;
     await Promise.all(
-      ids
-        .filter((id) => everything || this.cardDue(id, now))
+      cardIds
         .map(async (id) => {
           // Nothing found is often nothing reachable (a gateway down, a server out): the card we
           // had stays. Incomplete registration metadata gets a shorter retry interval.
@@ -292,15 +294,20 @@ export class ViewCache {
     this.advisories.write({ holders, contracts, cards });
     // Our own copy of each picture just read, saved in the background (pictures.ts).
     warmPictures([...[...cards.values()].map((f) => f.card?.image), ...[...contracts.values()].map((f) => f.collection?.image)]);
-    for (const id of ids) {
+    for (const id of holderIds) {
       // A holder the RPC failed to read keeps its mark and its old reading, and is tried again later.
       if (holders.has(id.ubid)) {
         this.dirty.holders.delete(id.ubid);
         this.retryAt.delete(id.ubid);
-      } else this.retryAt.set(id.ubid, now + this.opts.retryMs);
-      if (cards.has(id.ubid)) this.dirty.cards.delete(id.ubid);
+      } else this.retryAt.set(id.ubid, Date.now() + this.opts.retryMs);
     }
+    for (const ubid of cards.keys()) this.dirty.cards.delete(ubid);
     for (const a of contracts.keys()) this.dirty.contracts.delete(a);
+  }
+
+  private holderDue(id: IdentityState, now: number): boolean {
+    const had = this.advisories.holder(id.ubid);
+    return !had || this.dirty.holders.has(id.ubid) || this.dirty.contracts.has(id.boundAddress) || now - had.at >= this.opts.staleMs;
   }
 
   private contractDue(address: Address, now: number): boolean {
@@ -315,7 +322,7 @@ export class ViewCache {
   private cardDue(id: IdentityState, now: number): boolean {
     const c = this.advisories.card(id.ubid);
     if (!c || c.key !== cardKey(id) || this.dirty.cards.has(id.ubid)) return true;
-    return now - c.at > (c.card?.agentMetadataPending ? this.opts.retryMs : c.card ? this.opts.staleMs : Math.min(this.opts.missStaleMs, 10 * 60_000));
+    return now - c.at > (c.card ? this.opts.staleMs : this.opts.missStaleMs);
   }
 
   /**
@@ -451,6 +458,7 @@ export class ViewCache {
   }
 
   private checkRefs() {
+    if (!this.opts.canReadRpc()) return;
     if (this.checkingRefs) return;
     const due = this.dueRefs(Date.now());
     if (due.length === 0) return;
@@ -469,6 +477,7 @@ export class ViewCache {
   }
 
   private pump() {
+    if (!this.timer || !this.opts.canReadRpc()) return;
     if (!this.requestedCardBusy) for (const ubid of this.requestedCards) {
       this.requestedCards.delete(ubid);
       const id = this.store.identities.get(ubid);

@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import type { Address, Hex, PublicClient } from "viem";
 import { ProjectionStore, type LogEvent, type OrderKey } from "../src/projection.js";
 import { addressView, attestationView, collectionView, listAttestations, listCollections, listIdentities, search, type ChainScope } from "../src/queries.js";
@@ -202,6 +202,23 @@ describe("one process, several sites", () => {
 });
 
 describe("a chain fails on its own", () => {
+  it("serves stored identities and paused status without starting any RPC work in offline mode", async () => {
+    const c = chain("base", 8453n, 1000, 2);
+    c.register(1, 1n);
+    const rpc = vi.fn().mockRejectedValue(new Error("must never be called"));
+    const client = { request: rpc, readContract: rpc, getCode: rpc, getStorageAt: rpc } as unknown as PublicClient;
+    const runtime = new ChainRuntime({ slug: "base", label: "Base", store: c.store, client, adapter: ADAPTER, offline: true });
+    runtime.start();
+    try {
+      const profile = await handleApi([runtime], `identity/${c.ubid(1n)}`);
+      expect(profile.status).toBe(200);
+      expect(JSON.parse(profile.body).ubid).toBe(c.ubid(1n));
+      const overview = JSON.parse((await handleApi([runtime], "overview")).body);
+      expect(overview.chains[0].state).toBe("paused");
+      expect(rpc).not.toHaveBeenCalled();
+    } finally { runtime.stop(); }
+  });
+
   function fakeIngester(script: (() => Promise<number>)[]) {
     let n = 0;
     const ing = {

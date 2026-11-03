@@ -113,7 +113,7 @@ export function ChainFilter() {
             <ChainIcon id={c.chain} size={14} />
             {chainLabel(c.chain)}
             {c.state !== "live" && (
-              <span className="chain-state" title={c.state === "stalled" ? "The indexer hasn't heard from this chain's RPC for a while. Its records are as of the last block it read." : "Still catching up with the chain."}>
+              <span className="chain-state" title={c.state === "paused" ? "RPC reads are paused. Showing stored records." : c.state === "stalled" ? "The indexer hasn't heard from this chain's RPC for a while. Its records are as of the last block it read." : "Still catching up with the chain."}>
                 {c.state}
               </span>
             )}

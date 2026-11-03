@@ -167,7 +167,8 @@ it would avoid decoding every event body. Cheap now, a topic0 cutover later.
   Feedback references do not create identity rows. `attestations?resolution=unresolved` exposes
   those statements; with `from`/`to`, the filter uses each unresolved target's first attestation.
   This category describes the current resolution state and can shrink when identities are created.
-- Usage windows include the current partial hour and refresh with the app's polling cycle. Stats
+- Usage windows include the current partial hour and refresh 30 seconds after a completed load.
+  An app-wide poll cannot cancel an in-flight stats load. Stats
   overview responses include `generatedAt` (Unix seconds) and `indexed` (the source chain status,
   including its last successful sync). Timestamp backlogs and unavailable/stalled sources are
   disclosed instead of implying a complete, current count.

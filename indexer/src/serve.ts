@@ -1,3 +1,4 @@
+import { RpcBudget } from "./rpc-budget.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -114,6 +115,8 @@ async function main() {
   configureGatewayCache(join(dataDir, "cache")); // ipfs/ar content, under its address
   configurePictures(join(dataDir, "pictures")); // our small copy of every picture shown (pictures.ts)
 
+  // Fail closed until an operator explicitly sets a spending boundary.
+  const budget = new RpcBudget(join(dataDir, "rpc-usage.sqlite"), Number(process.env.RPC_DAILY_REQUEST_LIMIT ?? 0), Number(process.env.RPC_MINUTE_REQUEST_LIMIT ?? 120));
   const chains: ChainRuntime[] = [];
   for (const name of names) {
     const net = NETWORKS[name];
@@ -123,7 +126,7 @@ async function main() {
       console.log(`[${name}] not indexed yet: no cutover block. ${fix}`);
       continue;
     }
-    chains.push(await boot(name, net.fromBlock, dataDir));
+    chains.push(await boot(name, net.fromBlock, dataDir, budget));
   }
   if (chains.length === 0) throw new Error(`none of ${names.join(", ")} can be indexed yet`);
 
@@ -133,11 +136,12 @@ async function main() {
 }
 
 /** One chain up to the point of serving: the RPC checked, the stored log folded. Its first sync starts with the server. */
-async function boot(name: NetworkName, fromBlock: bigint, dataDir: string): Promise<ChainRuntime> {
+async function boot(name: NetworkName, fromBlock: bigint, dataDir: string, budget: RpcBudget): Promise<ChainRuntime> {
   const net = NETWORKS[name];
-  console.log(`[${name}] adapter ${net.adapter} from block ${fromBlock}${"upgradeBlock" in net ? ` (v0.0.17 from ${net.upgradeBlock})` : ""} via ${net.rpcUrl}`);
-  const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl) }) as PublicClient;
-  await preflight(client, net.rpcUrl, net.chainId, fromBlock);
+  console.log(`[${name}] adapter ${net.adapter} from block ${fromBlock}${"upgradeBlock" in net ? ` (v0.0.17 from ${net.upgradeBlock})` : ""} via configured RPC`);
+  const client = createPublicClient({ chain: net.chain, transport: http(net.rpcUrl, { fetchFn: budget.fetch(name), retryCount: 0 }) }) as PublicClient;
+  const offline = process.env.ADAPTER_OFFLINE === "1" || budget.dailyLimit === 0;
+  if (!offline && budget.snapshot().allowed) await preflight(client, net.rpcUrl, net.chainId, fromBlock);
   const upgradeBlock = "upgradeBlock" in net && net.upgradeBlock > fromBlock ? net.upgradeBlock : null;
   const store = new ProjectionStore(net.chainId, net.adapter, upgradeBlock);
   const log = new EventLog(join(dataDir, `${name}.sqlite`), { chainId: net.chainId, adapter: net.adapter, fromBlock, upgradeBlock });
@@ -158,7 +162,10 @@ async function boot(name: NetworkName, fromBlock: bigint, dataDir: string): Prom
     ingester,
     log,
     pollMs: net.pollMs,
-    verifyFrom: fromBlock,
+    // A full-history verification is expensive maintenance, never an automatic startup job.
+    verifyFrom: process.env.VERIFY_BACKFILL === "1" ? fromBlock : undefined,
+    offline,
+    rpcBudget: () => budget.snapshot(),
   });
 }
 
