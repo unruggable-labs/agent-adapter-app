@@ -136,7 +136,10 @@ full-chain rereads. Ownership refreshes are scheduled independently from card re
 
 `rpc-ingestion.env` is a non-secret, versioned policy for the hub: 20,000 requests/day,
 30 requests/minute shared across all three chains, and a minimum 60-second ingestion interval.
-It does not enable enrichment, watcher scans, timestamp backfills or full-history recounts.
+Enrichment runs in `events` mode on 8,000 requests/day and 12 a minute (the watcher's scans and
+the reads for new or changed records); ingestion keeps the rest. It does not enable timestamp
+backfills or full-history recounts. The hub drop-in loads this file after `/etc/adapter.env`,
+so its values override any set there - edit the policy, not adapter.env.
 Install it as an additional `EnvironmentFile` in a hub-specific systemd drop-in only after
 explicitly authorizing live RPC reads. It supplements the private endpoint configuration;
 it never contains provider URLs or keys. A positive allowance is not enabled merely by
