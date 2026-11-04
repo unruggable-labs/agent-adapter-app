@@ -1,8 +1,8 @@
 import { withRpcPurpose, withRpcWorkload } from "./rpc-budget.js";
-import { BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Address, type Hex, type PublicClient } from "viem";
+import type { Address, Hex, PublicClient } from "viem";
 import { AdvisoryStore, type CardFact, type ContractFacts, type HolderFact, type TxRefFact } from "./advisories.js";
 import { collectionFor, type Collection } from "./collection.js";
-import { cardKey, resolveCardDetails, type Card } from "./images.js";
+import { cardKey, resolveCardDetails, type Card, contractAnswered } from "./images.js";
 import { contractName, labelsFrom } from "./names.js";
 import { shownPicture, warmPictures } from "./pictures.js";
 import type { IdentityState, ProjectionStore } from "./projection.js";
@@ -77,13 +77,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** One-call-each reads in flight at once, where there is no Multicall3: a metered RPC counts requests per second. */
 const FALLBACK_CONCURRENCY = 5;
 
-/**
- * Did the contract answer, with a revert or with nothing? That is an answer: no holder. Anything
- * else - a rate limit, a timeout, a 5xx - is the RPC failing to ask, and says nothing about the token.
- */
-function contractAnswered(e: unknown): boolean {
-  return e instanceof BaseError && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ContractFunctionZeroDataError) !== null;
-}
 const firstLine = (e: unknown) => (e instanceof Error ? e.message.split("\n")[0] : String(e));
 
 export class ViewCache {
@@ -283,6 +276,8 @@ export class ViewCache {
     }
 
     const cards = new Map<Hex, CardFact>();
+    /** Cards whose token URI the RPC never answered: no reading, tried again after the backoff. */
+    const deferred: Hex[] = [];
     const cardIds = ids.filter((id) => everything || this.cardDue(id, now));
     const sourcesOf = (id: IdentityState) => {
       const had = this.advisories.card(id.ubid);
@@ -296,6 +291,10 @@ export class ViewCache {
           // had stays. HTTP retries can reuse the persisted metadata URIs.
           const had = this.advisories.card(id.ubid);
           const details = await resolveCardDetails(this.client, id, registry, priority, sourcesOf(id));
+          if (!details.complete) {
+            deferred.push(id.ubid);
+            return;
+          }
           const resolved = details.card;
           const legacyKey = `2:${id.boundAddress}:${id.tokenId}:${id.standard}:${id.agentURI ?? ""}`;
           const previous = had && (had.key === cardKey(id) || had.key === legacyKey) ? had.card : null;
@@ -324,6 +323,11 @@ export class ViewCache {
       const id = this.store.identities.get(ubid);
       if (id) this.initialKeys.set(ubid, cardKey(id));
     }
+    for (const ubid of deferred) {
+      this.dirty.cards.add(ubid);
+      this.retryAt.set(ubid, Date.now() + this.opts.retryMs);
+    }
+    if (deferred.length) this.opts.log(`Cards: ${deferred.length} token URI reads the RPC didn't answer (budget or outage), trying again in ${Math.round(this.opts.retryMs / 1000)}s`);
     for (const a of contracts.keys()) this.dirty.contracts.delete(a);
   }
 
@@ -342,9 +346,15 @@ export class ViewCache {
     return now - c.at > (missing ? this.opts.missStaleMs : this.opts.staleMs);
   }
 
+  /** A card stored by an earlier build after the RPC never answered the token URI: not a reading. */
+  private cardIncomplete(id: IdentityState): boolean {
+    const c = this.advisories.card(id.ubid);
+    return !!c && c.sources !== undefined && !("tokenUri" in c.sources);
+  }
+
   private cardDue(id: IdentityState, now: number): boolean {
     const c = this.advisories.card(id.ubid);
-    if (!c || c.key !== cardKey(id) || this.dirty.cards.has(id.ubid)) return true;
+    if (!c || c.key !== cardKey(id) || this.dirty.cards.has(id.ubid) || this.cardIncomplete(id)) return true;
     return now - c.at > (c.card ? this.opts.staleMs : this.opts.missStaleMs);
   }
 
@@ -430,7 +440,7 @@ export class ViewCache {
   /** Event-only mode never bootstraps or sweeps the old registry after a restart. */
   private eventEligible(id: IdentityState): boolean {
     return this.dirty.holders.has(id.ubid) || this.dirty.cards.has(id.ubid) || this.dirty.contracts.has(id.boundAddress)
-      || this.initialKeys.get(id.ubid) !== cardKey(id);
+      || this.initialKeys.get(id.ubid) !== cardKey(id) || this.cardIncomplete(id);
   }
 
   /** The next batch worth a read, possibly empty: marked first, then never-read newest first, then the stale. */

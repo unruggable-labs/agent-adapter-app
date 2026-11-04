@@ -8,15 +8,18 @@ import { RpcBudget, withRpcWorkload, withRpcPurpose } from "../src/rpc-budget.js
 const request = (method = "eth_call") => ({ body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [] }) });
 
 describe("outbound RPC budget", () => {
-  it("keeps the reviewed production policy bounded and enrichment disabled", () => {
+  it("keeps the reviewed production policy bounded: events-mode enrichment inside the global allowance, no maintenance", () => {
     const text = readFileSync(new URL("../../deploy/rpc-ingestion.env", import.meta.url), "utf8");
     const policy = Object.fromEntries(text.split("\n").filter((line) => line && !line.startsWith("#")).map((line) => line.split("=")));
     expect(policy).toMatchObject({
       RPC_DAILY_REQUEST_LIMIT: "20000", RPC_MINUTE_REQUEST_LIMIT: "30",
-      RPC_ENRICHMENT_DAILY_LIMIT: "0", RPC_ENRICHMENT_MINUTE_LIMIT: "0",
+      RPC_ENRICHMENT_DAILY_LIMIT: "8000", RPC_ENRICHMENT_MINUTE_LIMIT: "12",
       RPC_MAINTENANCE_DAILY_LIMIT: "0", RPC_MAINTENANCE_MINUTE_LIMIT: "0",
-      ENRICHMENT_MODE: "off", BACKFILL_TIMESTAMPS: "0", VERIFY_BACKFILL: "0",
+      ENRICHMENT_MODE: "events", BACKFILL_TIMESTAMPS: "0", VERIFY_BACKFILL: "0",
     });
+    // Ingestion keeps what the allocations leave: three chains polling every minute need about 9 a minute.
+    expect(30 - Number(policy.RPC_ENRICHMENT_MINUTE_LIMIT) - Number(policy.RPC_MAINTENANCE_MINUTE_LIMIT)).toBeGreaterThanOrEqual(12);
+    expect(20_000 - Number(policy.RPC_ENRICHMENT_DAILY_LIMIT) - Number(policy.RPC_MAINTENANCE_DAILY_LIMIT)).toBeGreaterThanOrEqual(10_000);
   });
 
   it("fits a full day of three-chain polling within the production policy", () => {

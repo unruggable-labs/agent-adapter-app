@@ -5,6 +5,7 @@ import { AdvisoryStore } from "../src/advisories.js";
 import { EventLog } from "../src/eventlog.js";
 import { AttestationType, computeAttestationId, computeUbid, Standard } from "../src/ubid.js";
 import { referencesIn, ViewCache } from "../src/views.js";
+import { cardKey } from "../src/images.js";
 
 const CHAIN = 31337n;
 const ADAPTER = "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0" as Address;
@@ -36,7 +37,7 @@ function fakeChain(multicall3 = false) {
       if (functionName === "ownerOf") return ALICE;
       if (functionName === "name") return "DemoPunks";
       if (functionName === "contractURI") return "data:application/json;base64," + Buffer.from(JSON.stringify({ name: "DemoPunks", description: "Ten punks.", image: "ipfs://bafyimg", external_link: "https://punks.example" })).toString("base64");
-      throw new Error(`unexpected ${functionName}`);
+      throw new ContractFunctionRevertedError({ abi: [], functionName });
     },
     getCode: async () => "0x",
     getStorageAt: async () => undefined,
@@ -265,6 +266,54 @@ describe("identity views", () => {
     (client as unknown as { multicall: unknown }).multicall = working; // the RPC recovers
     await views.refreshMany([...store.identities.values()]);
     expect(calls.filter((c) => c.startsWith("multicall")).length).toBe(3); // still batching
+  });
+
+  it("a token URI read the RPC rejected is tried again, not stored as 'no picture' for a day", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    store.apply(registered(1));
+    const id = store.identities.get(UBID7)!;
+    const { client, calls } = fakeChain(true);
+    let busy = true;
+    const read = client.readContract.bind(client);
+    (client as unknown as { readContract: (a: any) => Promise<unknown> }).readContract = async (args) => {
+      if (args.functionName !== "tokenURI") return read(args);
+      calls.push(busy ? "tokenURI (budget)" : "tokenURI");
+      if (busy) throw new HttpRequestError({ url: "https://rpc.example", status: 429, details: "RPC request budget exhausted; serving stored data" });
+      return `data:application/json,${encodeURIComponent(JSON.stringify({ name: "Normie #7", image: "https://example.com/token.png" }))}`;
+    };
+    const views = new ViewCache(store, client, { gapMs: 0, tickMs: 5, retryMs: 100 });
+    await views.refreshMany([id]);
+    expect(views.views()[0].currentControllerHolder).toBe(ALICE); // the holder read stands
+    expect(views.summary(id).card).toBeNull();
+    expect(views.advisories.card(UBID7)).toBeNull(); // and nothing was stored as a reading
+    busy = false;
+    await views.refreshMany([id]); // the worker's next batch takes it again
+    expect(views.summary(id).card?.image).toBe("https://example.com/token.png");
+    expect(calls.filter((c) => c.startsWith("tokenURI"))).toEqual(["tokenURI (budget)", "tokenURI"]);
+  });
+
+  it("re-reads a card an earlier build stored after the RPC never answered the token URI", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    store.apply(registered(1));
+    const id = store.identities.get(UBID7)!;
+    id.agentIds = [7n];
+    const { client, calls } = fakeChain(true);
+    const read = client.readContract.bind(client);
+    (client as unknown as { readContract: (a: any) => Promise<unknown> }).readContract = async (args) => {
+      if (args.functionName === "identityRegistry") throw new ContractFunctionRevertedError({ abi: [], functionName: "identityRegistry" });
+      if (args.functionName !== "tokenURI") return read(args);
+      calls.push("tokenURI");
+      return `data:application/json,${encodeURIComponent(JSON.stringify({ name: "Normie #7", image: "https://example.com/token.png" }))}`;
+    };
+    const log = new EventLog(":memory:", { chainId: CHAIN, adapter: ADAPTER, fromBlock: 1n });
+    const advisories = new AdvisoryStore(log.connection);
+    // What the old code wrote when the budget said no: a pending card, URIs recorded as none read.
+    const poisoned = { image: null, name: null, description: null, source: "agent" as const, agentMetadataPending: true };
+    advisories.write({ cards: new Map([[UBID7, { key: cardKey(id), card: poisoned, sources: {}, at: Date.now() }]]) });
+    const views = new ViewCache(store, client, { gapMs: 0, tickMs: 5, eventOnly: true }, advisories);
+    await views.refreshMany([id]);
+    expect(calls.filter((c) => c === "tokenURI")).toEqual(["tokenURI"]);
+    expect(views.summary(id).card?.image).toBe("https://example.com/token.png");
   });
 
   it("preserves the holder when an individual multicall result fails without a contract answer", async () => {

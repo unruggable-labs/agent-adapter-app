@@ -1,5 +1,5 @@
 import { withRpcPurpose } from "./rpc-budget.js";
-import type { Address, PublicClient } from "viem";
+import { BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Address, type PublicClient } from "viem";
 import { fetchContent, parseContentUri, proxyPath } from "./gateway.js";
 import type { IdentityState } from "./projection.js";
 import { Standard } from "./ubid.js";
@@ -51,18 +51,33 @@ export async function resolveCard(client: PublicClient, id: IdentityState, regis
   return (await resolveCardDetails(client, id, registry, priority)).card;
 }
 
-/** Successful URI lookups are persisted separately from the document. HTTP retries reuse them. */
-export async function resolveCardDetails(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false, cached?: CardSources): Promise<{ card: Card | null; sources: CardSources }> {
+/**
+ * Did the contract answer, with a revert or with nothing? That is an answer: no holder, no URI.
+ * Anything else - a rate limit, a timeout, a 5xx, our own request budget saying no - is the RPC
+ * failing to ask, and says nothing about the token.
+ */
+export function contractAnswered(e: unknown): boolean {
+  return e instanceof BaseError && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ContractFunctionZeroDataError) !== null;
+}
+
+/**
+ * Successful URI lookups are persisted separately from the document. HTTP retries reuse them.
+ * `complete` is false when the chain never answered the token URI lookup: the card is then no
+ * reading at all, and the caller keeps what it had and tries again, instead of storing "no
+ * picture" for a day because the RPC (or the request budget) was busy for a second.
+ */
+export async function resolveCardDetails(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false, cached?: CardSources): Promise<{ card: Card | null; sources: CardSources; complete: boolean }> {
   const tokenUri = cached && "tokenUri" in cached ? cached.tokenUri
-    : await withRpcPurpose("token-uri", () => tokenMetadataUri(client, id)).catch(() => undefined);
+    : await withRpcPurpose("token-uri", () => tokenMetadataUri(client, id)).catch((e) => (contractAnswered(e) ? null : undefined));
   const token = tokenUri ? await cardIn(tokenUri, "token", priority).catch(() => null) : null;
   const agentUri = id.agentURI !== null ? id.agentURI : cached && "agentUri" in cached ? cached.agentUri
     : !id.agentIds.length ? null : registry ? await withRpcPurpose("agent-uri", () => registryUri(client, id, registry)).catch(() => undefined) : undefined;
   const agent = agentUri ? await cardIn(agentUri, "agent", priority).catch(() => null) : null;
   const sources: CardSources = { ...(tokenUri !== undefined ? { tokenUri } : {}), ...(agentUri !== undefined ? { agentUri } : {}) };
   const pending = !!(id.agentURI || id.agentIds.length) && !agent;
-  if (!token && !agent && !pending) return { card: null, sources };
-  return { sources, card: {
+  const complete = tokenUri !== undefined;
+  if (!token && !agent && !pending) return { card: null, sources, complete };
+  return { sources, complete, card: {
     image: token?.image ?? agent?.image ?? null,
     name: token?.name ?? agent?.name ?? null,
     description: token?.description ?? agent?.description ?? null,

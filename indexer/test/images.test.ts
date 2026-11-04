@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PublicClient } from "viem";
+import { ContractFunctionRevertedError, HttpRequestError, type PublicClient } from "viem";
 import { parseCollection } from "../src/collection.js";
 import { cardKey, resolveCard, resolveCardDetails } from "../src/images.js";
 import type { IdentityState } from "../src/projection.js";
@@ -10,7 +10,7 @@ function client(reads: Record<string, (args: readonly unknown[]) => string>): Pu
   return {
     readContract: async ({ functionName, args }: { functionName: string; args: readonly unknown[] }) => {
       const fn = reads[functionName];
-      if (!fn) throw new Error(`The contract function "${functionName}" reverted.`);
+      if (!fn) throw new ContractFunctionRevertedError({ abi: [], functionName });
       return fn(args);
     },
   } as unknown as PublicClient;
@@ -75,6 +75,18 @@ describe("identity images", () => {
     const c = client({ tokenURI: () => "" });
     const img = await resolved(c, identity({ agentURI: json({ name: "Agent", image: "https://agent.example/pic.png" }) }));
     expect(img).toBe("https://agent.example/pic.png");
+  });
+
+  it("a token URI read the RPC never answered is no reading: incomplete, with no URI cached", async () => {
+    const busy = { readContract: async () => { throw new HttpRequestError({ url: "https://rpc.example", status: 429, details: "RPC request budget exhausted; serving stored data" }); } } as unknown as PublicClient;
+    const rejected = await resolveCardDetails(busy, identity({}));
+    expect(rejected.complete).toBe(false);
+    expect(rejected.card).toBeNull();
+    expect("tokenUri" in rejected.sources).toBe(false);
+    // A revert is an answer: the URI is known to be none, and that is kept so it isn't asked again.
+    const reverted = await resolveCardDetails(client({}), identity({}));
+    expect(reverted.complete).toBe(true);
+    expect(reverted.sources.tokenUri).toBeNull();
   });
 
   it("is null when tokenURI reverts and there is no agent card", async () => {
