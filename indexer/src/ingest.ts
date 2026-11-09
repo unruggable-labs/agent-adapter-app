@@ -10,10 +10,12 @@ import { ProjectionStore, type LogEvent } from "./projection.js";
  * Given an EventLog it also writes through: each synced range is committed with the hash of
  * the block it reached before the store sees it, so a restart replays from the file and syncs
  * from the checkpoint. Each poll first checks that the chain still has the checkpoint block
- * under the stored hash; if not, the chain reorganised, and the newest stored block the chain
- * still has is the fork point - the log is truncated there, the store folded again from the
- * file, and syncing resumes from the next block. Without an EventLog the poller is what it
- * always was: in memory, reorg handling by a fresh replay (spec O-2).
+ * under the stored hash; if the chain answers with a different hash it reorganised, and the
+ * newest stored block the chain still has is the fork point - the log is truncated there, the
+ * store folded again from the file, and syncing resumes from the next block. Only an answer
+ * counts: a request that failed (the RPC down, the request budget saying no) or a node that
+ * hasn't got the block fails the poll with that reason and the log stands. Without an EventLog
+ * the poller is what it always was: in memory, reorg handling by a fresh replay (spec O-2).
  */
 export type BlockNumberSemantics = "l2" | "arbitrum";
 
@@ -45,6 +47,12 @@ export class Ingester {
   private nextBlock: bigint;
   private readonly log: EventLog | undefined;
   private readonly onReorg: ((reorg: Reorg) => void) | undefined;
+  /**
+   * Headers read for event timestamps, kept across polls so a chunk the budget cut short resumes
+   * with what it already had instead of asking again. Cleared on a rewind: a hash in here could
+   * be the orphaned block's.
+   */
+  private headers: Headers = new Map();
 
   constructor(
     private client: PublicClient,
@@ -92,7 +100,11 @@ export class Ingester {
     return BigInt(raw.l1BlockNumber);
   }
 
-  /** The raw block header, so chains with extra fields (Arbitrum's l1BlockNumber) need no formatter. */
+  /**
+   * The raw block header, so chains with extra fields (Arbitrum's l1BlockNumber) need no formatter.
+   * Null is the chain's answer that it has no such block; a request that failed throws, and the
+   * callers let it: a failed ask says nothing about the chain.
+   */
   private async block(blockNumber: bigint | "latest"): Promise<Header | null> {
     return (await this.client.request({
       method: "eth_getBlockByNumber",
@@ -101,12 +113,12 @@ export class Ingester {
   }
 
   private async header(blockNumber: bigint, headers: Headers): Promise<Header | null> {
-    if (!headers.has(blockNumber)) headers.set(blockNumber, await this.block(blockNumber).catch(() => null));
+    if (!headers.has(blockNumber)) headers.set(blockNumber, await this.block(blockNumber));
     return headers.get(blockNumber) ?? null;
   }
 
   private async blockHash(blockNumber: bigint): Promise<Hex | null> {
-    const raw = await this.block(blockNumber).catch(() => null);
+    const raw = await this.block(blockNumber);
     return raw?.hash ?? null;
   }
 
@@ -146,11 +158,13 @@ export class Ingester {
     while (this.nextBlock <= head) {
       const to = this.nextBlock + this.maxRange - 1n > head ? head : this.nextBlock + this.maxRange - 1n;
       onProgress?.(this.nextBlock, to, head);
-      const headers: Headers = new Map([[head, latest]]);
+      if (this.headers.size > 4096) this.headers.clear();
+      const headers = this.headers;
+      headers.set(head, latest);
       // The checkpoint header is read before the logs. If the chain reorganises between the two
       // reads, the stored hash is the old chain's and the next poll notices.
       const toHeader = this.log ? await this.header(to, headers) : null;
-      if (this.log && !toHeader?.hash) throw new Error(`block ${to} not found while syncing; head was ${head}`);
+      if (this.log && !toHeader?.hash) throw new Error(`the RPC has head ${head} but no block ${to}; a lagging node - trying again next poll`);
       const logs = await this.client.getLogs({
         address: this.adapter,
         fromBlock: this.nextBlock,
@@ -173,23 +187,39 @@ export class Ingester {
     return applied;
   }
 
-  /** Does the chain still have our checkpoint block? If not, find where the two histories part and rewind to it. */
+  /**
+   * Does the chain still have our checkpoint block? If it answers with another hash, find where
+   * the two histories part and rewind to it. A reorg replaces blocks, it never removes them: a
+   * null for a block below the head is a lagging node, not a fork, and a failed request is no
+   * answer at all - both throw, the poll fails with that reason, and the log stands. A fork
+   * deeper than every hash we kept is refused the same way: dropping the whole log is a
+   * decision for a person (delete the file to re-index), not something a bad hour of RPC does.
+   */
   private async rewindIfReorged(): Promise<void> {
     if (!this.log) return;
     const cp = this.log.checkpoint();
     if (!cp) return;
-    if ((await this.blockHash(cp.number)) === cp.hash) return;
+    const answer = (n: bigint, hash: Hex | null) => {
+      if (hash === null) throw new Error(`the RPC has no block ${n}, which it synced before; a lagging node - trying again next poll`);
+      return hash;
+    };
+    if (answer(cp.number, await this.blockHash(cp.number)) === cp.hash) return;
     let fork: bigint | null = null;
-    for (const b of this.log.recentBlocks()) {
+    const known = this.log.recentBlocks();
+    for (const b of known) {
       if (b.number >= cp.number) continue;
-      if ((await this.blockHash(b.number)) === b.hash) {
+      if (answer(b.number, await this.blockHash(b.number)) === b.hash) {
         fork = b.number;
         break;
       }
     }
-    // Deeper than every hash we kept: the whole log goes, and the next sync is a full backfill.
-    const to = fork ?? this.fromBlock - 1n;
     const before = this.log.count();
+    if (fork === null && before > 0) {
+      throw new Error(`the chain has other blocks where our checkpoint ${cp.number} and all ${known.length} kept blocks before it were; refusing to drop ${before} events - a reorg this deep is not real. Is the RPC on the right chain? Delete the file to re-index.`);
+    }
+    // Nothing kept yet to lose: start over from the first block.
+    const to = fork ?? this.fromBlock - 1n;
+    this.headers.clear();
     this.log.rewindTo(to);
     this.store.reset();
     const kept = this.replay();

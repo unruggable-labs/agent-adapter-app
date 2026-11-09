@@ -134,4 +134,87 @@ describe("event log write-through and reorgs", () => {
     expect([...log.events()].map((e) => Number(e.blockNumber))).toEqual([103, 108]);
     expect(log.checkpoint()).toEqual({ number: 112n, hash: chain.blocks.get(112n)!.hash });
   });
+
+  /** A synced log of two statements at 103 and 108, checkpoint 110, and a second ingester on it. */
+  async function synced() {
+    const { EventLog } = await import("../src/eventlog.js");
+    const chain = await fakeChain();
+    for (let n = 100n; n <= 110n; n++) chain.setBlock(n, 0);
+    chain.setBlock(103n, 0, "0x01");
+    chain.setBlock(108n, 0, "0x02");
+    const log = new EventLog(":memory:", { chainId: chain.chainId, adapter: ADAPTER, fromBlock: 100n });
+    await new Ingester(chain.client, new ProjectionStore(chain.chainId, ADAPTER), ADAPTER, 100n, 1000n, "l2", { log }).sync();
+    const store = new ProjectionStore(chain.chainId, ADAPTER);
+    const reorgs: unknown[] = [];
+    const ing = new Ingester(chain.client, store, ADAPTER, 100n, 1000n, "l2", { log, onReorg: (r) => reorgs.push(r) });
+    ing.replay();
+    chain.calls.length = 0;
+    return { chain, log, store, reorgs, ing };
+  }
+
+  it("a request that fails is not a reorg: the poll fails with that reason and the log stands", async () => {
+    const { chain, log, store, reorgs, ing } = await synced();
+    chain.setBlock(111n, 0);
+    const request = chain.client.request;
+    (chain.client as unknown as { request: unknown }).request = async (args: { params: unknown[] }) => {
+      if (args.params[0] === "latest") return request(args as never);
+      throw new Error("RPC request budget exhausted; serving stored data");
+    };
+    await expect(ing.sync()).rejects.toThrow(/budget exhausted/);
+    expect(reorgs).toEqual([]);
+    expect(log.count()).toBe(2);
+    expect(store.attestations.size).toBe(2);
+    expect(log.checkpoint()).toEqual({ number: 110n, hash: chain.blocks.get(110n)!.hash });
+    // the RPC comes back: the poll completes as if nothing happened
+    (chain.client as unknown as { request: unknown }).request = request;
+    expect(await ing.sync()).toBe(0);
+    expect(log.checkpoint()).toEqual({ number: 111n, hash: chain.blocks.get(111n)!.hash });
+  });
+
+  it("a node that has the head but not our checkpoint block is lagging, not reorganised", async () => {
+    const { chain, log, reorgs, ing } = await synced();
+    chain.setBlock(111n, 0);
+    const cp = chain.blocks.get(110n)!;
+    chain.blocks.delete(110n); // this node hasn't got it (yet); it still has a head above it
+    await expect(ing.sync()).rejects.toThrow(/lagging node/);
+    expect(reorgs).toEqual([]);
+    expect(log.count()).toBe(2);
+    chain.blocks.set(110n, cp);
+    expect(await ing.sync()).toBe(0);
+  });
+
+  it("refuses a fork deeper than every kept block instead of dropping the log", async () => {
+    const { chain, log, store, reorgs, ing } = await synced();
+    for (let n = 100n; n <= 111n; n++) chain.setBlock(n, 7); // another history altogether
+    await expect(ing.sync()).rejects.toThrow(/refusing to drop 2 events/);
+    expect(reorgs).toEqual([]);
+    expect(log.count()).toBe(2);
+    expect(store.attestations.size).toBe(2);
+  });
+
+  it("a genuine one-block reorg still rewinds to the fork", async () => {
+    const { chain, store, reorgs, ing } = await synced();
+    chain.setBlock(110n, 1);
+    chain.setBlock(111n, 1, "0x09");
+    expect(await ing.sync()).toBe(1);
+    expect(reorgs).toEqual([{ fork: 108n, previousHead: 110n, droppedEvents: 0 }]);
+    expect(store.attestations.size).toBe(3);
+  });
+
+  it("keeps the headers a cut-short chunk already read, so the retry asks only for the rest", async () => {
+    const { chain, ing } = await synced();
+    for (let n = 111n; n <= 115n; n++) chain.setBlock(n, 0);
+    chain.setBlock(112n, 0, "0x05");
+    chain.setBlock(114n, 0, "0x06");
+    const request = chain.client.request;
+    let fail = true;
+    (chain.client as unknown as { request: unknown }).request = async (args: { params: unknown[] }) => {
+      if (fail && args.params[0] === `0x${(114n).toString(16)}`) throw new Error("RPC request budget exhausted; serving stored data");
+      return request(args as never);
+    };
+    await expect(ing.sync()).rejects.toThrow(/budget exhausted/);
+    fail = false;
+    expect(await ing.sync()).toBe(2);
+    expect(chain.calls.filter((c) => c === "header 112")).toHaveLength(1);
+  });
 });
