@@ -1,10 +1,15 @@
 import { computeUbid, Standard } from "../src/ubid.js";
 import { describe, expect, it } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Address, Hex } from "viem";
 import { decodeArgs, encodeArgs, EventLog, type StoredEvent } from "../src/eventlog.js";
 
 const ADAPTER = "0x000000009d62675362a58911e3f32FEcf46F5E18" as Address;
 const identity = { chainId: 4663n, adapter: ADAPTER, fromBlock: 100n };
+/** A scratch directory for the on-disk cases: the runner's temp dir, not a path only one machine has. */
+const dir = mkdtempSync(join(tmpdir(), "adapter-eventlog-"));
 const h = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hex;
 
 function ev(block: number, logIndex: number, extra: Partial<StoredEvent> = {}): StoredEvent {
@@ -46,7 +51,7 @@ describe("event log", () => {
   });
 
   it("refuses to be reused for a different adapter or chain", () => {
-    const path = `/tmp/claude-501/eventlog-${process.pid}-${Date.now()}.sqlite`;
+    const path = `${dir}/eventlog-${process.pid}-${Date.now()}.sqlite`;
     new EventLog(path, identity).close();
     expect(() => new EventLog(path, identity).close()).not.toThrow();
     expect(() => new EventLog(path, { ...identity, chainId: 1n })).toThrow(/chainId/);
@@ -54,7 +59,7 @@ describe("event log", () => {
   });
 
   it("reads the chain again when the start block moves, and notes the upgrade block", () => {
-    const path = `/tmp/claude-501/eventlog-${process.pid}-${Date.now()}-from.sqlite`;
+    const path = `${dir}/eventlog-${process.pid}-${Date.now()}-from.sqlite`;
     const first = new EventLog(path, identity);
     first.append([ev(101, 0)], { number: 110n, hash: h(110) });
     first.close();
@@ -131,7 +136,7 @@ describe("event log facts and timestamps (schema 2)", () => {
   });
 
   it("repairs legacy counterfactual facts in existing files without deleting events", () => {
-    const path = `/tmp/claude-501/eventlog-repair-${process.pid}-${Date.now()}.sqlite`;
+    const path = `${dir}/eventlog-repair-${process.pid}-${Date.now()}.sqlite`;
     const log = new EventLog(path, identity);
     log.append([at(101, 0, "CounterfactualAgentRegistered", { ubid: h(999), boundAddress: PUNKS, tokenId: 7n, standard: 0, emitter: ALICE }, 1_700_000_000)], { number: 101n, hash: h(101) });
     // Simulate the previous version's unvalidated fact columns.
@@ -147,7 +152,7 @@ describe("event log facts and timestamps (schema 2)", () => {
 
   it("migrates a schema 1 file in place, filling the facts from the stored args", async () => {
     const { DatabaseSync } = await import("node:sqlite");
-    const path = `/tmp/claude-501/eventlog-v1-${process.pid}-${Date.now()}.sqlite`;
+    const path = `${dir}/eventlog-v1-${process.pid}-${Date.now()}.sqlite`;
     const old = new DatabaseSync(path);
     old.exec(`
       CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
