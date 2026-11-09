@@ -48,9 +48,10 @@ export class Ingester {
   private readonly log: EventLog | undefined;
   private readonly onReorg: ((reorg: Reorg) => void) | undefined;
   /**
-   * Headers read for event timestamps, kept across polls so a chunk the budget cut short resumes
-   * with what it already had instead of asking again. Cleared on a rewind: a hash in here could
-   * be the orphaned block's.
+   * Headers read for event timestamps, kept across polls so a chunk the budget or a 429 cut short
+   * resumes with what it already had instead of asking again - however many tries that takes.
+   * Cleared when a chunk lands (its headers are done with) and on a rewind (a hash in here could
+   * be the orphaned block's), so it never holds more than one chunk's blocks.
    */
   private headers: Headers = new Map();
 
@@ -158,7 +159,6 @@ export class Ingester {
     while (this.nextBlock <= head) {
       const to = this.nextBlock + this.maxRange - 1n > head ? head : this.nextBlock + this.maxRange - 1n;
       onProgress?.(this.nextBlock, to, head);
-      if (this.headers.size > 4096) this.headers.clear();
       const headers = this.headers;
       headers.set(head, latest);
       // The checkpoint header is read before the logs. If the chain reorganises between the two
@@ -183,6 +183,7 @@ export class Ingester {
       for (const ev of events) this.store.apply(ev);
       applied += events.length;
       this.nextBlock = to + 1n;
+      this.headers.clear();
     }
     return applied;
   }

@@ -18,7 +18,10 @@ export function withRpcPurpose<T>(purpose: string, fn: () => T): T {
 export class RpcBudget {
   private db: DatabaseSync;
   private allocations: Record<RpcWorkload, RpcAllowance>;
-  constructor(path: string, readonly dailyLimit: number, readonly minuteLimit = 120, private now: () => number = Date.now, allocations: RpcAllocations = {}, private expiresAt?: number) {
+  /** When each chain's next request may go out: the pacing that keeps a backfill under a provider's burst limit. */
+  private nextAt = new Map<string, number>();
+  constructor(path: string, readonly dailyLimit: number, readonly minuteLimit = 120, private now: () => number = Date.now, allocations: RpcAllocations = {}, private expiresAt?: number, readonly gapMs = 0) {
+    if (!Number.isFinite(gapMs) || gapMs < 0) throw new Error("RPC_MIN_GAP_MS must be a non-negative number of milliseconds");
     const enrichment = allocations.enrichment ?? { daily: 0, minute: 0 };
     const maintenance = allocations.maintenance ?? { daily: 0, minute: 0 };
     const ingestion = allocations.ingestion ?? { daily: dailyLimit - enrichment.daily - maintenance.daily, minute: minuteLimit - enrichment.minute - maintenance.minute };
@@ -82,11 +85,22 @@ export class RpcBudget {
       this.db.exec("COMMIT");
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
+  /**
+   * The transport's fetch: paced, then counted, then sent. With a gap, a chain's requests go out
+   * at most one per `gapMs` - a backfill that would otherwise burst a few hundred header reads in
+   * seconds, trip the provider's rate limit and sit out its penalty, flows steadily instead.
+   */
   fetch(chain: string, fetchImpl: typeof fetch = fetch): typeof fetch {
     return async (input, init) => {
       if (typeof init?.body !== "string") throw new Error("RPC budget requires a JSON request body");
       const body = JSON.parse(init.body);
       const requests = Array.isArray(body) ? body : [body];
+      if (this.gapMs > 0) {
+        const at = Math.max(Date.now(), (this.nextAt.get(chain) ?? 0));
+        this.nextAt.set(chain, at + this.gapMs);
+        const wait = at - Date.now();
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      }
       this.consume(chain, requests.map((r: { method: string }) => r.method));
       return fetchImpl(input, init);
     };

@@ -22,6 +22,23 @@ describe("outbound RPC budget", () => {
     expect(20_000 - Number(policy.RPC_ENRICHMENT_DAILY_LIMIT) - Number(policy.RPC_MAINTENANCE_DAILY_LIMIT)).toBeGreaterThanOrEqual(10_000);
   });
 
+  it("paces a chain's requests a gap apart, so a backfill never bursts into a provider's rate limit", async () => {
+    const budget = new RpcBudget(":memory:", 1000, 1000, Date.now, {}, undefined, 25);
+    const sent: number[] = [];
+    const fetchFn = budget.fetch("mainnet", (async () => { sent.push(Date.now()); return new Response("{}"); }) as typeof fetch);
+    const started = Date.now();
+    await Promise.all([1, 2, 3, 4].map(() => fetchFn("https://rpc.example", request("eth_getBlockByNumber"))));
+    expect(sent).toHaveLength(4);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(70); // four requests, three gaps of 25ms
+    const gaps = sent.slice(1).map((t, i) => t - sent[i]);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(20);
+    // another chain is paced on its own
+    const other = budget.fetch("base", (async () => new Response("{}")) as typeof fetch);
+    const t = Date.now();
+    await other("https://rpc.example", request("eth_blockNumber"));
+    expect(Date.now() - t).toBeLessThan(20);
+  });
+
   it("fits a full day of three-chain polling within the production policy", () => {
     let now = Date.UTC(2026, 10, 3);
     const budget = new RpcBudget(":memory:", 20_000, 30, () => now);

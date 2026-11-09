@@ -119,7 +119,7 @@ async function main() {
   const budget = new RpcBudget(join(dataDir, "rpc-usage.sqlite"), Number(process.env.RPC_DAILY_REQUEST_LIMIT ?? 0), Number(process.env.RPC_MINUTE_REQUEST_LIMIT ?? 120), Date.now, {
     enrichment: { daily: Number(process.env.RPC_ENRICHMENT_DAILY_LIMIT ?? 0), minute: Number(process.env.RPC_ENRICHMENT_MINUTE_LIMIT ?? 0) },
     maintenance: { daily: Number(process.env.RPC_MAINTENANCE_DAILY_LIMIT ?? 0), minute: Number(process.env.RPC_MAINTENANCE_MINUTE_LIMIT ?? 0) },
-  }, process.env.RPC_READS_UNTIL ? Date.parse(process.env.RPC_READS_UNTIL) : undefined);
+  }, process.env.RPC_READS_UNTIL ? Date.parse(process.env.RPC_READS_UNTIL) : undefined, Number(process.env.RPC_MIN_GAP_MS ?? 0));
   const chains: ChainRuntime[] = [];
   for (const name of names) {
     const net = NETWORKS[name];

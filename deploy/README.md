@@ -160,6 +160,28 @@ URIs instead of repeating RPC calls. Existing cards are retained during this mig
 is no cache-version bump or automatic full-registry rebuild. Startup chain validation runs
 in the background, so an RPC outage leaves the stored-data API available.
 
+`RPC_MIN_GAP_MS` paces each chain's requests at most one per that many milliseconds (default 0,
+no pacing). A backfill otherwise bursts hundreds of header reads in seconds and trips a provider's
+rate limit, then sits out the penalty; `RPC_MIN_GAP_MS=150` keeps it under about 7 a second.
+
+### Re-syncing a chain on a paid RPC
+
+Set the endpoint in `/etc/adapter.env` (`MAINNET_RPC_URL` etc.) and raise the limits for the
+duration in a drop-in that loads *after* the policy - the policy file is overwritten by every
+deploy, a drop-in is not:
+
+```
+sudo tee /etc/adapter-resync.env >/dev/null <<END
+RPC_DAILY_REQUEST_LIMIT=100000
+RPC_MINUTE_REQUEST_LIMIT=300
+RPC_MIN_GAP_MS=150
+END
+printf "[Service]\nEnvironmentFile=/etc/adapter-resync.env\n" | sudo tee /etc/systemd/system/adapter-indexer@hub.service.d/95-resync.conf >/dev/null
+sudo systemctl daemon-reload && sudo systemctl restart adapter-indexer@hub
+```
+
+Remove the two files, reload and restart when the chain shows `live` again.
+
 For a time-bounded trial, set `RPC_READS_UNTIL` to an absolute ISO UTC timestamp. The guard
 rejects outbound requests after that time even if requests remain and the service restarts.
 Per-workload and global daily limits still apply. This is optional for the sustained policy.
