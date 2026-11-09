@@ -288,6 +288,15 @@ export class ChainRuntime implements ChainInfo {
   }
 }
 
+/**
+ * One line that says why. viem wraps the real reason - a 429, our own request budget saying no,
+ * a timeout - in "HTTP request failed." with the cause in `details`; the status line and the log
+ * carry that reason too, so the counters needn't be read to know which limit a chain is at.
+ */
 function firstLine(e: unknown): string {
-  return e instanceof Error ? e.message.split("\n")[0] : String(e);
+  if (!(e instanceof Error)) return String(e);
+  const line = e.message.split("\n")[0];
+  const details = (e as { details?: unknown }).details;
+  const reason = typeof details === "string" && details.trim() ? details.split("\n")[0].trim() : null;
+  return reason && reason !== line ? `${line} (${reason})` : line;
 }
