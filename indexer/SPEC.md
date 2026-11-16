@@ -20,6 +20,12 @@ not a cache**: two conforming indexers fed the same logs must agree on every pro
 - **(contract)** A registered agent's `bindingHashOf(agentId)` derives the same UBID, so an
   `AgentBound` whose stored binding shares the coordinates **joins** the counterfactual history —
   one identity row, both statuses. No link assertion exists; the join is by construction.
+- **J-2 (product).** A token can be registered more than once; each `AgentBound` joins the same
+  UBID. The newest registration in log order is the live agent: the profile, the card (its
+  registration file), the social card and the plain summary name that one only. The earlier agent
+  ids are **superseded** - kept in `agentIds` (log order, live one last), shown in the history, and
+  still found by search, but not presented as a second identity. Keeping two live ERC-8004
+  identities for one token is complexity nobody needs (decision of 16 Nov 2026).
 - **(contract)** `Standard` and `AttestationType` numbering is identity-critical and append-only.
 - **H-1 (deployment).** Where an adapter ran an earlier implementation before v0.0.17 (Ethereum,
   Base), the log starts at the proxy's deployment, not the upgrade. Those implementations

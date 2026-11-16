@@ -42,6 +42,11 @@ export function Identities() {
           <tr><th scope="row">ERC-8004 agent</th><td>none</td><td>none</td><td>minted</td></tr>
         </tbody>
       </table>
+      <p>
+        Register the same token again and the record follows the newest agent. The earlier agent ids are
+        superseded: they stay in the history and still find the record in search, but the profile shows one
+        live agent, not two.
+      </p>
       <div className="converge">
         <div className="converge-in"><span className="chip">Untouched</span><span className="chip">Claimed</span><span className="chip">Registered</span></div>
         <svg className="converge-join" viewBox="0 0 56 72" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>

@@ -179,6 +179,17 @@ describe("identity views", () => {
     } finally { views.stop(); }
   });
 
+  it("names the live agent and the ones it superseded (J-2)", () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    store.apply(registered(1));
+    const id = store.identities.get(UBID7)!;
+    const { client } = fakeChain();
+    const views = new ViewCache(store, client);
+    expect(views.view(id)).toMatchObject({ agentId: null, supersededAgentIds: [] });
+    id.agentIds = [3n, 9n];
+    expect(views.view(id)).toMatchObject({ agentId: 9n, supersededAgentIds: [3n] });
+  });
+
   it("answers from memory before the chain has been read, with the chain facts unknown", () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
     store.apply(registered(1));

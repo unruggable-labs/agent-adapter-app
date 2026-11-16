@@ -152,7 +152,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
             name: v.agentName ?? v.subjectLabel,
             ubid: id.ubid,
             standardName: v.standardName,
-            agentIds: id.agentIds.map(String),
+            agentIds: id.agentIds.slice(-1).map(String),
             claimed: id.claimed,
             image,
             ratingAverage: v.reputation.ratingAverage,
@@ -283,7 +283,7 @@ export function startServer(chains: ChainRuntime[], port: number) {
             rep.ratingAverage !== null ? `rated ${Math.round(rep.ratingAverage)}/100 by ${rep.ratings.length}` : "not yet rated",
             `${rep.reviews.length} ${rep.reviews.length === 1 ? "review" : "reviews"}`,
             `${rep.interactions.length} ${rep.interactions.length === 1 ? "transaction" : "transactions"}`,
-            id.agentIds.length ? `ERC-8004 #${id.agentIds[0]}` : "counterfactual claim",
+            id.agentIds.length ? `ERC-8004 #${id.agentIds.at(-1)}` : "counterfactual claim",
           ];
           return send(200, "text/html", withMeta(html, {
             title: `${name} · Agent Identity on ${chain} · Adapterscan`,

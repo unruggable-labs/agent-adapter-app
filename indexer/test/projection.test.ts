@@ -116,6 +116,18 @@ describe("registration join", () => {
     expect(id.agentIds).toEqual([0n]); // agent id 0 is a real id, never null
     expect(store.agents.get(0n)!.ubid).toBe(UBID7);
   });
+
+  it("registering the token again supersedes the earlier agent: live one last, the history says so (J-2)", () => {
+    const store = freshStore();
+    store.apply(ev("AgentBound", { agentId: 3n, standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, registeredBy: ALICE }, 10));
+    store.apply(ev("AgentBound", { agentId: 9n, standard: Standard.ERC721, boundAddress: PUNKS, tokenId: 7n, registeredBy: ALICE }, 20));
+    const id = store.identities.get(UBID7)!;
+    expect(id.agentIds).toEqual([3n, 9n]);
+    expect(store.agents.get(3n)!.ubid).toBe(UBID7); // both bindings exist on the contract
+    const entries = store.history.get(UBID7)!;
+    expect(entries[1].effect).toMatch(/#9 minted .* supersedes #3/);
+    expect(entries[0].effect).not.toMatch(/supersedes/);
+  });
 });
 
 describe("registrations from before the v0.0.17 upgrade", () => {

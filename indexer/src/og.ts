@@ -173,7 +173,7 @@ export async function identityCard(host: string, chain: Chain, c: IdentityCard):
   const avatar = img
     ? el("img", { width: 160, height: 160, borderRadius: 60, objectFit: "cover" }, undefined, { src: img })
     : el("div", { width: 160, height: 160, borderRadius: 60, backgroundImage: gradientFor(c.ubid) });
-  const registration = c.agentIds.length ? pill(`ERC-8004 #${c.agentIds[0]}`, C.ok, C.okBg) : c.claimed ? pill("counterfactual claim", C.accent, C.accentBg) : pill("unclaimed", C.t3, C.card);
+  const registration = c.agentIds.length ? pill(`ERC-8004 #${c.agentIds[c.agentIds.length - 1]}`, C.ok, C.okBg) : c.claimed ? pill("counterfactual claim", C.accent, C.accentBg) : pill("unclaimed", C.t3, C.card);
   const name = c.name.length > 26 ? `${c.name.slice(0, 25)}…` : c.name;
   const body = col({ flex: 1 }, [
     row({ gap: 32 }, [

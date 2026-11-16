@@ -54,7 +54,7 @@ function identity(scope: Scope[], ubid: string): string | null {
     ["Bound to", `${esc(v.standardName)} ${addr(id.boundAddress)}${v.standardName === "ACCOUNT" ? "" : `, token ${esc(id.tokenId.toString())}`}`],
     ["Held by", v.flags.currentlyOwnerless ? "nobody right now" : holder ? addr(holder) : "not read yet"],
     ["Operating wallet", id.agentWallet ? `${addr(id.agentWallet)} (${v.flags.walletUnverified ? "named by the profile, not confirmed by the wallet" : "verified: the wallet points back"})` : "none"],
-    ["Registration", `${id.agentIds.length ? `ERC-8004 agent #${esc(id.agentIds.map(String).join(", #"))}` : "counterfactual claim (no ERC-8004 agent minted)"}${v.legacy ? ", registered before the adapter's v0.0.17 upgrade" : ""}`],
+    ["Registration", `${id.agentIds.length ? `ERC-8004 agent #${esc(String(id.agentIds.at(-1)))}${id.agentIds.length > 1 ? ` (supersedes #${esc(id.agentIds.slice(0, -1).map(String).join(", #"))})` : ""}` : "counterfactual claim (no ERC-8004 agent minted)"}${v.legacy ? ", registered before the adapter's v0.0.17 upgrade" : ""}`],
     ["Agent URI", id.agentURI ? esc(id.agentURI) : "none"],
     [
       "Reputation",

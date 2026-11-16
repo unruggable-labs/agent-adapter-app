@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
-import { EventDate, Ubid, Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip } from "../components/ui";
+import { EventDate, Ubid, Addr, AgentIds, Avatar, Badge, Callout, ProfileSkeleton, Section, Spinner, StandardBadge, Stat, StatusBadge, Tip, liveAgentId, supersededAgentIds } from "../components/ui";
 import { adapterOf, api, NotFound, type HistoryEntry, type Identity } from "../lib/api";
 import { ChainTag } from "../components/chains";
 import { collectionPath } from "../components/collections";
@@ -154,7 +154,10 @@ export function IdentityPage({ ubid }: { ubid: string }) {
             <dt>ERC-8004 agent</dt>
             <dd>
               <span className="row wrap" style={{ gap: 8 }}>
-                {id.agentIds.length ? <AgentIds ids={id.agentIds} chain={id.chain} /> : <span className="t3">not registered</span>}
+                {liveAgentId(id) !== null ? <AgentIds ids={[liveAgentId(id)!]} chain={id.chain} /> : <span className="t3">not registered</span>}
+                {supersededAgentIds(id).length > 0 && (
+                  <Badge tip={`This token was registered again. The record follows the newest agent; #${supersededAgentIds(id).join(", #")} ${supersededAgentIds(id).length === 1 ? "is" : "are"} superseded and kept in the history.`}>supersedes #{supersededAgentIds(id).join(", #")}</Badge>
+                )}
                 {id.legacy && (
                   <Badge tip="Registered before the adapter was upgraded to v0.0.17. That version didn't put the UBID in its events, but the record has one all the same: it's worked out from what the record is bound to, and the contract's stored binding agrees.">before v0.0.17</Badge>
                 )}

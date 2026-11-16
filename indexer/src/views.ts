@@ -214,6 +214,9 @@ export class ViewCache {
     const card = this.cardOf(id);
     return {
       ...id,
+      /** The live ERC-8004 agent: the newest registration. Earlier ones are superseded (SPEC §1 J-2). */
+      agentId: id.agentIds.at(-1) ?? null,
+      supersededAgentIds: id.agentIds.slice(0, -1),
       ...labelsFrom(c?.name ?? null, id, card?.agentName, card?.source === "token" ? card.name : null),
       // The token's own picture; the collection's where the token has none (yet). Our copy of
       // it once the worker has saved one (pictures.ts).

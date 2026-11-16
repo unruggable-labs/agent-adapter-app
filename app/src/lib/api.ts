@@ -103,7 +103,11 @@ export interface Identity {
   created?: Order;
   collectionAuthoredAfterOwner: boolean;
   lastEventCollectionAuthored: boolean;
+  /** Every ERC-8004 agent id bound to these coordinates, in log order; the last is the live one. */
   agentIds: string[];
+  /** The live agent (the newest registration) and the ones it superseded. Older indexers omit them. */
+  agentId?: string | null;
+  supersededAgentIds?: string[];
   reputation: Reputation;
   trustBase: TrustBase | null;
   /** Registered by the adapter before its v0.0.17 upgrade. That version emitted no UBID; this one is

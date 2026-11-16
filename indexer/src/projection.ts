@@ -67,7 +67,11 @@ export interface IdentityState {
   collectionAuthoredAfterOwner: boolean;
   /** Whether the most recent applied event was collection-authored (emitter == boundAddress). */
   lastEventCollectionAuthored: boolean;
-  /** ERC-8004 agent ids whose stored binding derives this same UBID (the registration join). */
+  /**
+   * ERC-8004 agent ids whose stored binding derives this same UBID (the registration join), in
+   * log order. The last is the live agent; registering the token again supersedes the ones before
+   * it, which stay here for the history and for search but not for the profile (SPEC §1 J-2).
+   */
   agentIds: bigint[];
   /** The first event that brought this identity into being - what "newest" means in a list. */
   created: OrderKey;
@@ -359,9 +363,10 @@ export class ProjectionStore {
     // The join is by construction: the stored binding derives the same UBID as the
     // counterfactual claims for these coordinates. No link assertion exists or is needed.
     const id = this.identityFor(standard, boundAddress, tokenId, order);
+    const superseded = id.agentIds.filter((a) => a !== agentId);
     if (!id.agentIds.includes(agentId)) id.agentIds.push(agentId);
     const registeredBy = (ev.args.registeredBy as string).toLowerCase() as Address;
-    this.record(id.ubid, ev, order, registeredBy, `ERC-8004 agent #${agentId} minted on the shared registry for these coordinates.`);
+    this.record(id.ubid, ev, order, registeredBy, `ERC-8004 agent #${agentId} minted on the shared registry for these coordinates.${superseded.length ? ` It supersedes #${superseded.map(String).join(", #")}: the record follows this agent now.` : ""}`);
   }
 
   private withAgent(ev: LogEvent, fn: (a: AgentState) => void, effect?: (a: AgentState) => string): void {

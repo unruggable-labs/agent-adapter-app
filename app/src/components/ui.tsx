@@ -150,6 +150,16 @@ export function registrationOf(id: Identity): Registration {
   return id.agentIds.length ? "onchain" : id.claimed ? "claim" : "none";
 }
 
+/** The live ERC-8004 agent: the newest registration. Null when none was minted. */
+export function liveAgentId(id: Identity): string | null {
+  return id.agentId ?? id.agentIds[id.agentIds.length - 1] ?? null;
+}
+
+/** Agent ids a later registration of the same token superseded. They're in the history, not the profile. */
+export function supersededAgentIds(id: Identity): string[] {
+  return id.supersededAgentIds ?? id.agentIds.slice(0, -1);
+}
+
 const REGISTRATION_TIP: Record<Registration, string> = {
   onchain: "On-chain: an ERC-8004 agent is minted on the shared registry for this identity.",
   claim: "Counterfactual: claimed in the event log only, nothing minted. Same UBID either way.",
@@ -304,10 +314,12 @@ export function AgentIds({ ids, chain }: { ids: string[]; chain: string }) {
 }
 
 export function StatusBadge({ id }: { id: Identity }) {
-  if (id.agentIds.length)
+  const live = liveAgentId(id);
+  const superseded = supersededAgentIds(id);
+  if (live !== null)
     return (
-      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with ID #${id.agentIds.join(", #")}.`}>
-        <span className="dot" /> ERC-8004 <AgentIds ids={id.agentIds} chain={id.chain} />
+      <Badge tone="ok" tip={`Fully registered: a real agent was minted on the shared ERC-8004 registry with ID #${live}.${superseded.length ? ` It supersedes #${superseded.join(", #")} - the token was registered again, and the record follows the newest agent.` : ""}`}>
+        <span className="dot" /> ERC-8004 <AgentIds ids={[live]} chain={id.chain} />
       </Badge>
     );
   if (id.claimed)
