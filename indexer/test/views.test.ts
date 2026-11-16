@@ -80,7 +80,7 @@ describe("identity views", () => {
     log.close();
   });
 
-  it("preserves a searchable agent name without repeatedly rereading RPC metadata", async () => {
+  it("a registry read the RPC didn't answer keeps the name it had, and is asked again after the backoff - not stored as pending for a day", async () => {
     const store = new ProjectionStore(CHAIN, ADAPTER);
     store.apply(registered(1));
     const id = store.identities.get(UBID7)!;
@@ -103,19 +103,61 @@ describe("identity views", () => {
     expect(views.summary(id).agentName).toBe(name);
     available = false;
     await views.refreshMany([id], true);
-    expect(views.summary(id).agentName).toBe(name);
-    expect(views.summary(id).card?.agentMetadataPending).toBe(true);
+    expect(views.summary(id).agentName).toBe(name); // the reading we had stands
+    expect(views.summary(id).card?.agentMetadataPending).toBeUndefined(); // a failed ask is not a pending card
     available = true;
     name = "Zori updated";
     const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 101);
     try {
-      await views.refreshMany([id]);
-      expect(views.summary(id).agentName).toBe("Normie #7 - Zori");
-      clock.mockReturnValue(Date.now() + 1001);
-      await views.refreshMany([id]);
+      await views.refreshMany([id]); // past retryMs: the marked card is read again
       expect(views.summary(id).agentName).toBe(name);
       expect(views.summary(id).card?.agentMetadataPending).toBeUndefined();
     } finally { clock.mockRestore(); }
+  });
+
+  it("a registration file that isn't there yet is fetched again after minutes from the stored URI, with no RPC, then less often", async () => {
+    const store = new ProjectionStore(CHAIN, ADAPTER);
+    store.apply(registered(1));
+    const id = store.identities.get(UBID7)!;
+    id.agentIds = [7n];
+    const registry = "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432";
+    const { client, calls } = fakeChain(true);
+    const read = client.readContract.bind(client);
+    (client as unknown as { readContract: (a: any) => Promise<unknown> }).readContract = async (args) => {
+      if (args.functionName === "identityRegistry") return registry;
+      if (args.functionName === "tokenURI") {
+        calls.push(`tokenURI ${args.address === registry ? "registry" : "token"}`);
+        return args.address === registry ? "https://agents.example/7.json" : `data:application/json,${encodeURIComponent(JSON.stringify({ name: "Normie #7" }))}`;
+      }
+      return read(args);
+    };
+    let published = false;
+    vi.stubGlobal("fetch", async () => (published ? new Response(JSON.stringify({ name: "Normie #7 - Zori" }), { headers: { "content-type": "application/json" } }) : new Response("not yet", { status: 404 })));
+    const views = new ViewCache(store, client, { gapMs: 0, tickMs: 5, retryMs: 100, missStaleMs: 350, eventOnly: true });
+    try {
+      await views.refreshMany([id], true);
+      expect(views.summary(id).card?.agentMetadataPending).toBe(true); // the file 404s: pending, URIs kept
+      expect(views.summary(id).agentName).toBeNull();
+      const rpc = calls.filter((c) => c.startsWith("tokenURI")).length;
+      const t0 = Date.now();
+      const clock = vi.spyOn(Date, "now").mockReturnValue(t0 + 50);
+      try {
+        await views.refreshMany([id]); // too soon
+        expect(views.summary(id).card?.agentMetadataPending).toBe(true);
+        clock.mockReturnValue(t0 + 101);
+        await views.refreshMany([id]); // past the first wait: fetched again - still not there
+        expect(views.summary(id).card?.agentMetadataPending).toBe(true);
+        clock.mockReturnValue(t0 + 101 + 150);
+        await views.refreshMany([id]); // the wait doubled to 200: too soon
+        expect(views.summary(id).card?.agentMetadataPending).toBe(true);
+        published = true;
+        clock.mockReturnValue(t0 + 101 + 201);
+        await views.refreshMany([id]); // and now it is there
+        expect(views.summary(id).agentName).toBe("Normie #7 - Zori");
+        expect(views.summary(id).card?.agentMetadataPending).toBeUndefined();
+      } finally { clock.mockRestore(); }
+      expect(calls.filter((c) => c.startsWith("tokenURI")).length).toBe(rpc); // every retry reused the stored URIs
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it("queues an opened older profile without reading on the request, then refreshes it before the bulk backlog", async () => {

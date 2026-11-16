@@ -47,7 +47,7 @@ export interface CardSources {
   tokenUri?: string | null;
   agentUri?: string | null;
 }
-export async function resolveCard(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false): Promise<Card | null> {
+export async function resolveCard(client: PublicClient, id: IdentityState, registry?: Address | null, priority = false): Promise<Card | null> {
   return (await resolveCardDetails(client, id, registry, priority)).card;
 }
 
@@ -62,20 +62,25 @@ export function contractAnswered(e: unknown): boolean {
 
 /**
  * Successful URI lookups are persisted separately from the document. HTTP retries reuse them.
- * `complete` is false when the chain never answered the token URI lookup: the card is then no
- * reading at all, and the caller keeps what it had and tries again, instead of storing "no
- * picture" for a day because the RPC (or the request budget) was busy for a second.
+ * `complete` is false when the chain never answered a URI lookup, the token's or the registry's:
+ * the card is then no reading at all, and the caller keeps what it had and tries again, instead
+ * of storing "no picture" or "no name" for a day because the RPC (or the request budget) was busy
+ * for a second. A document that couldn't be fetched is different: the URIs are known and kept,
+ * the card is stored as pending, and the caller retries the fetch alone, with a backoff.
  */
-export async function resolveCardDetails(client: PublicClient, id: IdentityState, registry: Address | null = null, priority = false, cached?: CardSources): Promise<{ card: Card | null; sources: CardSources; complete: boolean }> {
+export async function resolveCardDetails(client: PublicClient, id: IdentityState, registry?: Address | null, priority = false, cached?: CardSources): Promise<{ card: Card | null; sources: CardSources; complete: boolean }> {
   const tokenUri = cached && "tokenUri" in cached ? cached.tokenUri
     : await withRpcPurpose("token-uri", () => tokenMetadataUri(client, id)).catch((e) => (contractAnswered(e) ? null : undefined));
   const token = tokenUri ? await cardIn(tokenUri, "token", priority).catch(() => null) : null;
+  // The registry: an address to ask; null when the adapter has none (an answer: no file); undefined
+  // when the RPC didn't say (no answer - the card isn't complete and is read again).
   const agentUri = id.agentURI !== null ? id.agentURI : cached && "agentUri" in cached ? cached.agentUri
-    : !id.agentIds.length ? null : registry ? await withRpcPurpose("agent-uri", () => registryUri(client, id, registry)).catch(() => undefined) : undefined;
+    : !id.agentIds.length ? null : registry === undefined ? undefined : registry === null ? null
+    : await withRpcPurpose("agent-uri", () => registryUri(client, id, registry)).catch((e) => (contractAnswered(e) ? null : undefined));
   const agent = agentUri ? await cardIn(agentUri, "agent", priority).catch(() => null) : null;
   const sources: CardSources = { ...(tokenUri !== undefined ? { tokenUri } : {}), ...(agentUri !== undefined ? { agentUri } : {}) };
   const pending = !!(id.agentURI || id.agentIds.length) && !agent;
-  const complete = tokenUri !== undefined;
+  const complete = tokenUri !== undefined && agentUri !== undefined;
   if (!token && !agent && !pending) return { card: null, sources, complete };
   return { sources, complete, card: {
     image: token?.image ?? agent?.image ?? null,

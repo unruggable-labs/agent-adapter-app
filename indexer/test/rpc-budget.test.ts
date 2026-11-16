@@ -12,13 +12,14 @@ describe("outbound RPC budget", () => {
     const text = readFileSync(new URL("../../deploy/rpc-ingestion.env", import.meta.url), "utf8");
     const policy = Object.fromEntries(text.split("\n").filter((line) => line && !line.startsWith("#")).map((line) => line.split("=")));
     expect(policy).toMatchObject({
-      RPC_DAILY_REQUEST_LIMIT: "20000", RPC_MINUTE_REQUEST_LIMIT: "30",
-      RPC_ENRICHMENT_DAILY_LIMIT: "8000", RPC_ENRICHMENT_MINUTE_LIMIT: "12",
+      RPC_DAILY_REQUEST_LIMIT: "20000", RPC_MINUTE_REQUEST_LIMIT: "60",
+      RPC_ENRICHMENT_DAILY_LIMIT: "8000", RPC_ENRICHMENT_MINUTE_LIMIT: "30",
       RPC_MAINTENANCE_DAILY_LIMIT: "0", RPC_MAINTENANCE_MINUTE_LIMIT: "0",
       ENRICHMENT_MODE: "events", BACKFILL_TIMESTAMPS: "0", VERIFY_BACKFILL: "0",
     });
     // Ingestion keeps what the allocations leave: three chains polling every minute need about 9 a minute.
-    expect(30 - Number(policy.RPC_ENRICHMENT_MINUTE_LIMIT) - Number(policy.RPC_MAINTENANCE_MINUTE_LIMIT)).toBeGreaterThanOrEqual(12);
+    expect(60 - Number(policy.RPC_ENRICHMENT_MINUTE_LIMIT) - Number(policy.RPC_MAINTENANCE_MINUTE_LIMIT)).toBeGreaterThanOrEqual(12);
+    expect(Number(policy.RPC_ENRICHMENT_MINUTE_LIMIT)).toBeGreaterThanOrEqual(22); // one events-mode batch of ten
     expect(20_000 - Number(policy.RPC_ENRICHMENT_DAILY_LIMIT) - Number(policy.RPC_MAINTENANCE_DAILY_LIMIT)).toBeGreaterThanOrEqual(10_000);
   });
 
@@ -29,9 +30,8 @@ describe("outbound RPC budget", () => {
     const started = Date.now();
     await Promise.all([1, 2, 3, 4].map(() => fetchFn("https://rpc.example", request("eth_getBlockByNumber"))));
     expect(sent).toHaveLength(4);
-    expect(Date.now() - started).toBeGreaterThanOrEqual(70); // four requests, three gaps of 25ms
-    const gaps = sent.slice(1).map((t, i) => t - sent[i]);
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(20);
+    // four requests leave at 0, 25, 50 and 75ms at the earliest - timers may run late, never early
+    sent.sort((a, b) => a - b).forEach((t, i) => expect(t - started).toBeGreaterThanOrEqual(i * 25 - 2));
     // another chain is paced on its own
     const other = budget.fetch("base", (async () => new Response("{}")) as typeof fetch);
     const t = Date.now();

@@ -108,21 +108,28 @@ export class ViewCache {
     this.opts = { eventOnly: false, canReadRpc: () => true, concurrency: 2, batch: 100, gapMs: 250, staleMs: 24 * 60 * 60_000, missStaleMs: 6 * 60 * 60_000, txRefBatch: 20, retryMs: 2 * 60_000, tickMs: 1000, log: () => {}, ...opts };
     this.advisories = advisories ?? new AdvisoryStore();
     if (this.opts.eventOnly) this.initialKeys = new Map([...this.store.identities.values()].map((id) => [id.ubid, cardKey(id)]));
+    for (const id of this.store.identities.values()) if (this.advisories.card(id.ubid)?.card?.agentMetadataPending) this.pendingCards.add(id.ubid);
     this.multicall = Boolean(client.chain?.contracts?.multicall3?.address);
   }
 
   /** Whether holder reads go through Multicall3. Off where the chain has none, or once it failed. */
   private multicall: boolean;
 
-  /** The ERC-8004 registry the adapter mints on, read from the adapter once it answers. */
-  private registryAddress: Address | null = null;
-  private async registry(): Promise<Address | null> {
-    if (this.registryAddress) return this.registryAddress;
+  /** The ERC-8004 registry the adapter mints on, read from the adapter once it answers; null once it has said it has none. */
+  private registryAddress: Address | null | undefined = undefined;
+  /** Cards stored pending (the registration file couldn't be fetched), with the wait before the next try. */
+  private pendingCards = new Set<Hex>();
+  private pendingWait = new Map<Hex, number>();
+  /** The registry address; null when the adapter answered that it has none; undefined when the RPC didn't answer. */
+  private async registry(): Promise<Address | null | undefined> {
+    if (this.registryAddress !== undefined) return this.registryAddress;
     try {
       const a = await withRpcPurpose("registry-address", () => this.client.readContract({ address: this.store.adapter, abi: REGISTRY_ABI, functionName: "identityRegistry" })) as Address;
-      if (a && a !== ZERO_ADDRESS) this.registryAddress = a;
-    } catch {
-      // the RPC or an adapter without it: cards go without the registry's URI, and the next batch asks again
+      this.registryAddress = a && a !== ZERO_ADDRESS ? a : null;
+    } catch (e) {
+      // An adapter without one answers with a revert: no registry. Anything else is the RPC not
+      // answering - the cards that need it stay incomplete and the next batch asks again.
+      if (contractAnswered(e)) this.registryAddress = null;
     }
     return this.registryAddress;
   }
@@ -276,7 +283,7 @@ export class ViewCache {
     }
 
     const cards = new Map<Hex, CardFact>();
-    /** Cards whose token URI the RPC never answered: no reading, tried again after the backoff. */
+    /** Cards whose token or registry URI the RPC never answered: no reading, tried again after the backoff. */
     const deferred: Hex[] = [];
     const cardIds = ids.filter((id) => everything || this.cardDue(id, now));
     const sourcesOf = (id: IdentityState) => {
@@ -284,6 +291,7 @@ export class ViewCache {
       return !everything && !this.dirty.cards.has(id.ubid) && had?.key === cardKey(id) ? had.sources : undefined;
     };
     const registry = cardIds.some((id) => id.agentURI === null && id.agentIds.length > 0 && !(sourcesOf(id) && "agentUri" in sourcesOf(id)!)) ? await this.registry() : null;
+    const now2 = Date.now();
     await Promise.all(
       cardIds
         .map(async (id) => {
@@ -318,10 +326,21 @@ export class ViewCache {
         this.retryAt.set(id.ubid, Date.now() + this.opts.retryMs);
       }
     }
-    for (const ubid of cards.keys()) {
+    for (const [ubid, fact] of cards) {
       this.dirty.cards.delete(ubid);
       const id = this.store.identities.get(ubid);
       if (id) this.initialKeys.set(ubid, cardKey(id));
+      if (fact.card?.agentMetadataPending) {
+        // The registration file wasn't there (yet): try the fetch again soon, then less and less
+        // often - minutes, not the day a settled card waits. The URIs are kept, so no RPC is spent.
+        const wait = Math.min(this.opts.missStaleMs, (this.pendingWait.get(ubid) ?? this.opts.retryMs / 2) * 2);
+        this.pendingWait.set(ubid, wait);
+        this.pendingCards.add(ubid);
+        this.retryAt.set(ubid, now2 + wait);
+      } else {
+        this.pendingCards.delete(ubid);
+        this.pendingWait.delete(ubid);
+      }
     }
     for (const ubid of deferred) {
       this.dirty.cards.add(ubid);
@@ -355,6 +374,7 @@ export class ViewCache {
   private cardDue(id: IdentityState, now: number): boolean {
     const c = this.advisories.card(id.ubid);
     if (!c || c.key !== cardKey(id) || this.dirty.cards.has(id.ubid) || this.cardIncomplete(id)) return true;
+    if (c.card?.agentMetadataPending) return now - c.at >= (this.pendingWait.get(id.ubid) ?? this.opts.retryMs);
     return now - c.at > (c.card ? this.opts.staleMs : this.opts.missStaleMs);
   }
 
@@ -440,7 +460,7 @@ export class ViewCache {
   /** Event-only mode never bootstraps or sweeps the old registry after a restart. */
   private eventEligible(id: IdentityState): boolean {
     return this.dirty.holders.has(id.ubid) || this.dirty.cards.has(id.ubid) || this.dirty.contracts.has(id.boundAddress)
-      || this.initialKeys.get(id.ubid) !== cardKey(id) || this.cardIncomplete(id);
+      || this.initialKeys.get(id.ubid) !== cardKey(id) || this.cardIncomplete(id) || this.pendingCards.has(id.ubid);
   }
 
   /** The next batch worth a read, possibly empty: marked first, then never-read newest first, then the stale. */

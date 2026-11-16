@@ -89,6 +89,25 @@ describe("identity images", () => {
     expect(reverted.sources.tokenUri).toBeNull();
   });
 
+  it("a registry URI read the RPC never answered leaves the card incomplete; an adapter with no registry is an answer", async () => {
+    const registry = "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432";
+    const c = {
+      readContract: async ({ address }: { address: string }) => {
+        if (address === registry) throw new HttpRequestError({ url: "https://rpc.example", status: 429, details: "RPC request budget exhausted; serving stored data" });
+        return json({ name: "Punk #7", image: "ipfs://bafy/7.png" });
+      },
+    } as unknown as PublicClient;
+    const rejected = await resolveCardDetails(c, identity({ agentIds: [42n] }), registry);
+    expect(rejected.complete).toBe(false);
+    expect(rejected.sources).toEqual({ tokenUri: expect.any(String) }); // the token URI is kept for next time
+    // the registry address itself couldn't be read: not an answer either
+    expect((await resolveCardDetails(c, identity({ agentIds: [42n] }), undefined)).complete).toBe(false);
+    // the adapter answered that it has no registry: complete, with no agent file to fetch
+    const none = await resolveCardDetails(c, identity({ agentIds: [42n] }), null);
+    expect(none.complete).toBe(true);
+    expect(none.sources.agentUri).toBeNull();
+  });
+
   it("is null when tokenURI reverts and there is no agent card", async () => {
     expect(await resolved(client({}), identity({}))).toBeNull();
   });
