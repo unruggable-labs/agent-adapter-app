@@ -134,7 +134,7 @@ full-chain rereads. Ownership refreshes are scheduled independently from card re
 
 ### Ingestion-only recovery policy
 
-`rpc-ingestion.env` is a non-secret, versioned policy for the hub: 20,000 requests/day,
+`rpc-ingestion.env` is a non-secret, versioned policy for the hub: 40,000 requests/day,
 60 requests/minute shared across all three chains, and a minimum 60-second ingestion interval.
 Enrichment runs in `events` mode on 8,000 requests/day and 30 a minute (the watcher's scans and
 the reads for new or changed records - a batch of ten new records is about 22 calls); ingestion

@@ -12,7 +12,7 @@ describe("outbound RPC budget", () => {
     const text = readFileSync(new URL("../../deploy/rpc-ingestion.env", import.meta.url), "utf8");
     const policy = Object.fromEntries(text.split("\n").filter((line) => line && !line.startsWith("#")).map((line) => line.split("=")));
     expect(policy).toMatchObject({
-      RPC_DAILY_REQUEST_LIMIT: "20000", RPC_MINUTE_REQUEST_LIMIT: "60",
+      RPC_DAILY_REQUEST_LIMIT: "40000", RPC_MINUTE_REQUEST_LIMIT: "60",
       RPC_ENRICHMENT_DAILY_LIMIT: "8000", RPC_ENRICHMENT_MINUTE_LIMIT: "30",
       RPC_MAINTENANCE_DAILY_LIMIT: "0", RPC_MAINTENANCE_MINUTE_LIMIT: "0",
       ENRICHMENT_MODE: "events", BACKFILL_TIMESTAMPS: "0", VERIFY_BACKFILL: "0",
@@ -20,7 +20,7 @@ describe("outbound RPC budget", () => {
     // Ingestion keeps what the allocations leave: three chains polling every minute need about 9 a minute.
     expect(60 - Number(policy.RPC_ENRICHMENT_MINUTE_LIMIT) - Number(policy.RPC_MAINTENANCE_MINUTE_LIMIT)).toBeGreaterThanOrEqual(12);
     expect(Number(policy.RPC_ENRICHMENT_MINUTE_LIMIT)).toBeGreaterThanOrEqual(22); // one events-mode batch of ten
-    expect(20_000 - Number(policy.RPC_ENRICHMENT_DAILY_LIMIT) - Number(policy.RPC_MAINTENANCE_DAILY_LIMIT)).toBeGreaterThanOrEqual(10_000);
+    expect(40_000 - Number(policy.RPC_ENRICHMENT_DAILY_LIMIT) - Number(policy.RPC_MAINTENANCE_DAILY_LIMIT)).toBeGreaterThanOrEqual(14_000); // a busy day's ingestion
   });
 
   it("paces a chain's requests a gap apart, so a backfill never bursts into a provider's rate limit", async () => {
